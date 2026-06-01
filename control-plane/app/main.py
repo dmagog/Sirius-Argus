@@ -91,6 +91,14 @@ class VersionIn(BaseModel):
     limitations: str = ""
 
 
+# DATA-01: доверенные источники данных (allow-list); остальное — в карантин
+TRUSTED_SOURCE_PREFIXES = ("internal://", "curated://", "trusted:", "s3://sirius-")
+
+
+def _is_trusted_source(src: str) -> bool:
+    return bool(src) and src.startswith(TRUSTED_SOURCE_PREFIXES)
+
+
 @app.post("/api/datasets")
 def create_dataset(body: DatasetIn, p: Principal = Depends(require("dataset.create"))):
     with SessionLocal() as s:
@@ -102,9 +110,17 @@ def create_dataset(body: DatasetIn, p: Principal = Depends(require("dataset.crea
             hash=hashlib.sha256(f"{ds.id}:{body.name}:{body.source}".encode()).hexdigest()[:16],
         )
         s.add(dv)
+        # DATA-01: недоверенный источник → карантин + Finding (датасет принят в holding, не «чистый»)
+        status = "active" if _is_trusted_source(body.source) else "quarantined"
+        if status == "quarantined":
+            now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            s.add(domain.Finding(ts=now, tool="sirius-source-policy", verdict="untrusted-source",
+                                 severity="medium", status="open", asset_type="dataset",
+                                 asset_ref=f"dataset/{ds.id}",
+                                 detail=f"источник '{body.source or '—'}' не в доверенном списке → карантин", actor=p.sub))
         s.commit()
-        audit.append_event(actor=p.sub, action="dataset.create", obj=f"dataset/{ds.id}")
-        return {"dataset_id": ds.id, "dataset_version_id": dv.id, "sensitivity": ds.sensitivity}
+        audit.append_event(actor=p.sub, action=f"dataset.create:{status}", obj=f"dataset/{ds.id}")
+        return {"dataset_id": ds.id, "dataset_version_id": dv.id, "sensitivity": ds.sensitivity, "status": status}
 
 
 @app.get("/api/datasets/{ds_id}")
