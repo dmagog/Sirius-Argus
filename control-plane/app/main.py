@@ -11,7 +11,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 from pydantic import BaseModel
 
 from . import audit, bus, domain, logging_setup, registry, scanners
@@ -23,6 +24,11 @@ logger = logging.getLogger("sirius")
 
 app = FastAPI(title="Sirius Argus — Control Plane")
 
+# Prometheus-метрики (observability, ADR-0009): аудит ≠ метрики — аудит авторитетен в Postgres
+_REQS = Counter("sirius_http_requests_total", "HTTP-запросы control-plane", ["status"])
+_FINDINGS_G = Gauge("sirius_findings_total", "Всего сработок (Finding)")
+_AUDIT_OK_G = Gauge("sirius_audit_chain_ok", "Целостность аудита: 1=ок, 0=нарушена")
+
 
 @app.on_event("startup")
 def _startup():
@@ -31,9 +37,11 @@ def _startup():
 
 
 @app.middleware("http")
-async def audit_denied(request: Request, call_next):
-    logger.info("req %s %s auth=%s", request.method, request.url.path, request.headers.get("authorization", "-"))
+async def observe_and_audit(request: Request, call_next):
+    if request.url.path not in ("/metrics", "/health"):
+        logger.info("req %s %s auth=%s", request.method, request.url.path, request.headers.get("authorization", "-"))
     resp = await call_next(request)
+    _REQS.labels(status=str(resp.status_code)).inc()
     if request.url.path.startswith("/api/") and resp.status_code in (401, 403):
         audit.append_event(actor="anonymous", action="access.denied", obj=request.url.path, was_authorized=False)
     return resp
@@ -45,6 +53,15 @@ def health():
     return {"status": "ok", "service": "control-plane", "audit_chain_ok": audit.verify_chain(),
             "bus": {"connected": bus.connected(), "events": bus.stream_len()},
             "mlflow": {"configured": registry.configured(), "connected": registry.connected()}}
+
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus-метрики (scrape во внутренней сети, наружу не публикуется)."""
+    with SessionLocal() as s:
+        _FINDINGS_G.set(s.query(domain.Finding).count())
+    _AUDIT_OK_G.set(1 if audit.verify_chain() else 0)
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/", response_class=HTMLResponse)

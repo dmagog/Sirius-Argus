@@ -1,0 +1,34 @@
+{
+  "uid": "sirius-sec",
+  "title": "Sirius Argus — Security",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Сработки (Finding)",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "sirius_findings_total", "refId": "A" } ]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Целостность аудита (1=ок)",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "sirius_audit_chain_ok", "refId": "A" } ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "HTTP-запросы control-plane (rate по статусам)",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "sum by (status) (rate(sirius_http_requests_total[5m]))", "refId": "A" } ]
+    },
+    {
+      "id": 4, "type": "logs", "title": "Логи control-plane",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 6 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [ { "expr": "{container=~\"sirius-argus-control-plane.*\"}", "refId": "A" } ]
+    }
+  ]
+}

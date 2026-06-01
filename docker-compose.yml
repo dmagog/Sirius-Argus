@@ -159,6 +159,16 @@ services:
     networks: [internal]
     profiles: [full]
 
+  promtail:
+    image: grafana/promtail:3.2.0
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./infra/observability/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    networks: [internal]
+    profiles: [full]
+
   prometheus:
     image: prom/prometheus:v3.0.1
     volumes:
@@ -170,7 +180,9 @@ services:
     image: grafana/grafana:11.4.0
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-    volumes: [grafana_data:/var/lib/grafana]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on: [loki, prometheus]
     ports:
       - "3000:3000"
