@@ -2,6 +2,13 @@
 # Принцип fail-closed: пайплайн ПАДАЕТ при находках секретов/уязвимостей.
 # "В прод (main) — только через зелёный гейт." Те же проверки позже выполняет control-plane.
 
+# Пайплайн создаётся только на merge request и в main, а не на каждый push в рабочую ветку.
+# Так security-гейт стоит перед merge, а коммиты в dmagog не плодят пайплайны и письма.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
 stages:
   - secrets
   - deps
