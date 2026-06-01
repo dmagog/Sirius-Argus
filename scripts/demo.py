@@ -131,6 +131,28 @@ def main():
     st, j = req("POST", "/api/scan/code", "DS", b"def add(a, b):\n    return a + b\n")
     line(f"  безопасный код       → clean={j['clean']} ✅")
 
+    hr("MONEY-SHOT #2 — уязвимая зависимость не доходит до прода (SUP-03)")
+    _, j = req("POST", "/api/scan/deps", "DS", b"numpy==1.26.4\nrequests==2.19.0\n")
+    line(f"  requirements c requests==2.19.0  →  clean={j['clean']}")
+    for f in j["findings"]:
+        line(f"     🛑 {f['detail']}")
+    _, j = req("POST", "/api/scan/deps", "DS", b"numpy==1.26.4\nfastapi==0.115.6\n")
+    line(f"  чистые requirements  →  clean={j['clean']} ✅")
+
+    hr("MONEY-SHOT #3 — критичная модель только после HITL (VIS-03 + policy-матрица)")
+    _, dvj = req("POST", "/api/datasets", "DE", {"name": "scoring-data", "source": "internal://curated/scoring"})
+    _, cmj = req("POST", "/api/models", "DS", {"name": "credit-model", "criticality": "financial"})
+    cm = cmj["model_id"]
+    _, vj = req("POST", f"/api/models/{cm}/versions", "DS",
+                {"dataset_version_id": dvj["dataset_version_id"], "code_commit": "abc123", "env_lock": "req.lock",
+                 "intended_use": "скоринг заявок", "limitations": "не для физлиц", "signature": "cosign:abc"})
+    cv = vj["version"]
+    st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
+    line(f"  промоушен критичной модели БЕЗ HITL-аппрува  →  HTTP {st} 🛑")
+    req("POST", f"/api/models/{cm}/versions/{cv}/approve", "MLSecOps", {"reason": "ревью пройдено"})
+    st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
+    line(f"  MLSecOps одобрил версию (в аудит)  →  промоушен  →  HTTP {st} ✅")
+
     hr("6. VIS-02 — расхождение вердиктов сканеров + триаж фолза")
     vid = model("recommender", "internal")
     st, j = req("POST", f"/api/models/{vid}/ingest", "DS", BENIGN_CODE_PKL)

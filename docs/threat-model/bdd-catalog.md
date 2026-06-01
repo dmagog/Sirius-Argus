@@ -286,6 +286,16 @@ Feature: Подпись и admission критичных моделей
 ```
 
 ```gherkin
+@supply-chain @OWASP-ML06 @P0
+Feature: Скан зависимостей (gate перед продом)
+  Scenario: SUP-03 — Зависимость с известной CVE не проходит гейт
+    Given на скан поступает requirements с зависимостью с известной CVE
+    When сканер зависимостей проверяет пины
+    Then уязвимая зависимость флагается Finding(vulnerable-dependency) и не пропускается
+    And чистые зависимости проходят
+```
+
+```gherkin
 @identity @authn @keycloak @P1
 Feature: AuthN через Keycloak и устойчивость
   Scenario: AUTH-01 — Невалидный токен отвергается, недоступность IdP не открывает доступ

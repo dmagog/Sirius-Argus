@@ -411,3 +411,23 @@ async def scan_code_endpoint(request: Request, filename: str = Query("submitted.
         return {"filename": filename, "clean": False, "findings": findings}
     audit.append_event(actor=p.sub, action="code.scan.clean", obj=f"code/{filename}")
     return {"filename": filename, "clean": True, "findings": []}
+
+
+@app.post("/api/scan/deps")
+async def scan_deps_endpoint(request: Request, filename: str = Query("requirements.txt"),
+                             p: Principal = Depends(require("code.scan"))):
+    """SUP-03/SC-01: скан зависимостей (пины requirements) против базы известных CVE.
+    Уязвимая зависимость → Finding и не проходит гейт перед продом."""
+    reqs = (await request.body()).decode("utf-8", "replace")
+    findings = scanners.scan_dependencies(reqs)
+    if findings:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with SessionLocal() as s:
+            for r in findings:
+                s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
+                                     status="open", asset_type="deps", asset_ref=f"deps/{filename}", detail=r["detail"], actor=p.sub))
+            s.commit()
+        audit.append_event(actor=p.sub, action="deps.scan.flagged", obj=f"deps/{filename}")
+        return {"filename": filename, "clean": False, "findings": findings}
+    audit.append_event(actor=p.sub, action="deps.scan.clean", obj=f"deps/{filename}")
+    return {"filename": filename, "clean": True, "findings": []}

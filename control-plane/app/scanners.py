@@ -161,3 +161,30 @@ def scan_code(src: str, filename: str = "submitted.py"):
         return []
     return [{"tool": "sirius-code-scan", "verdict": "insecure-code", "severity": "high",
              "detail": "; ".join(hits)}]
+
+
+# Крошечная встроенная база известно уязвимых пинов (демо; в проде — pip-audit/OSV/Trivy)
+KNOWN_VULNERABLE = {
+    "pyyaml": {"5.3.1": "CVE-2020-14343 (RCE через yaml.load)", "5.3": "CVE-2020-14343"},
+    "requests": {"2.19.0": "CVE-2018-18074 (утечка Authorization при редиректе)"},
+    "flask": {"0.12.2": "CVE-2018-1000656 (DoS)"},
+    "jinja2": {"2.10": "CVE-2019-10906 (sandbox escape)"},
+    "urllib3": {"1.24.1": "CVE-2019-11324 (обход проверки сертификата)"},
+    "numpy": {"1.16.0": "CVE-2019-6446 (небезопасный pickle в np.load)"},
+}
+
+
+def scan_dependencies(requirements_text: str):
+    """SUP-03/SC-01: проверка пинов из requirements против базы известных CVE.
+    Возвращает список находок ([] = чисто)."""
+    findings = []
+    for raw in requirements_text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line or "==" not in line:
+            continue
+        pkg, _, ver = line.partition("==")
+        bad = KNOWN_VULNERABLE.get(pkg.strip().lower(), {})
+        if ver.strip() in bad:
+            findings.append({"tool": "sirius-dep-scan", "verdict": "vulnerable-dependency", "severity": "high",
+                             "detail": f"{pkg.strip()}=={ver.strip()}: {bad[ver.strip()]}"})
+    return findings
