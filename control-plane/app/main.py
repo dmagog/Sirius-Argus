@@ -6,6 +6,7 @@ AuthN — fail-closed (auth.py). Каждое действие и каждый �
 """
 import hashlib
 import logging
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 
 from . import audit, bus, domain, logging_setup, registry, scanners
 from .auth import Principal, get_principal
-from .db import SessionLocal, init_db
+from .db import AuditEvent, SessionLocal, init_db
 from .rbac import can_read_sensitivity, require
 
 logger = logging.getLogger("sirius")
@@ -312,6 +313,87 @@ def runtime_event(body: RuntimeEventIn, p: Principal = Depends(require("runtime.
         s.commit()
     audit.append_event(actor=p.sub, action=f"runtime.{body.type}", obj=f"endpoint/{body.endpoint}")
     return {"recorded": True, "type": body.type}
+
+
+# ---------- карта покрытия + CEO-вью (И5) ----------
+# Связь МУ↔платформа: угроза → контроль → как ловится в live-данных (Finding/аудит)
+COVERAGE = [
+    {"id": "SUP-01", "threat": "вредоносный артефакт модели", "control": "ingestion-скан (pickle-опкоды)", "match": ("verdict", "malicious")},
+    {"id": "SUP-07", "threat": "небезопасный формат критичной модели", "control": "политика форматов", "match": ("verdict", "unsafe-format")},
+    {"id": "SUP-03", "threat": "уязвимая зависимость (CVE)", "control": "скан зависимостей", "match": ("verdict", "vulnerable-dependency")},
+    {"id": "DATA-01", "threat": "недоверенный источник данных", "control": "карантин источника", "match": ("verdict", "untrusted-source")},
+    {"id": "CODE-01", "threat": "небезопасный паттерн в коде", "control": "ML-aware AST-SAST", "match": ("verdict", "insecure-code")},
+    {"id": "ACC-06", "threat": "утёкший секрет в коде", "control": "скан секретов", "match": ("verdict", "secret-exposed")},
+    {"id": "VIS-02", "threat": "расхождение вердиктов / фолз", "control": "триаж сработок", "match": ("verdict", "suspicious")},
+    {"id": "RT-01", "threat": "extraction модели в рантайме", "control": "rate-limit + детект", "match": ("verdict", "extraction")},
+    {"id": "VIS-03/GOV-01/SUP-04", "threat": "небезопасный промоушен критичной модели", "control": "gated promotion (карта+подпись+HITL)", "match": ("prefix", "promote.blocked")},
+    {"id": "ACC-01/ESC-01", "threat": "действие вне роли / IDOR", "control": "zero-trust RBAC + object-level", "match": ("prefix", "authz.deny")},
+    {"id": "CRED-01/AUTH-01", "threat": "невалидный/поддельный токен", "control": "OIDC fail-closed", "match": ("exact", "access.denied")},
+]
+
+
+def _coverage_data():
+    with SessionLocal() as s:
+        findings = s.query(domain.Finding).all()
+        actions = [a for (a,) in s.query(AuditEvent.action).all()]
+        by_verdict, by_sev, by_status = defaultdict(int), defaultdict(int), defaultdict(int)
+        for f in findings:
+            by_verdict[f.verdict] += 1
+            by_sev[f.severity] += 1
+            by_status[f.status] += 1
+        models = s.query(domain.Model).count()
+        prod = s.query(domain.Deployment).filter_by(status="active").count()
+    controls, live = [], 0
+    for c in COVERAGE:
+        kind, val = c["match"]
+        if kind == "verdict":
+            cnt = by_verdict.get(val, 0)
+        elif kind == "prefix":
+            cnt = sum(1 for a in actions if a.startswith(val))
+        else:
+            cnt = sum(1 for a in actions if a == val)
+        controls.append({"id": c["id"], "threat": c["threat"], "control": c["control"],
+                         "evidence": cnt, "status": "live" if cnt else "ready"})
+        live += 1 if cnt else 0
+    kpi = {"findings_total": len(findings), "by_severity": dict(by_sev), "by_status": dict(by_status),
+           "blocked_attempts": sum(1 for a in actions if ".blocked" in a),
+           "access_denied": sum(1 for a in actions if a.startswith("authz.deny") or a == "access.denied"),
+           "models": models, "prod_deployments": prod,
+           "coverage": f"{live}/{len(COVERAGE)}", "audit_chain_ok": audit.verify_chain()}
+    return {"controls": controls, "kpi": kpi}
+
+
+@app.get("/api/coverage")
+def coverage(p: Principal = Depends(require("visibility.read"))):
+    """VIS-01: карта покрытия (угроза→контроль→live-статус) + KPI поверх реальных Finding/аудита."""
+    audit.append_event(actor=p.sub, action="coverage.read")
+    return _coverage_data()
+
+
+@app.get("/coverage", response_class=HTMLResponse)
+def coverage_view():
+    """CEO-вью: карта покрытия угроз + KPI (read-only экран, money-shot #5)."""
+    d = _coverage_data()
+    k = d["kpi"]
+    rows = "".join(
+        f"<tr><td>{c['id']}</td><td>{c['threat']}</td><td>{c['control']}</td>"
+        f"<td style='text-align:center'>{'🟢 live' if c['status'] == 'live' else '⚪ ready'} ({c['evidence']})</td></tr>"
+        for c in d["controls"]
+    )
+    return (
+        "<html><head><meta charset='utf-8'><title>Sirius Argus — Карта покрытия</title></head>"
+        "<body style='font-family:sans-serif;max-width:920px;margin:2em auto'>"
+        "<h1>Карта покрытия угроз — CEO-вью</h1>"
+        f"<p>Покрытие контролей: <b>{k['coverage']}</b> live · сработок: <b>{k['findings_total']}</b> · "
+        f"блокировок: <b>{k['blocked_attempts']}</b> · отказов доступа: <b>{k['access_denied']}</b> · "
+        f"моделей: <b>{k['models']}</b> · прод-деплоев: <b>{k['prod_deployments']}</b> · "
+        f"аудит цел: <b>{'да' if k['audit_chain_ok'] else 'НЕТ'}</b></p>"
+        "<table border='1' cellpadding='6' style='border-collapse:collapse;width:100%'>"
+        "<tr><th>Сценарий</th><th>Угроза</th><th>Контроль</th><th>Статус (evidence)</th></tr>"
+        f"{rows}</table>"
+        "<p style='color:#888'>Статус «live» означает реальные сработки/блокировки в аудите по этому контролю.</p>"
+        "</body></html>"
+    )
 
 
 @app.get("/api/registry")

@@ -180,6 +180,16 @@ def main():
         st_ok, _ = req("POST", f"/api/findings/{fid}/triage", "MLSecOps", {"status": "FP", "reason": "ложное срабатывание"})
         line(f"  MLSecOps закрывает как FP → HTTP {st_ok} ✅ (в аудите: кто/почему)")
 
+    hr("MONEY-SHOT #5 — карта покрытия угроз + CEO-вью (VIS-01)")
+    _, cov = req("GET", "/api/coverage", "CEO")
+    k = cov["kpi"]
+    line(f"  покрытие контролей: {k['coverage']} live · сработок {k['findings_total']} · "
+         f"блокировок {k['blocked_attempts']} · отказов доступа {k['access_denied']}")
+    line(f"  моделей {k['models']} · прод-деплоев {k['prod_deployments']} · аудит цел: {k['audit_chain_ok']}")
+    for c in cov["controls"]:
+        line(f"     {'🟢' if c['status'] == 'live' else '⚪'} {c['id']}: {c['threat']} — {c['control']} ({c['evidence']})")
+    line(f"  CEO-вью (HTML): {BASE}/coverage")
+
     hr("7. СВОДКА — Finding как спина интегрированности")
     _, j = req("GET", "/api/findings", "MLSecOps")
     by_tool = {}

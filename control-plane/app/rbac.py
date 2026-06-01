@@ -21,6 +21,7 @@ PERMISSIONS = {
     "finding.read": {"DS", "DE", "MLSecOps", "Product", "CEO"},
     "finding.triage": {"MLSecOps"},
     "registry.read": {"DS", "DE", "MLSecOps", "Product", "CEO"},
+    "visibility.read": {"DS", "DE", "MLSecOps", "Product", "CEO"},
 }
 
 # Допуск к данным по чувствительности (object-level, ACC-04)
