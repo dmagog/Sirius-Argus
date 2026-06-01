@@ -23,6 +23,8 @@
 | **security/ (гейты)** | сами проверки | вызывается CP/CI | fail-open/evasion = тихий пропуск зла |
 | **Serving** | модели в проде, прод-периметр | наружу (gateway) | extraction/evasion/lateral, загрузка неодобренного |
 | **Сеть / секреты / хост** | связность, креды, рантайм | сквозное | боковое движение, утечка кред, граница доверия |
+| **Keycloak** | identity, токены, роли | внутр. сеть (логин через proxy) | компрометация = захват всех identity; SPOF authN |
+| **Брокер / Observability** | события, очередь сканов, логи, метрики | внутр. сеть | инъекция/подмена событий; утечка секретов в логи |
 
 ## Реестр рисков — отсортирован по Score
 
@@ -55,6 +57,7 @@
 | PG-4 | Postgres | Утечка DB-кред | 2 | 5 | 10 | Mitigate · D9 | secrets, netpolicy (CRED-01) |
 | SC-4 | security/ | Компрометация зависимости самих сканеров | 2 | 5 | 10 | Mitigate · D1 | пин + скан собственных зависимостей (SC-01) |
 | SV-1 | Serving | Загрузка неподписанной/неодобренной модели | 2 | 5 | 10 | Mitigate · D1 | admission control (SUP-04, TOCTOU-01) |
+| KC-1 | Keycloak | Компрометация Keycloak → захват identity/токенов (SPOF authN) | 2 | 5 | 10 | Mitigate · D9 | внутр. сеть, realm-as-code, не наружу, ротация ключей (ADR-0007) |
 | SV-3 | Serving | Model extraction | 3 | 3 | 9 | Mitigate · D1 | rate-limit + detect (RT-01) |
 | SV-4 | Serving | Adversarial evasion | 3 | 3 | 9 | Mitigate · D1 | детектор (RT-02) |
 | SV-6 | Serving | Denial-of-wallet / истощение ресурсов | 3 | 3 | 9 | Mitigate · D9 | rate-limit + квоты (DOW-01) |
@@ -79,6 +82,8 @@
 | SV-5 | Serving | Membership/attribute inference | 2 | 3 | 6 | Accept(partial) · D1 | output reduction (RT-03/04); остаток принят |
 | HOST-1 | Хост | Компрометация хоста / docker-демона | 1 | 5 | 5 | **Accept** · D9 | граница доверия — допущение (вне скоупа) |
 | GT-4 | Gitea/CI | Вредоносный Gitea-плагин/action | 1 | 4 | 4 | Mitigate · D9 | allow-list плагинов |
+| BUS-1 | Брокер | Инъекция/подмена событий → ложные Finding или обход | 2 | 4 | 8 | Mitigate · D9 | ACL топиков, аутентификация клиентов, дубль критичных событий в tamper-evident аудит (ADR-0008) |
+| OBS-1 | Observability | Утечка секретов/PII в операционные логи | 2 | 4 | 8 | Mitigate · D9/D3 | маскирование в логах, доступ к лог-стору по ролям (ADR-0009) |
 
 > Низкий уровень (≤3) пуст осознанно: для платформы безопасности «тривиальных» рисков почти нет.
 

@@ -1,7 +1,9 @@
 # ADR-0003: Без Keycloak — zero-trust RBAC в control-plane
 
-- Статус: Accepted
+- Статус: **Superseded by [ADR-0007](0007-keycloak-authn.md)** — принят Keycloak (OIDC) для authN; объектная авторизация осталась в control-plane.
 - Дата: 2026-06-01
+
+> Решение пересмотрено по фидбэку: катать свой auth в платформе безопасности — антипаттерн, а Keycloak узнаваем судьями и уже есть в `main`. Ниже — исходный контекст для истории.
 
 ## Контекст
 Нужны роли и zero-trust (DS/DE/MLSecOps/Product/CEO). Keycloak/OIDC тяжёл для окна <1 недели и ноутбучного демо.

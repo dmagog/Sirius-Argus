@@ -76,6 +76,7 @@ flowchart LR
 flowchart TB
     U[Пользователи RBAC-акторы]
     CONS[Внешние потребители инференса]
+    KC[Keycloak authN OIDC]
     subgraph INT[Внутренняя docker-сеть наружу не публикуется]
         CP[Sirius Argus Control Plane]
         ML[MLflow трекинг и реестр]
@@ -83,20 +84,28 @@ flowchart TB
         GT[Gitea git PR branch protection]
         PG[PostgreSQL метаданные findings audit]
         SEC[security гейты modelscan Trivy gitleaks cosign]
+        BUS[Redis шина событий и очередь сканов]
+        OBS[Observability Loki Grafana Prometheus]
     end
     subgraph PRODSG[Прод-периметр]
         SV[Serving 3 модели и рантайм-защиты]
     end
+    U -->|OIDC-логин| KC
     U -->|единственная точка входа| CP
+    CP -->|проверка токена| KC
     CP --> ML
     CP --> MO
     CP --> PG
     CP -->|webhook и CI| GT
     GT --> CP
-    CP -->|запуск проверок| SEC
+    CP -->|задачи сканов| BUS
+    BUS --> SEC
+    SEC -->|Finding| BUS
+    CP -->|события| BUS
+    BUS -->|логи и метрики| OBS
     ML --> MO
     CP -->|деплой подписанного| SV
-    SV -->|runtime findings| CP
+    SV -->|события и findings| BUS
     CONS -->|inference API| SV
 ```
 
@@ -111,6 +120,11 @@ flowchart TB
 | **Postgres** | Метаданные платформы: пользователи/роли, реестр-надстройка, findings, audit, coverage, deployments. | Реляционная целостность связей между активами и сработками. |
 | **security/** (библиотека гейтов) | Общий код проверок, вызывается **и CI, и Control Plane** (одна логика в двух местах). | Build-time и интерактивные проверки не расходятся. |
 | **Serving** | Сервинг 3 моделей за единым gateway + runtime-защиты. | Прод-периметр, где живут runtime-атаки и их детект. |
+| **Keycloak** (OIDC) | AuthN, пользователи, роли/группы, токены; realm-as-code. Object-authz остаётся в Control Plane. | Не катаем свой auth ([ADR-0007](adr/0007-keycloak-authn.md)); узнаваем судьями; есть в `main`. |
+| **Redis** (брокер) | Шина событий + async-очередь сканов; заодно бэкенд rate-limit. | Развязка вместо API-меша; долгие сканы вне HTTP ([ADR-0008](adr/0008-message-broker.md)). |
+| **Observability** (Loki/Grafana/Prometheus) | Отдельный лог-стор + метрики + дашборды; питается событиями с шины. | Аудит ≠ observability ([ADR-0009](adr/0009-observability-logstore.md)); «каждое действие сохранено». |
+
+**Взаимодействие и логирование.** Прямые чтения (control-plane → MLflow/MinIO/Gitea) — синхронный HTTP; долгие сканы и все значимые события — через **шину Redis** ([ADR-0008](adr/0008-message-broker.md)), а не API-меш. Логи разведены: **аудит** (security, tamper-evident) — Postgres + hash-chain; **операционные логи и метрики** — отдельный лог-стор (Loki/Grafana/Prometheus, [ADR-0009](adr/0009-observability-logstore.md)). Каждое действие → событие → и в аудит, и в лог-стор.
 
 ---
 
@@ -341,6 +355,8 @@ flowchart LR
 
 ## 10. Безопасность самой платформы (zero-trust)
 
+**AuthN — Keycloak (OIDC)** ([ADR-0007](adr/0007-keycloak-authn.md)): идентичность, пользователи, роли/группы, токены, сервисные identity. **Объектная авторизация** (можно ли актору трогать ИМЕННО этот объект) — в Control Plane; Keycloak даёт роль, а не право на объект.
+
 **Матрица RBAC (наименьшие привилегии):**
 
 | Действие \ Роль | DE | DS | MLSecOps | Product | CEO |
@@ -383,7 +399,8 @@ flowchart LR
 
 - **ShadowLogic-класс бэкдоров** (граф-уровень в ONNX/safetensors) наши сканеры pickle не ловят — частично адресуется этапом валидации/red-team; фиксируется как остаточный риск.
 - Без Kubernetes/Seldon/KServe — сервинг на FastAPI (достаточно для ноутбука).
-- Без полноценного Keycloak/OIDC — RBAC реализован в Control Plane.
+- AuthN — Keycloak (OIDC, [ADR-0007](adr/0007-keycloak-authn.md)); объектная авторизация — в Control Plane. Keycloak — новая поверхность атаки и **SPOF для authN** (см. риск-реестр); митигируем тем, что он во внутр. сети, realm-as-code, и не выставляется наружу напрямую.
+- Брокер (Redis) — инфра-зависимость: события можно инъектить/подменять → ACL топиков + критичные события дублируются в tamper-evident аудит.
 - Без распределённых CI-раннеров — CI = Control Plane по вебхуку Gitea.
 - Генеративные/агентские модели — вне фокуса (бриф: упор на не-генеративные).
 - Сертифицированная adversarial-робастность — только базовый детект.
@@ -402,6 +419,9 @@ flowchart LR
 | Объектное хранилище | MinIO (S3) |
 | Git + CI-вход | Gitea (branch protection, webhooks) |
 | Метаданные | PostgreSQL |
+| AuthN / идентичность | Keycloak (OIDC, realm-as-code) |
 | Гейты безопасности | picklescan, modelscan, fickling, pip-audit, Trivy, Syft, gitleaks, cosign/sigstore, policy-as-code |
-| ML / валидация | scikit-learn, XGBoost, PyTorch, ART (Adversarial Robustness Toolbox) |
-| Развёртывание | Docker Compose (одна команда) |
+| ML / валидация | scikit-learn, XGBoost, ART; deep — только pre-trained CPU-only (без обучения в демо) |
+| Брокер / шина событий | Redis Streams (очередь сканов + события, бэкенд rate-limit) |
+| Observability / лог-стор | Loki, Grafana, Prometheus |
+| Развёртывание | Docker Compose, профили `core` / `full` (full добавляет брокер + observability) |
