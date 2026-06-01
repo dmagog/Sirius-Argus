@@ -58,4 +58,10 @@ make up                   # core: control-plane + Postgres + Keycloak + Redis + 
 cd tests && pip install -r requirements.txt && pytest -q
 ```
 
+Живое демо money-shot'ов по поднятому стеку (вредоносная модель → блок, гейты, сработки):
+
+```bash
+make demo        # или: python3 scripts/demo.py
+```
+
 Профили `core`/`full` — см. [docs/roadmap.md](docs/roadmap.md). AuthN — через Keycloak; для локали без Keycloak можно `DEV_AUTH=1` и токены `Bearer dev:<user>:<role>`.

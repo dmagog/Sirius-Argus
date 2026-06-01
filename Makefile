@@ -1,4 +1,4 @@
-.PHONY: up up-full down config test logs ps
+.PHONY: up up-full down config test demo logs ps
 
 up:        ## core: поднять MVP-стек
 	docker compose up -d --build
@@ -14,6 +14,9 @@ config:    ## валидация compose-конфига
 
 test:      ## pytest-bdd против поднятого стека
 	cd tests && python -m pytest -q
+
+demo:      ## живой прогон money-shot'ов по поднятому стеку
+	python3 scripts/demo.py
 
 logs:      ## логи control-plane
 	docker compose logs -f control-plane
