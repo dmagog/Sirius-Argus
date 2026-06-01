@@ -1,0 +1,8 @@
+# Единственная точка входа для людей (ADR-0005).
+# /auth/* -> Keycloak (OIDC-логин), всё остальное -> control-plane.
+:80 {
+	handle_path /auth/* {
+		reverse_proxy keycloak:8080
+	}
+	reverse_proxy control-plane:8000
+}

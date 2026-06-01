@@ -44,8 +44,18 @@ Sirius Argus встраивает безопасность прямо в ML-па
 
 ## Запуск
 
-Появится на итерации И0: вся система поднимается одной командой.
+```bash
+cp .env.example .env      # поправь секреты
+make up                   # core: control-plane + Postgres + Keycloak + Redis + MinIO + MLflow + reverse-proxy
+# или: make up-full       # + observability (Loki/Grafana/Prometheus) + Gitea
+```
+
+Открыть: дашборд — http://localhost:8080 · Keycloak — http://localhost:8080/auth/ · Grafana (full) — http://localhost:3000.
+
+Тесты (BDD против живого стека):
 
 ```bash
-docker compose up
+cd tests && pip install -r requirements.txt && pytest -q
 ```
+
+Профили `core`/`full` — см. [docs/roadmap.md](docs/roadmap.md). AuthN — через Keycloak; для локали без Keycloak можно `DEV_AUTH=1` и токены `Bearer dev:<user>:<role>`.

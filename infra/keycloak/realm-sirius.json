@@ -1,0 +1,38 @@
+{
+  "realm": "sirius",
+  "enabled": true,
+  "displayName": "Sirius Argus",
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      { "name": "DS", "description": "Data Scientist" },
+      { "name": "DE", "description": "Data Engineer" },
+      { "name": "MLSecOps", "description": "Security authority" },
+      { "name": "Product", "description": "Product / model owner" },
+      { "name": "CEO", "description": "Executive read-only" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "sirius",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"]
+    }
+  ],
+  "users": [
+    { "username": "ds", "enabled": true, "email": "ds@sirius.local", "firstName": "Demo", "lastName": "DS",
+      "credentials": [{ "type": "password", "value": "ds", "temporary": false }], "realmRoles": ["DS"] },
+    { "username": "de", "enabled": true, "email": "de@sirius.local", "firstName": "Demo", "lastName": "DE",
+      "credentials": [{ "type": "password", "value": "de", "temporary": false }], "realmRoles": ["DE"] },
+    { "username": "mlsecops", "enabled": true, "email": "sec@sirius.local", "firstName": "Demo", "lastName": "MLSecOps",
+      "credentials": [{ "type": "password", "value": "mlsecops", "temporary": false }], "realmRoles": ["MLSecOps"] },
+    { "username": "product", "enabled": true, "email": "po@sirius.local", "firstName": "Demo", "lastName": "Product",
+      "credentials": [{ "type": "password", "value": "product", "temporary": false }], "realmRoles": ["Product"] },
+    { "username": "ceo", "enabled": true, "email": "ceo@sirius.local", "firstName": "Demo", "lastName": "CEO",
+      "credentials": [{ "type": "password", "value": "ceo", "temporary": false }], "realmRoles": ["CEO"] }
+  ]
+}
