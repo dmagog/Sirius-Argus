@@ -305,6 +305,16 @@ Feature: Вывод из эксплуатации
 ```
 
 ```gherkin
+@integrity @audit @P1
+Feature: Целостность аудита (tamper-evidence)
+  Scenario: MON-04 — Подмена записи аудита детектируется
+    Given аудит — append-only журнал с hash-chain
+    When кто-то подменяет существующую запись в БД
+    Then цепочка хешей перестаёт сходиться (audit_chain_ok=false)
+    And после отката подмены целостность восстанавливается
+```
+
+```gherkin
 @supply-chain @OWASP-ML06 @OWASP-ML09 @P1
 Feature: Подпись и admission критичных моделей
   Scenario: SUP-04 — Неподписанный артефакт нельзя промоутить
