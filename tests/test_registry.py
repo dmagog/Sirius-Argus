@@ -1,7 +1,9 @@
 """pytest-bdd: реестр + RBAC против живого стека (роли через dev-токены, DEV_AUTH=1)."""
 import os
+import subprocess
 
 import httpx
+import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 BASE = os.environ.get("SIRIUS_BASE_URL", "http://localhost:8080")
@@ -79,3 +81,29 @@ def check(code):
 def impact_shows():
     r = httpx.get(f"{BASE}/api/impact", params={"dataset_version_id": S["dv"]}, headers=tok("MLSecOps"), timeout=10)
     assert r.status_code == 200 and len(r.json()["affected"]) >= 1, r.text
+
+
+@given("реестр на MLflow доступен")
+def mlflow_up():
+    h = httpx.get(f"{BASE}/health", timeout=10).json()
+    if not h.get("mlflow", {}).get("connected"):
+        pytest.skip("MLflow backend не поднят")
+
+
+@then("версия видна в MLflow-реестре через control-plane")
+def version_in_mlflow():
+    r = httpx.get(f"{BASE}/api/models/{S['model_id']}/backend", headers=tok("MLSecOps"), timeout=10)
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert j["backend"] == "mlflow" and j["present"] is True, j
+    assert any(str(v["cp_version"]) == str(S["ver"]) for v in j["versions"]), j
+
+
+@then("прямой доступ к MLflow снаружи закрыт")
+def mlflow_not_exposed():
+    # Истинный инвариант zero-trust: docker не публикует порт MLflow на хост.
+    # (Прямая проба localhost:5000 ненадёжна — на macOS порт занимает AirPlay.)
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = subprocess.run(["docker", "compose", "port", "mlflow", "5000"],
+                         cwd=repo, capture_output=True, text=True, timeout=15)
+    assert out.stdout.strip() == "", f"MLflow порт опубликован наружу: {out.stdout!r}"

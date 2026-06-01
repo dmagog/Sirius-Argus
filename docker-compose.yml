@@ -13,6 +13,7 @@ volumes:
   minio_data: {}
   redis_data: {}
   grafana_data: {}
+  mlflow_pg_data: {}
 
 services:
   # ---------- core ----------
@@ -36,11 +37,14 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-sirius}:${POSTGRES_PASSWORD:-sirius}@postgres:5432/sirius
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/sirius/protocol/openid-connect/certs
       REDIS_URL: redis://:${REDIS_PASSWORD:-sirius-redis}@redis:6379/0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
       DEV_AUTH: ${DEV_AUTH:-0}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_started
+      mlflow:
         condition: service_started
     networks: [internal]   # наружу не публикуется — только через reverse-proxy
 
@@ -91,22 +95,42 @@ services:
     volumes: [minio_data:/data]
     networks: [internal]
 
+  mlflow-db:
+    image: postgres:17-alpine
+    # Своя БД: таблицы MLflow (datasets, model_versions) не должны пересекаться
+    # с таблицами control-plane в БД sirius.
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: ${MLFLOW_DB_USER:-mlflow}
+      POSTGRES_PASSWORD: ${MLFLOW_DB_PASSWORD:-mlflow}
+    volumes: [mlflow_pg_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${MLFLOW_DB_USER:-mlflow}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.18.0
+    build: ./infra/mlflow   # psycopg2/boto3 запечены в образ (рантайм без egress)
     command:
       - sh
       - -c
       - >
-        pip install --no-cache-dir psycopg2-binary boto3 >/dev/null 2>&1 &&
         mlflow server --host 0.0.0.0 --port 5000
-        --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-sirius}:${POSTGRES_PASSWORD:-sirius}@postgres:5432/sirius
+        --backend-store-uri postgresql+psycopg2://${MLFLOW_DB_USER:-mlflow}:${MLFLOW_DB_PASSWORD:-mlflow}@mlflow-db:5432/mlflow
         --artifacts-destination s3://mlflow
     environment:
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
       AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     depends_on:
-      postgres:
+      mlflow-db:
         condition: service_healthy
     networks: [internal]
 

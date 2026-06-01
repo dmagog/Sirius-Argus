@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from . import audit, bus, domain, logging_setup
+from . import audit, bus, domain, logging_setup, registry
 from .auth import Principal, get_principal
 from .db import SessionLocal, init_db
 from .rbac import can_read_sensitivity, require
@@ -40,7 +40,8 @@ async def audit_denied(request: Request, call_next):
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "control-plane", "audit_chain_ok": audit.verify_chain(),
-            "bus": {"connected": bus.connected(), "events": bus.stream_len()}}
+            "bus": {"connected": bus.connected(), "events": bus.stream_len()},
+            "mlflow": {"configured": registry.configured(), "connected": registry.connected()}}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -125,8 +126,16 @@ def create_model(body: ModelIn, p: Principal = Depends(require("model.register")
         m = domain.Model(name=body.name, type=body.type, criticality=body.criticality, owner=p.sub)
         s.add(m)
         s.commit()
-        audit.append_event(actor=p.sub, action="model.register", obj=f"model/{m.id}")
-        return {"model_id": m.id, "criticality": m.criticality}
+        model_id, name = m.id, registry.model_name(m.id, m.name)
+        # write-through в обёрнутый MLflow (fail-soft: при недоступности не валимся)
+        synced = True
+        try:
+            registry.ensure_registered_model(name, tags={"criticality": body.criticality, "type": body.type, "owner": p.sub})
+        except registry.RegistryError as e:
+            synced = False
+            logger.warning("MLflow недоступен при регистрации model/%s: %s", model_id, e)
+        audit.append_event(actor=p.sub, action="model.register", obj=f"model/{model_id}")
+        return {"model_id": model_id, "criticality": m.criticality, "registry_backend": "mlflow", "backend_synced": synced}
 
 
 @app.post("/api/models/{model_id}/versions")
@@ -145,8 +154,23 @@ def create_version(model_id: int, body: VersionIn, p: Principal = Depends(requir
         )
         s.add(mv)
         s.commit()
+        mvid, requires_validation = mv.id, mv.requires_validation
+        name = registry.model_name(model_id, m.name)
+        # write-through: версия + профиль безопасности уходят тегами в MLflow (fail-soft)
+        synced, mlflow_ver = True, None
+        try:
+            registry.ensure_registered_model(name, tags={"criticality": m.criticality})
+            mlflow_ver = registry.create_model_version(name, source=f"s3://mlflow/{name}", tags={
+                "cp_version": n, "stage": "dev", "code_commit": body.code_commit,
+                "dataset_version_id": body.dataset_version_id, "env_lock": body.env_lock,
+                "artifact_hash": body.artifact_hash, "signature": body.signature,
+                "criticality": m.criticality, "requires_validation": requires_validation})
+        except registry.RegistryError as e:
+            synced = False
+            logger.warning("MLflow недоступен при создании model/%s v%s: %s", model_id, n, e)
         audit.append_event(actor=p.sub, action="model.version", obj=f"model/{model_id}/v{n}")
-        return {"model_version_id": mv.id, "version": n, "stage": "dev"}
+        return {"model_version_id": mvid, "version": n, "stage": "dev",
+                "registry_backend": "mlflow", "backend_synced": synced, "mlflow_version": mlflow_ver}
 
 
 @app.post("/api/models/{model_id}/versions/{ver}/promote")
@@ -163,12 +187,22 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
         mv.stage = "prod"
         s.add(domain.Deployment(model_version_id=mv.id, status="active"))
         s.commit()
+        mvid = mv.id
+        m = s.get(domain.Model, model_id)
+        name = registry.model_name(model_id, m.name)
+        # отражаем стадию в MLflow по нашему cp_version (fail-soft)
+        try:
+            mlflow_ver = registry.find_version_by_cp(name, ver)
+            if mlflow_ver is not None:
+                registry.set_version_tag(name, mlflow_ver, "stage", "prod")
+        except registry.RegistryError as e:
+            logger.warning("MLflow недоступен при промоуте model/%s v%s: %s", model_id, ver, e)
         audit.append_event(actor=p.sub, action="model.promote", obj=f"model/{model_id}/v{ver}")
-        return {"model_version_id": mv.id, "stage": "prod"}
+        return {"model_version_id": mvid, "stage": "prod"}
 
 
 @app.get("/api/registry")
-def registry(p: Principal = Depends(require("registry.read"))):
+def list_registry(p: Principal = Depends(require("registry.read"))):
     with SessionLocal() as s:
         out = []
         for m in s.query(domain.Model).all():
@@ -198,3 +232,23 @@ def impact(dataset_version_id: int = Query(...), p: Principal = Depends(require(
             deps = s.query(domain.Deployment).filter_by(model_version_id=mv.id, status="active").count()
             affected.append({"model_id": mv.model_id, "version": mv.version, "stage": mv.stage, "active_deployments": deps})
         return {"dataset_version_id": dataset_version_id, "affected": affected}
+
+
+@app.get("/api/models/{model_id}/backend")
+def model_backend(model_id: int, p: Principal = Depends(require("registry.read"))):
+    """REG-01: доказательство, что реестр живёт в обёрнутом MLflow. Читаем backend
+    через единственную дверь — control-plane; прямого доступа к MLflow снаружи нет."""
+    with SessionLocal() as s:
+        m = s.get(domain.Model, model_id)
+        if not m:
+            raise HTTPException(status_code=404, detail="model not found")
+        name = registry.model_name(model_id, m.name)
+    rm = registry.get_registered_model(name)
+    audit.append_event(actor=p.sub, action="model.backend.read", obj=f"model/{model_id}")
+    if rm is None:
+        return {"backend": "mlflow", "mlflow_name": name, "connected": registry.connected(), "present": False, "versions": []}
+    versions = []
+    for v in rm["versions"]:
+        tags = {t["key"]: t["value"] for t in v.get("tags", [])}
+        versions.append({"mlflow_version": v["version"], "cp_version": tags.get("cp_version"), "stage": tags.get("stage")})
+    return {"backend": "mlflow", "mlflow_name": name, "connected": True, "present": True, "versions": versions}

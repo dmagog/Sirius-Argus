@@ -31,3 +31,10 @@ Feature: Реестр и zero-trust RBAC
     And DE создал секретный датасет
     When Product читает секретный датасет
     Then ответ 403
+
+  Scenario: REG-01 — версия модели реально лежит в обёрнутом MLflow
+    Given поднятый control-plane
+    And реестр на MLflow доступен
+    And зарегистрирована модель с воспроизводимой версией
+    Then версия видна в MLflow-реестре через control-plane
+    And прямой доступ к MLflow снаружи закрыт
