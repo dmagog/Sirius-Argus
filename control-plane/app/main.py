@@ -267,18 +267,17 @@ async def ingest_model(model_id: int, request: Request, p: Principal = Depends(r
         if not m:
             raise HTTPException(status_code=404, detail="model not found")
         digest = hashlib.sha256(body).hexdigest()
-        results = scanners.scan_artifact(body)
-        blocked = [r for r in results if r["verdict"] != "clean"]
+        assessment = scanners.assess_artifact(body, m.criticality)
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        for r in blocked:
+        for r in assessment["findings"]:
             s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
                                  status="open", asset_type="model", asset_ref=f"model/{model_id}",
                                  detail=r["detail"], actor=p.sub))
-        if blocked:
+        if not assessment["admit"]:
             s.commit()
             audit.append_event(actor=p.sub, action="model.ingest.blocked", obj=f"model/{model_id}")
-            raise HTTPException(status_code=422, detail={"blocked": True, "reason": "unsafe artifact",
-                                                         "tools": [r["tool"] for r in blocked]})
+            raise HTTPException(status_code=422, detail={"blocked": True, "format": assessment["format"],
+                                                         "tools": [r["tool"] for r in assessment["findings"]]})
         n = s.query(domain.ModelVersion).filter_by(model_id=model_id).count() + 1
         mv = domain.ModelVersion(model_id=model_id, version=n, stage="dev", artifact_hash=digest,
                                  requires_validation=(m.criticality in ("regulatory", "financial")))
@@ -288,11 +287,12 @@ async def ingest_model(model_id: int, request: Request, p: Principal = Depends(r
         try:
             registry.ensure_registered_model(name, tags={"criticality": m.criticality})
             registry.create_model_version(name, source=f"s3://mlflow/{name}",
-                                          tags={"cp_version": n, "stage": "dev", "artifact_hash": digest, "scanned": "clean"})
+                                          tags={"cp_version": n, "stage": "dev", "artifact_hash": digest,
+                                                "scanned": "clean", "format": assessment["format"]})
         except registry.RegistryError as e:
             logger.warning("MLflow недоступен при ingest model/%s v%s: %s", model_id, n, e)
         audit.append_event(actor=p.sub, action="model.ingest.admitted", obj=f"model/{model_id}/v{n}")
-        return {"admitted": True, "version": n, "artifact_hash": digest, "scanned": [r["tool"] for r in results]}
+        return {"admitted": True, "version": n, "artifact_hash": digest, "format": assessment["format"]}
 
 
 @app.get("/api/findings")

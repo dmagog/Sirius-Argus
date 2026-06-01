@@ -8,7 +8,9 @@
 pickle-RCE на приёме. Он не претендует на полноту (ShadowLogic, отравление
 весов — остаточные риски, см. SUP-06), но честно делает то, что заявляет.
 """
+import json
 import pickletools
+import struct
 
 DANGEROUS_MODULES = {
     "os", "posix", "nt", "subprocess", "sys", "shutil", "socket", "ctypes",
@@ -51,17 +53,47 @@ def scan_pickle(data: bytes):
     return findings
 
 
-def scan_artifact(data: bytes, filename: str = "artifact"):
-    """Прогон артефакта через сканеры → список результатов по инструментам.
+def detect_format(data: bytes) -> str:
+    """Классификация формата по сигнатуре: safetensors | pickle | unknown."""
+    if len(data) >= 8:
+        try:
+            n = struct.unpack("<Q", data[:8])[0]
+            if 0 < n <= len(data) - 8:
+                header = data[8:8 + n].decode("utf-8")
+                if header.lstrip().startswith("{"):
+                    json.loads(header)
+                    return "safetensors"
+        except Exception:
+            pass
+    try:
+        for _ in pickletools.genops(data):
+            pass
+        return "pickle"
+    except Exception:
+        return "unknown"
 
-    Сейчас один инструмент `sirius-pickle-scan`; модель findings рассчитана на
-    несколько инструментов (для расхождения вердиктов и триажа — VIS-02/VIS-04).
+
+def assess_artifact(data: bytes, criticality: str = "internal"):
+    """Оценка артефакта на приёме: формат + опасные опкоды + политика форматов.
+
+    Возвращает {format, findings:[...], admit:bool}.
+    - SUP-01: вредоносный pickle (опасные опкоды) блокируется всегда.
+    - SUP-07: для критичных моделей (regulatory/financial) формат с произвольным
+      кодом (pickle) отклоняется — безопасная автоконверсия в safetensors без
+      десериализации невозможна (fail-closed). Для прочих чистый pickle допускается.
+    - Неизвестный формат — fail-closed.
     """
-    hits = scan_pickle(data)
-    detail = "; ".join(f"{h['opcode']} {h['module']}.{h['name']}" for h in hits) or "опасных опкодов нет"
-    return [{
-        "tool": "sirius-pickle-scan",
-        "verdict": "malicious" if hits else "clean",
-        "severity": "critical" if hits else "info",
-        "detail": detail,
-    }]
+    fmt = detect_format(data)
+    findings = []
+    if fmt == "pickle":
+        hits = scan_pickle(data)
+        if hits:
+            findings.append({"tool": "sirius-pickle-scan", "verdict": "malicious", "severity": "critical",
+                             "detail": "; ".join(f"{h['opcode']} {h['module']}.{h['name']}" for h in hits)})
+        if criticality in ("regulatory", "financial"):
+            findings.append({"tool": "sirius-format-policy", "verdict": "unsafe-format", "severity": "high",
+                             "detail": f"формат pickle недопустим для критичности '{criticality}': требуется safetensors (convert-or-reject)"})
+    elif fmt == "unknown":
+        findings.append({"tool": "sirius-format-policy", "verdict": "unknown-format", "severity": "medium",
+                         "detail": "неизвестный/неподдерживаемый формат артефакта"})
+    return {"format": fmt, "findings": findings, "admit": not findings}

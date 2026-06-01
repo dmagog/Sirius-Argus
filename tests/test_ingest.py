@@ -4,8 +4,10 @@
 НИКОГДА не исполняется: gate не делает pickle.loads, а pickle.dumps лишь
 сериализует инструкцию __reduce__, не вызывая её. Реального RCE нет.
 """
+import json
 import os
 import pickle
+import struct
 
 import httpx
 from pytest_bdd import given, parsers, scenarios, then, when
@@ -33,11 +35,17 @@ def _clean_bytes():
     return pickle.dumps({"model": "linear", "weights": [0.1, 0.2, 0.3]})
 
 
-def _register_model():
+def _register_model(criticality="internal"):
     r = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
-                   json={"name": "ext", "type": "boosting", "criticality": "internal"}, timeout=10)
+                   json={"name": "ext", "type": "boosting", "criticality": criticality}, timeout=10)
     assert r.status_code == 200, r.text
     return r.json()["model_id"]
+
+
+def _safetensors_bytes():
+    # минимальный валидный safetensors: 8-байтный LE-префикс длины + JSON-заголовок
+    header = json.dumps({"__metadata__": {"producer": "sirius-demo"}}).encode()
+    return struct.pack("<Q", len(header)) + header
 
 
 @given("поднятый control-plane")
@@ -129,3 +137,29 @@ def status_fp():
     r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
     f = next(f for f in r.json()["findings"] if f["id"] == S["finding_id"])
     assert f["status"] == "FP", f
+
+
+# --- SUP-07 (политика форматов по критичности) ---
+@given("зарегистрирована критичная модель для приёма")
+def reg_crit_model():
+    S["model_id"] = _register_model("financial")
+
+
+@when("DS подаёт чистый pickle-артефакт")
+def ingest_clean_pickle():
+    S["resp"] = httpx.post(f"{BASE}/api/models/{S['model_id']}/ingest", headers=tok("DS"),
+                           content=_clean_bytes(), timeout=15)
+
+
+@when("DS подаёт артефакт в формате safetensors")
+def ingest_safetensors():
+    S["resp"] = httpx.post(f"{BASE}/api/models/{S['model_id']}/ingest", headers=tok("DS"),
+                           content=_safetensors_bytes(), timeout=15)
+
+
+@then("появляется сработка о небезопасном формате")
+def unsafe_format_finding():
+    r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
+    fs = [f for f in r.json()["findings"]
+          if f["asset"] == f"model/{S['model_id']}" and f["verdict"] == "unsafe-format"]
+    assert fs, r.text
