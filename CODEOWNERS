@@ -1,0 +1,13 @@
+# Обязательное ревью на чувствительные изменения (separation of duties, риск ACC-02/GT-1).
+# Владелец — РОЛЬ (группа-мейнтейнеров), не конкретная личность.
+# TODO: заменить плейсхолдер на реальную GitLab-группу проекта.
+
+* @secure-mlops-maintainers
+
+# Контур безопасности требует ревью владельца:
+/.gitlab-ci.yml          @secure-mlops-maintainers
+/.pre-commit-config.yaml @secure-mlops-maintainers
+/SECURITY.md             @secure-mlops-maintainers
+/CODEOWNERS              @secure-mlops-maintainers
+/docs/threat-model/      @secure-mlops-maintainers
+/docs/adr/               @secure-mlops-maintainers

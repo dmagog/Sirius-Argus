@@ -1,0 +1,45 @@
+# Security gates самого репозитория Sirius — догфудинг практик платформы.
+# Принцип fail-closed: пайплайн ПАДАЕТ при находках секретов/уязвимостей.
+# "В прод (main) — только через зелёный гейт." Те же проверки позже выполняет control-plane.
+
+stages:
+  - secrets
+  - deps
+  - sast
+
+# 1) Секреты в коде и истории — блокирующий гейт (закрывает риск SECR-1)
+gitleaks:
+  stage: secrets
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  script:
+    - gitleaks detect --source . --redact --verbose --exit-code 1
+  allow_failure: false
+
+# 2) Уязвимости и секреты в зависимостях/файлах репо — блокирующий (закрывает SC-1)
+trivy-fs:
+  stage: deps
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  variables:
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_CACHE_DIR: ".trivycache/"
+  script:
+    - trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 .
+  cache:
+    paths:
+      - .trivycache/
+  allow_failure: false
+
+# 3) SAST — запускается, когда в репо появляется код (advisory на старте)
+semgrep:
+  stage: sast
+  image: semgrep/semgrep:latest
+  script:
+    - semgrep scan --config auto --error .
+  allow_failure: true
+  rules:
+    - exists:
+        - "**/*.py"
