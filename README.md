@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/sirius-argus-mark.png" alt="Sirius Argus" width="140">
+</p>
+
 # Sirius Argus — безопасная MLOps-платформа
 
 Argus — стоокий страж из мифа: имя про суть платформы, которая видит весь ML-пайплайн и оберегает от угроз. Sirius — звезда-сторож, α Большого Пса; девиз — *the all-seeing watchdog star*.
