@@ -58,6 +58,7 @@
 | SV-3 | Serving | Model extraction | 3 | 3 | 9 | Mitigate · D1 | rate-limit + detect (RT-01) |
 | SV-4 | Serving | Adversarial evasion | 3 | 3 | 9 | Mitigate · D1 | детектор (RT-02) |
 | SV-6 | Serving | Denial-of-wallet / истощение ресурсов | 3 | 3 | 9 | Mitigate · D9 | rate-limit + квоты (DOW-01) |
+| SV-7 | Serving | Распределённый DDoS на gateway → недоступность инференса | 3 | 3 | 9 | Mitigate + Accept(volumetric) · D9 | reverse-proxy, global/per-IP rate-limit, load-shedding (DOS-01) |
 | ID-2 | Identity | Неотозванный доступ (orphaned) | 3 | 3 | 9 | Mitigate · D9 | lifecycle revoke (ACC-03) |
 
 ### 🟡 Средний (4–8)
@@ -65,6 +66,7 @@
 | ID | Узел | Риск | L | I | Score | Обработка · Владелец | Митигация (сценарий) |
 |---|---|---|:--:|:--:|:--:|---|---|
 | CP-4 | Control Plane | Утечка секретов из CP (логи/env) | 2 | 4 | 8 | Mitigate · D9 | secret mgmt, не логировать секреты |
+| CP-5 | Control Plane | DDoS на единую точку входа → недоступность управления | 2 | 4 | 8 | Mitigate + Accept(volumetric) · D9 | reverse-proxy, rate-limit, load-shedding (DOS-01) |
 | MO-3 | MinIO | Мисконфиг бакета (анонимный доступ) | 2 | 4 | 8 | Mitigate · D9 | private by default |
 | GT-3 | Gitea/CI | Подделка вебхука (fake → PR passed) | 2 | 4 | 8 | Mitigate · D9 | HMAC-секрет вебхука (CI-01) |
 | PG-1 | Postgres | Подмена/удаление аудита | 2 | 4 | 8 | Mitigate · D1 | hash-chain (MON-04) |
@@ -89,6 +91,7 @@
 | HOST-1 — компрометация хоста/докер-демона | граница доверия: ноутбук/хост считаем доверенным; защита хоста вне скоупа MLSecOps-контура | D9 |
 | SC-2 (остаток) — ShadowLogic-класс граф-бэкдоров | автосканеры pickle их не ловят; смягчаем валидацией/red-team, остаток принимаем и роутим в HITL (SUP-06) | D1 |
 | SV-5 (остаток) — membership/attribute inference | полностью не устраняется без DP; снижаем output-reduction, остаток принят | D1 |
+| Объёмный L3/L4 DDoS (SV-7/CP-5 остаток) | сетевой scrubbing / anti-DDoS-провайдер вне ноутбука; держим app-layer (DOS-01), сетевую защиту принимаем как допущение | D9 |
 | Side-channel / weight-stego (edge) | research-grade, вне скоупа окна; см. personas.md §6 | D1 |
 
 ## Что это значит для порядка работ
@@ -97,7 +100,7 @@
 
 1. **И0/И1 — самозащита контура с самого начала**: сетевая изоляция (наружу только CP и serving-gateway), per-service креды, object-level authz, **fail-closed** гейты, short-lived токены, hash-chain аудита, скан собственных зависимостей.
 2. **И2/И3 — supply-chain и единая точка входа** (SUP-01/03, CI-01, REG-01).
-3. **И4 — runtime** (extraction/evasion/DoW) — важно для демо, но не «корона».
+3. **И4 — runtime** (extraction/evasion/DoW/DDoS) — важно для демо, но не «корона».
 4. **Остаточные** — приняты явно (таблица выше), а не замолчаны.
 
 Главный тезис для защиты проекта: **мы защищаем в первую очередь то, что само защищает** — компрометация энфорсера обнуляет все остальные контроли.

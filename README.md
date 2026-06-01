@@ -11,8 +11,8 @@ Sirius Argus встраивает безопасность прямо в ML-па
 | Документ | О чём |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Архитектура: компоненты, ER-модель, жизненный цикл, потоки, карта покрытия (схемы Mermaid) |
-| [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A21) и защитников (D1–D10) |
-| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 41 BDD-сценарий: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
+| [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A22) и защитников (D1–D10), с кодовыми именами |
+| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 42 BDD-сценария: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
 | [docs/threat-model/risk-register.md](docs/threat-model/risk-register.md) | Пер-узловой реестр рисков: приоритет L×I, обработка, владелец |
 | [docs/threat-model/security-kpis.md](docs/threat-model/security-kpis.md) | Измеримая безопасность: KPI и SLO |
 | [docs/adr/](docs/adr/) | Журнал архитектурных решений |

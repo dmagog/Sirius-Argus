@@ -59,6 +59,7 @@
 | RB-01 | Rollback на уязвимую версию блокируется | A19 | @governance | version policy / запрет downgrade | P1 | И3 |
 | TOCTOU-01 | Подмена артефакта после скана ловится при загрузке | A20 | @ML09 | ре-верификация подписи (admission) | P1 | И4 |
 | DOW-01 | Ресурсное истощение троттлится/квотируется | A21 | @availability | rate-limit + квоты | P2 | И4 |
+| DOS-01 | Распределённый DDoS не роняет платформу | A22 | @availability | reverse-proxy, global/per-IP rate-limit, load-shedding | P1 | И4 |
 | VIS-04 | Смена статуса finding требует прав и пишется в аудит | A7,A17 | @visibility-integrity | authz на триаж + audit | P1 | И2 |
 
 ---
@@ -74,6 +75,19 @@ Feature: Защита CI/build-конвейера
     Then шаг с неподписанным/неприкреплённым образом не выполняется
     And создаётся Finding(type=ci-supply-chain)
     And раннер работает с минимальными правами, без доступа к прод-секретам
+```
+
+```gherkin
+@availability @ddos @P1
+Feature: Устойчивость к распределённому DDoS
+  Scenario: DOS-01 — Объёмный флуд не роняет платформу
+    Given внешние поверхности (serving-gateway и control-plane) стоят за reverse-proxy
+    And заданы global и per-IP rate-limit, лимиты соединений и таймаутов
+    When приходит объёмный флуд с множества источников
+    Then избыточные запросы отбрасываются быстро (429/503, load-shedding)
+    And ядро остаётся доступным для легитимного трафика
+    And создаётся Finding(type=ddos) и поднимается алерт
+    And объёмная L3/L4-защита (upstream scrubbing) зафиксирована как остаточный риск
 ```
 
 ```gherkin
