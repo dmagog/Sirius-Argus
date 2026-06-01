@@ -13,7 +13,7 @@ Sirius Argus встраивает безопасность прямо в ML-па
 | [docs/roadmap.md](docs/roadmap.md) | Итеративный план реализации (И0–И6), привязка к приоритетам куратора и сценариям |
 | [docs/architecture.md](docs/architecture.md) | Архитектура: компоненты, ER-модель, жизненный цикл, потоки, карта покрытия (схемы Mermaid) |
 | [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A22) и защитников (D1–D10), с кодовыми именами |
-| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 44 BDD-сценария: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
+| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 47 BDD-сценариев: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
 | [docs/testing.md](docs/testing.md) | Стратегия тестирования: test-first BDD, пирамида, pytest-bdd против compose |
 | [docs/threat-model/risk-register.md](docs/threat-model/risk-register.md) | Пер-узловой реестр рисков: приоритет L×I, обработка, владелец |
 | [docs/threat-model/security-kpis.md](docs/threat-model/security-kpis.md) | Измеримая безопасность: KPI и SLO |

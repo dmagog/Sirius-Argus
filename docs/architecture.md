@@ -130,7 +130,7 @@ flowchart TB
 
 ## 6. Доменная модель
 
-Все сущности связаны; сработки и аудит — сквозные.
+Все сущности связаны; сработки и аудит — сквозные. Идентичность и роли (`User/Role`) — из Keycloak (OIDC); object-authz — в control-plane.
 
 | Сущность | Ключевые поля | Связи |
 |---|---|---|
@@ -262,22 +262,27 @@ flowchart LR
 
 ## 8. Ключевые потоки
 
+> Все акторы аутентифицированы через Keycloak (OIDC); сканы и сработки идут асинхронно через шину Redis ([ADR-0008](adr/0008-message-broker.md)) — явно показано в потоке A, в C/D подразумевается.
+
 **A. Приём внешней модели (showpiece).** Актор тянет модель (HF/локально) → Control Plane запускает скан артефакта → вредоносный pickle → **БЛОК** + `Finding(critical)` + `AuditEvent`; чистая модель регистрируется. Артефакт никогда не десериализуется до прохождения скана.
 
 ```mermaid
 sequenceDiagram
     actor DS
     participant CP as Control Plane
-    participant SEC as Security gates
-    participant REG as MLflow Registry
+    participant BUS as Redis шина
+    participant SEC as Скан-воркер
     participant DB as Postgres
 
-    DS->>CP: затянуть внешнюю модель
-    CP->>SEC: скан артефакта (до десериализации)
-    SEC-->>CP: вредоносный pickle (verdict=malicious)
-    CP->>DB: Finding(critical) + AuditEvent ingestion.blocked
+    DS->>CP: затянуть внешнюю модель (OIDC-токен)
+    CP->>BUS: задача скана (артефакт в карантине)
+    BUS->>SEC: взять задачу
+    SEC->>SEC: скан до десериализации
+    SEC->>BUS: Finding(critical, malicious)
+    BUS->>CP: событие Finding
+    CP->>DB: Finding + AuditEvent ingestion.blocked
     CP-->>DS: БЛОК — в реестр не добавлено
-    Note over CP,REG: артефакт никогда не загружается в память
+    Note over CP,SEC: артефакт не загружается в память
 ```
 
 **B. Обучение.** DS обучает → `Run` (гиперпараметры, метрики, lineage) в MLflow, артефакт в MinIO → авто-генерится Model Card / security profile → артефакт **подписывается с провенанс-аттестацией** (in-toto/cosign), и дальше принимается только подписанным ([ADR-0006](adr/0006-model-signing-provenance.md)).
