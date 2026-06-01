@@ -48,7 +48,7 @@
 - 🎯 в прод только через gated PR; критичное — через HITL.
 - **срез:** Gitea webhook → control-plane как CI; gated promotion + branch protection (no bypass); `SUP-03` (CVE-PR блокируется); HITL (`VIS-03`); admission на сервинге.
 - **глубина:** подпись+провенанс ([ADR-0006](adr/0006-model-signing-provenance.md)); **policy-as-code матрица гейтов по критичности** (regulatory/financial → HITL + доп. сканы).
-- **green:** `SUP-03/04`, `CI-01`, `REG-01`, `RB-01`, `ACC-02/06/07`, `SC-01`, `VIS-03`.
+- **green:** `SUP-03/04`, `SUP-08`, `CI-01`, `REG-01`, `RB-01`, `ACC-02/06/07`, `SC-01`, `VIS-03`, `GOV-01`.
 - **риск/fallback (главный):** вебхук Gitea↔CI хрупок → **fallback: внутренний промоушен-пайплайн в control-plane** (гейт без git-слоя); Gitea — слой сверху, не блокер демо.
 - **демо money-shots #2/#3:** «уязвимый PR не доходит до прода» + «критичная модель — только после HITL».
 
@@ -56,7 +56,7 @@
 - 🎯 рантайм-атаки детектятся; decommission отзывает доступы.
 - **срез:** сервинг трио за gateway; rate-limit + extraction-detect; decommission-флоу; `TOCTOU-01`.
 - **глубина:** adversarial/FGSM, DDoS (`DOS-01`), drift; **петля рантайм→реестр** (инцидент → ре-ревью / авто-rollback).
-- **green:** `RT-01/02/05/06`, `DOS-01`, `DOW-01`, `MON-01/03`, `DATA-03/05`, `FB-01`, `TOCTOU-01`.
+- **green:** `RT-01/02/05/06`, `DOS-01`, `DOW-01`, `MON-01/03`, `DATA-03/05`, `FB-01`, `TOCTOU-01`, `EXF-01`.
 - **риск/fallback:** torch вес/ARM/время → pre-trained CPU-only чекпойнт, без обучения в демо; adversarial на лёгкой модели.
 - **демо money-shot #4:** «100 параллельных запросов на extraction → детект + таймлайн».
 
