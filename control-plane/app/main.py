@@ -5,13 +5,17 @@
 AuthN — fail-closed (auth.py). Каждое действие и каждый отказ доступа — в аудит.
 """
 import hashlib
+import hmac
+import json
 import logging
+import os
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
+import requests
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 from pydantic import BaseModel
 
@@ -385,6 +389,7 @@ COVERAGE = [
     {"id": "CRED-01/AUTH-01", "threat": "невалидный/поддельный токен", "control": "OIDC fail-closed", "match": ("exact", "access.denied")},
     {"id": "EXF-01", "threat": "инсайдерская эксфильтрация", "control": "детект объёма выгрузок", "match": ("verdict", "bulk-exfiltration")},
     {"id": "MON-03", "threat": "вывод из эксплуатации", "control": "decommission снимает деплои", "match": ("prefix", "model.retire")},
+    {"id": "CI-01", "threat": "отравленный коммит / шаг пайплайна", "control": "control-plane как CI + HMAC-вебхук", "match": ("prefix", "ci.")},
 ]
 
 
@@ -450,6 +455,111 @@ def coverage_view():
         "<p style='color:#888'>Статус «live» означает реальные сработки/блокировки в аудите по этому контролю.</p>"
         "</body></html>"
     )
+
+
+# ---------- единая точка входа в прод: control-plane как CI (Gitea) ----------
+GITEA_URL = os.environ.get("GITEA_BASE_URL", "http://gitea:3000")
+GITEA_TOKEN = os.environ.get("GITEA_TOKEN", "")
+CI_WEBHOOK_SECRET = os.environ.get("CI_WEBHOOK_SECRET", "")
+
+
+class CiFile(BaseModel):
+    path: str
+    content: str = ""
+
+
+class CiScanIn(BaseModel):
+    ref: str = "HEAD"
+    files: list[CiFile] = []
+
+
+def _ci_gate(files):
+    """Прогон файлов коммита через гейты: код (SAST+секреты), зависимости, секреты."""
+    findings = []
+    for f in files:
+        path, content = f.get("path", ""), f.get("content", "")
+        if path.endswith((".py", ".ipynb")):
+            findings += scanners.scan_code(content, path) + scanners.scan_secrets(content)
+        elif "requirements" in path and path.endswith(".txt"):
+            findings += scanners.scan_dependencies(content)
+        else:
+            findings += scanners.scan_secrets(content)
+    return findings
+
+
+def _record_ci(findings, ref, actor):
+    if findings:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with SessionLocal() as s:
+            for r in findings:
+                s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
+                                     status="open", asset_type="ci", asset_ref=f"ci/{ref}", detail=r["detail"], actor=actor))
+            s.commit()
+
+
+@app.post("/api/ci/scan")
+def ci_scan(body: CiScanIn, p: Principal = Depends(require("ci.scan"))):
+    """CI-01: гейт «control-plane как CI» — отравленный коммит не проходит (fail-closed)."""
+    findings = _ci_gate([f.model_dump() for f in body.files])
+    _record_ci(findings, body.ref, p.sub)
+    passed = not findings
+    audit.append_event(actor=p.sub, action="ci.scan.passed" if passed else "ci.scan.blocked", obj=f"ci/{body.ref}")
+    return {"passed": passed, "ref": body.ref, "findings": findings}
+
+
+def _fetch_changed_files(repo, sha, payload):
+    if not (repo and sha and GITEA_TOKEN):
+        return []
+    paths = set()
+    for c in payload.get("commits", []):
+        paths.update((c.get("added") or []) + (c.get("modified") or []))
+    files = []
+    for path in list(paths)[:20]:
+        try:
+            r = requests.get(f"{GITEA_URL}/api/v1/repos/{repo}/raw/{path}", params={"ref": sha},
+                             headers={"Authorization": f"token {GITEA_TOKEN}"}, timeout=4)
+            if r.status_code == 200:
+                files.append({"path": path, "content": r.text})
+        except requests.RequestException:
+            pass
+    return files
+
+
+def _post_commit_status(repo, sha, passed, n):
+    if not (repo and sha and GITEA_TOKEN):
+        return
+    try:
+        requests.post(f"{GITEA_URL}/api/v1/repos/{repo}/statuses/{sha}",
+                      headers={"Authorization": f"token {GITEA_TOKEN}"},
+                      json={"state": "success" if passed else "failure", "context": "sirius/security-gate",
+                            "description": "ок" if passed else f"{n} сработок — блок"}, timeout=4)
+    except requests.RequestException as e:
+        logger.warning("не удалось выставить commit-status в Gitea: %s", e)
+
+
+@app.post("/api/ci/webhook")
+async def ci_webhook(request: Request):
+    """Единая точка входа: Gitea webhook → security-гейт → commit-status обратно.
+    Подпись HMAC обязательна (поддельный вебхук отвергается, CI-01). Изменённые файлы
+    тянутся из Gitea API, гоняются через _ci_gate; статус ставится обратно (best-effort)."""
+    body = await request.body()
+    if CI_WEBHOOK_SECRET:
+        expected = hmac.new(CI_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(request.headers.get("X-Gitea-Signature", ""), expected):
+            audit.append_event(actor="gitea-webhook", action="ci.webhook.rejected", obj="ci", was_authorized=False)
+            raise HTTPException(status_code=401, detail="invalid webhook signature")
+    try:
+        payload = json.loads(body or b"{}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="bad payload")
+    repo = (payload.get("repository") or {}).get("full_name", "")
+    sha = payload.get("after", "")
+    findings = _ci_gate(_fetch_changed_files(repo, sha, payload))
+    passed = not findings
+    _post_commit_status(repo, sha, passed, len(findings))
+    _record_ci(findings, f"{repo}@{sha[:8]}" if sha else (repo or "webhook"), "gitea-webhook")
+    audit.append_event(actor="gitea-webhook", action="ci.webhook.passed" if passed else "ci.webhook.blocked", obj=f"ci/{repo}")
+    return {"accepted": True, "passed": passed, "findings": len(findings)}
 
 
 @app.get("/api/registry")

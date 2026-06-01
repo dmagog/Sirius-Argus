@@ -38,6 +38,9 @@ services:
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/sirius/protocol/openid-connect/certs
       REDIS_URL: redis://:${REDIS_PASSWORD:-sirius-redis}@redis:6379/0
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:-change-me-ci-webhook}
+      GITEA_BASE_URL: http://gitea:3000
+      GITEA_TOKEN: ${GITEA_TOKEN:-}
       DEV_AUTH: ${DEV_AUTH:-0}
     depends_on:
       postgres:
