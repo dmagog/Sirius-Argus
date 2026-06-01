@@ -28,4 +28,5 @@ class AuditEvent(Base):
 
 
 def init_db():
+    from . import domain  # noqa: F401 — регистрирует доменные модели на Base
     Base.metadata.create_all(engine)

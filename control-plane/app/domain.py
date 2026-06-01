@@ -1,0 +1,58 @@
+"""Доменная модель реестра: датасеты, модели, версии, деплои.
+
+ModelVersion несёт lineage (dataset_version + code_commit + env_lock) — для
+репродьюсибилити (MON-02) и blast-radius, и поля профиля безопасности / модель-карты.
+"""
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
+
+from .db import Base
+
+
+class Dataset(Base):
+    __tablename__ = "datasets"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    sensitivity = Column(String(16), default="open")  # open | pii | secret
+    source = Column(String(255), default="")
+    owner = Column(String(255), default="")
+
+
+class DatasetVersion(Base):
+    __tablename__ = "dataset_versions"
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
+    hash = Column(String(64), default="")
+
+
+class Model(Base):
+    __tablename__ = "models"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    type = Column(String(64), default="")              # boosting | linear | anomaly | ...
+    criticality = Column(String(16), default="internal")  # regulatory | financial | mass | internal
+    owner = Column(String(255), default="")
+
+
+class ModelVersion(Base):
+    __tablename__ = "model_versions"
+    id = Column(Integer, primary_key=True)
+    model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
+    version = Column(Integer, default=1)
+    stage = Column(String(16), default="dev")          # dev | staging | prod | retired
+    # lineage / репродьюсибилити (MON-02)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    code_commit = Column(String(64), default="")
+    env_lock = Column(String(255), default="")
+    # профиль безопасности / модель-карта (GOV-01)
+    artifact_hash = Column(String(64), default="")
+    signature = Column(String(128), default="")
+    intended_use = Column(Text, default="")
+    limitations = Column(Text, default="")
+    requires_validation = Column(Boolean, default=False)
+
+
+class Deployment(Base):
+    __tablename__ = "deployments"
+    id = Column(Integer, primary_key=True)
+    model_version_id = Column(Integer, ForeignKey("model_versions.id"), nullable=False)
+    status = Column(String(16), default="active")      # active | retired
