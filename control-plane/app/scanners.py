@@ -11,6 +11,7 @@ pickle-RCE на приёме. Он не претендует на полноту
 import ast
 import json
 import pickletools
+import re
 import struct
 
 DANGEROUS_MODULES = {
@@ -187,4 +188,22 @@ def scan_dependencies(requirements_text: str):
         if ver.strip() in bad:
             findings.append({"tool": "sirius-dep-scan", "verdict": "vulnerable-dependency", "severity": "high",
                              "detail": f"{pkg.strip()}=={ver.strip()}: {bad[ver.strip()]}"})
+    return findings
+
+
+_SECRET_PATTERNS = [
+    (re.compile(r"AKIA[0-9A-Z]{16}"), "AWS access key"),
+    (re.compile(r"ghp_[0-9A-Za-z]{36}"), "GitHub token"),
+    (re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"), "private key"),
+    (re.compile(r"""(?i)(password|passwd|secret|api[_-]?key|token)\s*[:=]\s*['"][^'"]{6,}['"]"""), "hardcoded secret"),
+]
+
+
+def scan_secrets(text: str):
+    """ACC-06: поиск утёкших секретов в тексте кода/коммита (gitleaks-стиль, regex)."""
+    findings = []
+    for pat, label in _SECRET_PATTERNS:
+        if pat.search(text):
+            findings.append({"tool": "sirius-secret-scan", "verdict": "secret-exposed", "severity": "high",
+                             "detail": label})
     return findings

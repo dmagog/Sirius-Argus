@@ -399,7 +399,7 @@ async def scan_code_endpoint(request: Request, filename: str = Query("submitted.
     """CODE-01: AST-скан кода/ноутбука на опасные паттерны. Код НЕ исполняется
     (только ast.parse). Pattern-based MVP; полный Semgrep-гейт на PR — в И3."""
     src = (await request.body()).decode("utf-8", "replace")
-    findings = scanners.scan_code(src, filename)
+    findings = scanners.scan_code(src, filename) + scanners.scan_secrets(src)
     if findings:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         with SessionLocal() as s:

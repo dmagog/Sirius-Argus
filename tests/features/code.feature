@@ -12,3 +12,9 @@ Feature: SAST на код (ML-aware)
     Given поднятый control-plane
     When DS отправляет на скан безопасный код
     Then скан помечает код чистым
+
+  Scenario: ACC-06 — захардкоженный секрет в коде флагается
+    Given поднятый control-plane
+    When DS отправляет на скан код с захардкоженным секретом
+    Then скан помечает код небезопасным
+    And создаётся сработка secret-exposed

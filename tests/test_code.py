@@ -47,3 +47,15 @@ def finding():
 def clean():
     assert S["resp"].status_code == 200, S["resp"].text
     assert S["resp"].json()["clean"] is True, S["resp"].text
+
+
+@when("DS отправляет на скан код с захардкоженным секретом")
+def scan_secret():
+    code = b'def connect():\n    password = "demoSecret123"\n    return password\n'
+    S["resp"] = httpx.post(f"{BASE}/api/scan/code", headers=tok("DS"), content=code, timeout=10)
+
+
+@then("создаётся сработка secret-exposed")
+def secret_finding():
+    r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
+    assert any(f["verdict"] == "secret-exposed" for f in r.json()["findings"]), r.text

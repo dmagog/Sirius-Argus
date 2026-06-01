@@ -42,6 +42,14 @@ def dep_finding():
     assert any(f["verdict"] == "vulnerable-dependency" for f in r.json()["findings"]), r.text
 
 
+@when("сканируются собственные requirements платформы")
+def scan_self():
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(repo, "control-plane", "requirements.txt"), "rb") as f:
+        reqs = f.read()
+    S["resp"] = httpx.post(f"{BASE}/api/scan/deps", headers=tok("MLSecOps"), content=reqs, timeout=10)
+
+
 @then("скан помечает зависимости чистыми")
 def deps_clean():
     assert S["resp"].status_code == 200, S["resp"].text
