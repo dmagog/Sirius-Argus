@@ -69,10 +69,17 @@ def whoami(p: Principal = Depends(get_principal)):
 
 
 # ---------- registry ----------
+class ColumnIn(BaseModel):
+    name: str
+    pii: bool = False
+    sample: str = ""
+
+
 class DatasetIn(BaseModel):
     name: str
     sensitivity: str = "open"
     source: str = ""
+    columns: list[ColumnIn] = []
 
 
 class ModelIn(BaseModel):
@@ -110,6 +117,8 @@ def create_dataset(body: DatasetIn, p: Principal = Depends(require("dataset.crea
             hash=hashlib.sha256(f"{ds.id}:{body.name}:{body.source}".encode()).hexdigest()[:16],
         )
         s.add(dv)
+        for c in body.columns:
+            s.add(domain.DatasetColumn(dataset_id=ds.id, name=c.name, is_pii=c.pii, sample=c.sample))
         # DATA-01: недоверенный источник → карантин + Finding (датасет принят в holding, не «чистый»)
         status = "active" if _is_trusted_source(body.source) else "quarantined"
         if status == "quarantined":
@@ -135,6 +144,21 @@ def get_dataset(ds_id: int, p: Principal = Depends(require("registry.read"))):
             raise HTTPException(status_code=403, detail=f"no clearance for sensitivity={ds.sensitivity}")
         audit.append_event(actor=p.sub, action="dataset.read", obj=f"dataset/{ds_id}")
         return {"id": ds.id, "name": ds.name, "sensitivity": ds.sensitivity, "source": ds.source}
+
+
+@app.get("/api/datasets/{ds_id}/schema")
+def dataset_schema(ds_id: int, p: Principal = Depends(require("registry.read"))):
+    """DATA-04: PII-колонки маскируются, если у роли нет допуска к pii; иначе видны."""
+    with SessionLocal() as s:
+        ds = s.get(domain.Dataset, ds_id)
+        if not ds:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        unmasked = can_read_sensitivity(p.roles, "pii")
+        cols = s.query(domain.DatasetColumn).filter_by(dataset_id=ds_id).all()
+        out = [{"name": c.name, "pii": c.is_pii,
+                "sample": c.sample if (unmasked or not c.is_pii) else "***"} for c in cols]
+        audit.append_event(actor=p.sub, action="dataset.schema.read", obj=f"dataset/{ds_id}")
+        return {"dataset_id": ds_id, "columns": out, "pii_unmasked": unmasked}
 
 
 @app.post("/api/models")

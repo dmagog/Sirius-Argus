@@ -24,6 +24,17 @@ class DatasetVersion(Base):
     hash = Column(String(64), default="")
 
 
+class DatasetColumn(Base):
+    """Колонка датасета с пометкой PII (DATA-04): значения PII маскируются для ролей
+    без допуска к чувствительным данным."""
+    __tablename__ = "dataset_columns"
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
+    name = Column(String(128), default="")
+    is_pii = Column(Boolean, default=False)
+    sample = Column(String(255), default="")
+
+
 class Model(Base):
     __tablename__ = "models"
     id = Column(Integer, primary_key=True)

@@ -35,6 +35,16 @@ def _clean_bytes():
     return pickle.dumps({"model": "linear", "weights": [0.1, 0.2, 0.3]})
 
 
+class _Benign:
+    def __init__(self):
+        self.w = [1, 2, 3]
+
+
+def _benign_code_bytes():
+    # код-несущий, но безопасный pickle (ссылка на безобидный класс) — для VIS-02
+    return pickle.dumps(_Benign())
+
+
 def _register_model(criticality="internal"):
     r = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
                    json={"name": "ext", "type": "boosting", "criticality": criticality}, timeout=10)
@@ -163,3 +173,20 @@ def unsafe_format_finding():
     fs = [f for f in r.json()["findings"]
           if f["asset"] == f"model/{S['model_id']}" and f["verdict"] == "unsafe-format"]
     assert fs, r.text
+
+
+# --- VIS-02 (расхождение вердиктов сканеров) ---
+@when("DS подаёт артефакт, подозрительный для второго сканера")
+def ingest_benign_code():
+    S["resp"] = httpx.post(f"{BASE}/api/models/{S['model_id']}/ingest", headers=tok("DS"),
+                           content=_benign_code_bytes(), timeout=15)
+
+
+@then("есть сработка suspicious от эвристического сканера")
+def suspicious_finding():
+    r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
+    fs = [f for f in r.json()["findings"]
+          if f["asset"] == f"model/{S['model_id']}" and f["verdict"] == "suspicious"
+          and f["tool"] == "sirius-heuristic-scan"]
+    assert fs, r.text
+    S["finding_id"] = fs[0]["id"]

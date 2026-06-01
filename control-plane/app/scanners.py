@@ -53,6 +53,21 @@ def scan_pickle(data: bytes):
     return findings
 
 
+_CODE_OPS = {"GLOBAL", "STACK_GLOBAL", "REDUCE", "INST", "OBJ", "NEWOBJ", "NEWOBJ_EX", "BUILD"}
+
+
+def scan_heuristic(data: bytes):
+    """Второй, намеренно «параноидальный» сканер: любой код-несущий опкод.
+
+    Шумнее, чем scan_pickle (флагует и обращения к безопасным модулям) — нужен,
+    чтобы вердикты инструментов могли расходиться (VIS-02): один считает чистым,
+    другой — подозрительным, оба видны, фолз триажится."""
+    try:
+        return sorted({op.name for op, _arg, _pos in pickletools.genops(data) if op.name in _CODE_OPS})
+    except Exception:
+        return ["parse-error"]
+
+
 def detect_format(data: bytes) -> str:
     """Классификация формата по сигнатуре: safetensors | pickle | unknown."""
     if len(data) >= 8:
@@ -84,16 +99,24 @@ def assess_artifact(data: bytes, criticality: str = "internal"):
     - Неизвестный формат — fail-closed.
     """
     fmt = detect_format(data)
-    findings = []
+    findings, admit = [], True
     if fmt == "pickle":
         hits = scan_pickle(data)
         if hits:
             findings.append({"tool": "sirius-pickle-scan", "verdict": "malicious", "severity": "critical",
                              "detail": "; ".join(f"{h['opcode']} {h['module']}.{h['name']}" for h in hits)})
+            admit = False
+        else:
+            susp = scan_heuristic(data)
+            if susp:  # код-несущий опкод без опасных модулей → подозрительно, но не блокируем (VIS-02)
+                findings.append({"tool": "sirius-heuristic-scan", "verdict": "suspicious", "severity": "medium",
+                                 "detail": f"код-несущие опкоды {susp}; опасных модулей не найдено — требует триажа (возможен фолз)"})
         if criticality in ("regulatory", "financial"):
             findings.append({"tool": "sirius-format-policy", "verdict": "unsafe-format", "severity": "high",
                              "detail": f"формат pickle недопустим для критичности '{criticality}': требуется safetensors (convert-or-reject)"})
+            admit = False
     elif fmt == "unknown":
         findings.append({"tool": "sirius-format-policy", "verdict": "unknown-format", "severity": "medium",
                          "detail": "неизвестный/неподдерживаемый формат артефакта"})
-    return {"format": fmt, "findings": findings, "admit": not findings}
+        admit = False
+    return {"format": fmt, "findings": findings, "admit": admit}

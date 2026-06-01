@@ -50,3 +50,43 @@ def untrusted_finding():
     fs = [f for f in r.json()["findings"]
           if f["asset"] == f"dataset/{S['ds_id']}" and f["verdict"] == "untrusted-source"]
     assert fs, r.text
+
+
+# --- DATA-04 (PII-маскирование) ---
+@given("DE создал датасет с PII-колонкой")
+def ds_with_pii():
+    r = httpx.post(f"{BASE}/api/datasets", headers=tok("DE"), json={
+        "name": "customers", "sensitivity": "open", "source": "internal://crm",
+        "columns": [{"name": "email", "pii": True, "sample": "alice@example.com"},
+                    {"name": "amount", "pii": False, "sample": "42"}]}, timeout=10)
+    assert r.status_code == 200, r.text
+    S["ds_id"] = r.json()["dataset_id"]
+
+
+@when("DS читает схему датасета")
+def ds_reads_schema():
+    S["resp"] = httpx.get(f"{BASE}/api/datasets/{S['ds_id']}/schema", headers=tok("DS"), timeout=10)
+
+
+@when("MLSecOps читает схему датасета")
+def sec_reads_schema():
+    S["resp"] = httpx.get(f"{BASE}/api/datasets/{S['ds_id']}/schema", headers=tok("MLSecOps"), timeout=10)
+
+
+def _cols():
+    return {c["name"]: c for c in S["resp"].json()["columns"]}
+
+
+@then("PII-значение замаскировано")
+def pii_masked():
+    assert _cols()["email"]["sample"] == "***", S["resp"].text
+
+
+@then("не-PII значение видно")
+def nonpii_visible():
+    assert _cols()["amount"]["sample"] == "42", S["resp"].text
+
+
+@then("PII-значение видно")
+def pii_visible():
+    assert _cols()["email"]["sample"] == "alice@example.com", S["resp"].text

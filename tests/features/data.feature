@@ -12,3 +12,16 @@ Feature: Контроль источников данных (gate на зака�
     Given поднятый control-plane
     When DE создаёт датасет из доверенного источника
     Then датасет в статусе active
+
+  Scenario: DATA-04 — PII-колонка маскируется без допуска
+    Given поднятый control-plane
+    And DE создал датасет с PII-колонкой
+    When DS читает схему датасета
+    Then PII-значение замаскировано
+    And не-PII значение видно
+
+  Scenario: DATA-04 — с допуском PII видно
+    Given поднятый control-plane
+    And DE создал датасет с PII-колонкой
+    When MLSecOps читает схему датасета
+    Then PII-значение видно
