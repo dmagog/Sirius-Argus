@@ -14,6 +14,9 @@ PERMISSIONS = {
     "model.version": {"DS"},
     "model.promote": {"MLSecOps"},
     "decommission": {"MLSecOps"},
+    "model.ingest": {"DS", "MLSecOps"},
+    "finding.read": {"DS", "DE", "MLSecOps", "Product", "CEO"},
+    "finding.triage": {"MLSecOps"},
     "registry.read": {"DS", "DE", "MLSecOps", "Product", "CEO"},
 }
 

@@ -6,12 +6,13 @@ AuthN — fail-closed (auth.py). Каждое действие и каждый �
 """
 import hashlib
 import logging
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from . import audit, bus, domain, logging_setup, registry
+from . import audit, bus, domain, logging_setup, registry, scanners
 from .auth import Principal, get_principal
 from .db import SessionLocal, init_db
 from .rbac import can_read_sensitivity, require
@@ -252,3 +253,72 @@ def model_backend(model_id: int, p: Principal = Depends(require("registry.read")
         tags = {t["key"]: t["value"] for t in v.get("tags", [])}
         versions.append({"mlflow_version": v["version"], "cp_version": tags.get("cp_version"), "stage": tags.get("stage")})
     return {"backend": "mlflow", "mlflow_name": name, "connected": True, "present": True, "versions": versions}
+
+
+# ---------- ingestion-гейт + findings (И2) ----------
+@app.post("/api/models/{model_id}/ingest")
+async def ingest_model(model_id: int, request: Request, p: Principal = Depends(require("model.ingest"))):
+    """SUP-01 ingestion-гейт: артефакт сканируется в карантине БЕЗ десериализации.
+    Вредоносный → БЛОК (422) + Finding(critical) + audit, в реестр не попадает.
+    Чистый → регистрируется новой версией. pickle.load на артефакте не вызывается никогда."""
+    body = await request.body()
+    with SessionLocal() as s:
+        m = s.get(domain.Model, model_id)
+        if not m:
+            raise HTTPException(status_code=404, detail="model not found")
+        digest = hashlib.sha256(body).hexdigest()
+        results = scanners.scan_artifact(body)
+        blocked = [r for r in results if r["verdict"] != "clean"]
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        for r in blocked:
+            s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
+                                 status="open", asset_type="model", asset_ref=f"model/{model_id}",
+                                 detail=r["detail"], actor=p.sub))
+        if blocked:
+            s.commit()
+            audit.append_event(actor=p.sub, action="model.ingest.blocked", obj=f"model/{model_id}")
+            raise HTTPException(status_code=422, detail={"blocked": True, "reason": "unsafe artifact",
+                                                         "tools": [r["tool"] for r in blocked]})
+        n = s.query(domain.ModelVersion).filter_by(model_id=model_id).count() + 1
+        mv = domain.ModelVersion(model_id=model_id, version=n, stage="dev", artifact_hash=digest,
+                                 requires_validation=(m.criticality in ("regulatory", "financial")))
+        s.add(mv)
+        s.commit()
+        name = registry.model_name(model_id, m.name)
+        try:
+            registry.ensure_registered_model(name, tags={"criticality": m.criticality})
+            registry.create_model_version(name, source=f"s3://mlflow/{name}",
+                                          tags={"cp_version": n, "stage": "dev", "artifact_hash": digest, "scanned": "clean"})
+        except registry.RegistryError as e:
+            logger.warning("MLflow недоступен при ingest model/%s v%s: %s", model_id, n, e)
+        audit.append_event(actor=p.sub, action="model.ingest.admitted", obj=f"model/{model_id}/v{n}")
+        return {"admitted": True, "version": n, "artifact_hash": digest, "scanned": [r["tool"] for r in results]}
+
+
+@app.get("/api/findings")
+def list_findings(p: Principal = Depends(require("finding.read"))):
+    with SessionLocal() as s:
+        rows = s.query(domain.Finding).order_by(domain.Finding.id.desc()).all()
+        return {"findings": [{"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict,
+                              "severity": f.severity, "status": f.status, "asset": f.asset_ref,
+                              "detail": f.detail} for f in rows]}
+
+
+class TriageIn(BaseModel):
+    status: str
+    reason: str = ""
+
+
+@app.post("/api/findings/{finding_id}/triage")
+def triage_finding(finding_id: int, body: TriageIn, p: Principal = Depends(require("finding.triage"))):
+    """VIS-04: статус сработки меняет только MLSecOps; пишется в аудит (кто/когда/почему)."""
+    if body.status not in ("open", "triaged", "TP", "FP"):
+        raise HTTPException(status_code=422, detail="invalid status")
+    with SessionLocal() as s:
+        f = s.get(domain.Finding, finding_id)
+        if not f:
+            raise HTTPException(status_code=404, detail="finding not found")
+        f.status = body.status
+        s.commit()
+        audit.append_event(actor=p.sub, action=f"finding.triage:{body.status}", obj=f"finding/{finding_id}")
+        return {"id": finding_id, "status": body.status, "reason": body.reason}

@@ -56,3 +56,20 @@ class Deployment(Base):
     id = Column(Integer, primary_key=True)
     model_version_id = Column(Integer, ForeignKey("model_versions.id"), nullable=False)
     status = Column(String(16), default="active")      # active | retired
+
+
+class Finding(Base):
+    """Сквозная «сработка»: инструмент, вердикт, severity, статус триажа, привязка
+    к активу. Источник — гейты (скан моделей/данных/кода) и рантайм. Принцип
+    «одна тулза ок, другая плохо»: на один актив может быть несколько Finding."""
+    __tablename__ = "findings"
+    id = Column(Integer, primary_key=True)
+    ts = Column(String(32), default="")
+    tool = Column(String(64), default="")
+    verdict = Column(String(32), default="")            # malicious | suspicious | clean
+    severity = Column(String(16), default="info")        # critical | high | medium | low | info
+    status = Column(String(16), default="open")          # open | triaged | TP | FP
+    asset_type = Column(String(32), default="")          # model | dataset | pr | endpoint
+    asset_ref = Column(String(128), default="")
+    detail = Column(Text, default="")
+    actor = Column(String(255), default="")
