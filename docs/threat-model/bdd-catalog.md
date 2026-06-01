@@ -277,6 +277,15 @@ Feature: HITL-гейт критичных моделей
 ```
 
 ```gherkin
+@supply-chain @OWASP-ML06 @OWASP-ML09 @P1
+Feature: Подпись и admission критичных моделей
+  Scenario: SUP-04 — Неподписанный артефакт нельзя промоутить
+    Given критичная версия без подписи артефакта
+    When запрашивается промоушен в прод
+    Then промоушен блокируется (нужна подпись; «подпись ≠ безопасность»)
+```
+
+```gherkin
 @identity @authn @keycloak @P1
 Feature: AuthN через Keycloak и устойчивость
   Scenario: AUTH-01 — Невалидный токен отвергается, недоступность IdP не открывает доступ

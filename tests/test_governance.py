@@ -1,4 +1,8 @@
-"""pytest-bdd: VIS-03 — HITL-гейт промоушена критичной модели."""
+"""pytest-bdd: policy-матрица промоушена критичной модели — GOV-01, SUP-04, VIS-03.
+
+Каждый сценарий выдаёт всё, кроме проверяемого: так изолируется конкретный гейт.
+Порядок гейтов в control-plane: MON-02 → GOV-01 → SUP-04 → VIS-03.
+"""
 import os
 
 import httpx
@@ -13,20 +17,40 @@ def tok(role):
     return {"Authorization": f"Bearer dev:{role.lower()}:{role}"}
 
 
-@given("воспроизводимая критичная модель")
-def critical_model():
+def _critical_version(intended_use="прогноз риска дефолта", limitations="не для физлиц; не финсовет",
+                      signature="cosign:abc123"):
     dv = httpx.post(f"{BASE}/api/datasets", headers=tok("DE"),
                     json={"name": "d", "sensitivity": "open", "source": "internal://curated/d"}, timeout=10).json()["dataset_version_id"]
     m = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
                    json={"name": "credit", "type": "boosting", "criticality": "financial"}, timeout=10).json()["model_id"]
-    v = httpx.post(f"{BASE}/api/models/{m}/versions", headers=tok("DS"),
-                   json={"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock"}, timeout=10).json()["version"]
+    body = {"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock",
+            "intended_use": intended_use, "limitations": limitations, "signature": signature}
+    v = httpx.post(f"{BASE}/api/models/{m}/versions", headers=tok("DS"), json=body, timeout=10).json()["version"]
     S.update(model_id=m, ver=v)
 
 
-@when("MLSecOps промоутит её без аппрува")
-def promote_no_approval():
-    S["resp"] = httpx.post(f"{BASE}/api/models/{S['model_id']}/versions/{S['ver']}/promote", headers=tok("MLSecOps"), timeout=10)
+@given("критичная версия без модель-карты")
+def no_card():
+    _critical_version(intended_use="", limitations="")
+
+
+@given("критичная версия без подписи")
+def no_signature():
+    _critical_version(signature="")
+
+
+@given("полная критичная версия (карта и подпись на месте)")
+def full_version():
+    _critical_version()
+
+
+def _promote():
+    return httpx.post(f"{BASE}/api/models/{S['model_id']}/versions/{S['ver']}/promote", headers=tok("MLSecOps"), timeout=10)
+
+
+@when("MLSecOps промоутит критичную версию")
+def promote():
+    S["resp"] = _promote()
 
 
 @when("MLSecOps аппрувит версию")
@@ -38,7 +62,7 @@ def approve():
 
 @when("MLSecOps промоутит её снова")
 def promote_again():
-    S["resp"] = httpx.post(f"{BASE}/api/models/{S['model_id']}/versions/{S['ver']}/promote", headers=tok("MLSecOps"), timeout=10)
+    S["resp"] = _promote()
 
 
 @then(parsers.parse("промоушен заблокирован со статусом {code:d}"))

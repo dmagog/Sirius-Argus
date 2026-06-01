@@ -225,10 +225,17 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
         if missing:
             audit.append_event(actor=p.sub, action="promote.blocked", obj=f"model/{model_id}/v{ver}", was_authorized=False)
             raise HTTPException(status_code=422, detail=f"not reproducible, missing: {missing}")
-        # VIS-03 / policy-матрица по критичности: критичное (requires_validation) — только после HITL-аппрува
-        if mv.requires_validation and not s.query(domain.Approval).filter_by(model_version_id=mv.id).count():
-            audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
-            raise HTTPException(status_code=422, detail="HITL approval required (critical model)")
+        # policy-матрица для критичных моделей (regulatory/financial): модель-карта + подпись + HITL
+        if mv.requires_validation:
+            if not (mv.intended_use and mv.limitations):  # GOV-01: полнота модель-карты
+                audit.append_event(actor=p.sub, action="promote.blocked.modelcard", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+                raise HTTPException(status_code=422, detail="incomplete model card (GOV-01): need intended_use + limitations")
+            if not mv.signature:  # SUP-04: неподписанное в прод не пускаем («подпись ≠ безопасность»)
+                audit.append_event(actor=p.sub, action="promote.blocked.unsigned", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+                raise HTTPException(status_code=422, detail="unsigned artifact (SUP-04)")
+            if not s.query(domain.Approval).filter_by(model_version_id=mv.id).count():  # VIS-03: HITL
+                audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+                raise HTTPException(status_code=422, detail="HITL approval required (VIS-03)")
         mv.stage = "prod"
         s.add(domain.Deployment(model_version_id=mv.id, status="active"))
         s.commit()
