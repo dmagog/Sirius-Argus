@@ -256,6 +256,16 @@ Feature: Маскирование PII
 ```
 
 ```gherkin
+@code-scan @OWASP-ML09 @P1
+Feature: SAST на код (ML-aware)
+  Scenario: CODE-01 — SAST ловит небезопасный паттерн в коде
+    Given на скан поступает код или ноутбук
+    When сканер разбирает его статически (без исполнения)
+    Then опасные вызовы (eval/exec/os.system/subprocess/pickle.load) флагаются
+    And создаётся Finding(insecure-code); чистый код проходит
+```
+
+```gherkin
 @identity @authn @keycloak @P1
 Feature: AuthN через Keycloak и устойчивость
   Scenario: AUTH-01 — Невалидный токен отвергается, недоступность IdP не открывает доступ

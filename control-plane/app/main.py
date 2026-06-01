@@ -362,3 +362,23 @@ def triage_finding(finding_id: int, body: TriageIn, p: Principal = Depends(requi
         s.commit()
         audit.append_event(actor=p.sub, action=f"finding.triage:{body.status}", obj=f"finding/{finding_id}")
         return {"id": finding_id, "status": body.status, "reason": body.reason}
+
+
+@app.post("/api/scan/code")
+async def scan_code_endpoint(request: Request, filename: str = Query("submitted.py"),
+                             p: Principal = Depends(require("code.scan"))):
+    """CODE-01: AST-скан кода/ноутбука на опасные паттерны. Код НЕ исполняется
+    (только ast.parse). Pattern-based MVP; полный Semgrep-гейт на PR — в И3."""
+    src = (await request.body()).decode("utf-8", "replace")
+    findings = scanners.scan_code(src, filename)
+    if findings:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with SessionLocal() as s:
+            for r in findings:
+                s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
+                                     status="open", asset_type="code", asset_ref=f"code/{filename}", detail=r["detail"], actor=p.sub))
+            s.commit()
+        audit.append_event(actor=p.sub, action="code.scan.flagged", obj=f"code/{filename}")
+        return {"filename": filename, "clean": False, "findings": findings}
+    audit.append_event(actor=p.sub, action="code.scan.clean", obj=f"code/{filename}")
+    return {"filename": filename, "clean": True, "findings": []}

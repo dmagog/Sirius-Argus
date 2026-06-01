@@ -8,6 +8,7 @@
 pickle-RCE на приёме. Он не претендует на полноту (ShadowLogic, отравление
 весов — остаточные риски, см. SUP-06), но честно делает то, что заявляет.
 """
+import ast
 import json
 import pickletools
 import struct
@@ -120,3 +121,43 @@ def assess_artifact(data: bytes, criticality: str = "internal"):
                          "detail": "неизвестный/неподдерживаемый формат артефакта"})
         admit = False
     return {"format": fmt, "findings": findings, "admit": admit}
+
+
+_CODE_DANGEROUS_NAMES = {"eval", "exec", "compile", "__import__"}
+_CODE_DANGEROUS_ATTRS = {
+    ("os", "system"), ("os", "popen"), ("os", "remove"), ("os", "unlink"),
+    ("subprocess", "call"), ("subprocess", "Popen"), ("subprocess", "run"),
+    ("subprocess", "check_output"), ("subprocess", "check_call"),
+    ("pickle", "loads"), ("pickle", "load"), ("marshal", "loads"), ("yaml", "load"),
+}
+
+
+def scan_code(src: str, filename: str = "submitted.py"):
+    """ML-aware SAST на ast: опасные вызовы в коде/ноутбуке. Код НЕ исполняется —
+    только разбирается в AST. Pattern-based MVP; полный Semgrep-гейт на PR — в И3.
+    Возвращает список находок ([] = чисто)."""
+    if filename.endswith(".ipynb"):
+        try:
+            nb = json.loads(src)
+            src = "\n".join("".join(c.get("source", [])) for c in nb.get("cells", []) if c.get("cell_type") == "code")
+        except Exception:
+            pass
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as e:
+        return [{"tool": "sirius-code-scan", "verdict": "parse-error", "severity": "low",
+                 "detail": f"не разобрать как Python: {e}"}]
+    hits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        if isinstance(fn, ast.Name) and fn.id in _CODE_DANGEROUS_NAMES:
+            hits.append(f"{fn.id}() @стр{node.lineno}")
+        elif isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name) \
+                and (fn.value.id, fn.attr) in _CODE_DANGEROUS_ATTRS:
+            hits.append(f"{fn.value.id}.{fn.attr}() @стр{node.lineno}")
+    if not hits:
+        return []
+    return [{"tool": "sirius-code-scan", "verdict": "insecure-code", "severity": "high",
+             "detail": "; ".join(hits)}]
