@@ -86,6 +86,31 @@ def promote_retired():
     S["resp"] = _promote()
 
 
+@given("воспроизводимая модель в проде")
+def model_in_prod():
+    dv = httpx.post(f"{BASE}/api/datasets", headers=tok("DE"),
+                    json={"name": "d", "sensitivity": "open", "source": "internal://curated/d"}, timeout=10).json()["dataset_version_id"]
+    m = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
+                   json={"name": "m", "type": "boosting", "criticality": "internal"}, timeout=10).json()["model_id"]
+    v = httpx.post(f"{BASE}/api/models/{m}/versions", headers=tok("DS"),
+                   json={"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock"}, timeout=10).json()["version"]
+    assert httpx.post(f"{BASE}/api/models/{m}/versions/{v}/promote", headers=tok("MLSecOps"), timeout=10).status_code == 200
+    S.update(model_id=m, ver=v, dv=dv)
+
+
+@when("MLSecOps выводит версию из эксплуатации")
+def decommission():
+    S["resp"] = httpx.post(f"{BASE}/api/models/{S['model_id']}/versions/{S['ver']}/retire", headers=tok("MLSecOps"), timeout=10)
+
+
+@then("активных деплоев у версии не остаётся")
+def no_active_deploys():
+    assert S["resp"].status_code == 200, S["resp"].text
+    imp = httpx.get(f"{BASE}/api/impact", params={"dataset_version_id": S["dv"]}, headers=tok("MLSecOps"), timeout=10).json()
+    aff = [a for a in imp["affected"] if a["version"] == S["ver"]]
+    assert aff and all(a["active_deployments"] == 0 for a in aff), imp
+
+
 @when("MLSecOps промоутит её снова")
 def promote_again():
     S["resp"] = _promote()

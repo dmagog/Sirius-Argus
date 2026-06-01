@@ -6,6 +6,7 @@ AuthN — fail-closed (auth.py). Каждое действие и каждый �
 """
 import hashlib
 import logging
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -315,6 +316,42 @@ def runtime_event(body: RuntimeEventIn, p: Principal = Depends(require("runtime.
     return {"recorded": True, "type": body.type}
 
 
+# ---------- EXF-01: детект инсайдерской эксфильтрации ----------
+_EXPORT_WINDOW_S = 60.0
+_EXPORT_THRESHOLD = 15
+_exports = defaultdict(list)
+_exfil_reported = set()
+
+
+@app.get("/api/models/{model_id}/export")
+def export_model(model_id: int, p: Principal = Depends(require("registry.read"))):
+    """Выгрузка артефакта модели. EXF-01: аномальный объём выгрузок одним актором
+    за окно → Finding(bulk-exfiltration) + audit + троттлинг (429)."""
+    with SessionLocal() as s:
+        m = s.get(domain.Model, model_id)
+        if not m:
+            raise HTTPException(status_code=404, detail="model not found")
+        last = s.query(domain.ModelVersion).filter_by(model_id=model_id).order_by(domain.ModelVersion.version.desc()).first()
+        digest = last.artifact_hash if last else ""
+    now = time.monotonic()
+    dq = [t for t in _exports[p.sub] if now - t <= _EXPORT_WINDOW_S]
+    dq.append(now)
+    _exports[p.sub] = dq
+    if len(dq) > _EXPORT_THRESHOLD:
+        if p.sub not in _exfil_reported:
+            _exfil_reported.add(p.sub)
+            with SessionLocal() as s:
+                s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                     tool="sirius-exfil", verdict="bulk-exfiltration", severity="high",
+                                     status="open", asset_type="actor", asset_ref=f"actor/{p.sub}",
+                                     detail=f"{len(dq)} выгрузок за {int(_EXPORT_WINDOW_S)}s", actor=p.sub))
+                s.commit()
+        audit.append_event(actor=p.sub, action="exfil.blocked", obj=f"actor/{p.sub}", was_authorized=False)
+        raise HTTPException(status_code=429, detail=f"bulk export limit: {len(dq)} за {int(_EXPORT_WINDOW_S)}s — троттлинг (EXF-01)")
+    audit.append_event(actor=p.sub, action="model.export", obj=f"model/{model_id}")
+    return {"model_id": model_id, "artifact_hash": digest, "exported_by": p.sub}
+
+
 # ---------- карта покрытия + CEO-вью (И5) ----------
 # Связь МУ↔платформа: угроза → контроль → как ловится в live-данных (Finding/аудит)
 COVERAGE = [
@@ -329,6 +366,8 @@ COVERAGE = [
     {"id": "VIS-03/GOV-01/SUP-04", "threat": "небезопасный промоушен критичной модели", "control": "gated promotion (карта+подпись+HITL)", "match": ("prefix", "promote.blocked")},
     {"id": "ACC-01/ESC-01", "threat": "действие вне роли / IDOR", "control": "zero-trust RBAC + object-level", "match": ("prefix", "authz.deny")},
     {"id": "CRED-01/AUTH-01", "threat": "невалидный/поддельный токен", "control": "OIDC fail-closed", "match": ("exact", "access.denied")},
+    {"id": "EXF-01", "threat": "инсайдерская эксфильтрация", "control": "детект объёма выгрузок", "match": ("verdict", "bulk-exfiltration")},
+    {"id": "MON-03", "threat": "вывод из эксплуатации", "control": "decommission снимает деплои", "match": ("prefix", "model.retire")},
 ]
 
 

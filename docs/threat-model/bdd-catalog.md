@@ -295,6 +295,16 @@ Feature: Запрет отката на изъятую версию
 ```
 
 ```gherkin
+@governance @decommission @P1
+Feature: Вывод из эксплуатации
+  Scenario: MON-03 — Decommission снимает прод-деплой и отзывает доступ
+    Given версия модели в проде с активным деплоем
+    When MLSecOps выводит её из эксплуатации
+    Then активные деплои сняты, версия помечена retired
+    And повторный промоушен изъятой версии запрещён (RB-01)
+```
+
+```gherkin
 @supply-chain @OWASP-ML06 @OWASP-ML09 @P1
 Feature: Подпись и admission критичных моделей
   Scenario: SUP-04 — Неподписанный артефакт нельзя промоутить
