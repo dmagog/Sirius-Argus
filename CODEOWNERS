@@ -5,7 +5,7 @@
 * @secure-mlops-maintainers
 
 # Контур безопасности требует ревью владельца:
-/.gitlab-ci.yml          @secure-mlops-maintainers
+/ci/                     @secure-mlops-maintainers
 /.pre-commit-config.yaml @secure-mlops-maintainers
 /SECURITY.md             @secure-mlops-maintainers
 /CODEOWNERS              @secure-mlops-maintainers
