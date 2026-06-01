@@ -28,8 +28,10 @@ def three_models():
 
 @then("каждая модель отвечает на предсказание")
 def each_predicts():
+    # уникальный client-id — изоляция от бёрстов demo/pipeline по host-IP (rate-limit)
+    h = {"X-Client-Id": "serving-each-test"}
     for m in httpx.get(f"{SERVING}/models", timeout=10).json()["models"]:
-        r = httpx.post(f"{SERVING}/predict/{m['name']}", json={"features": [0.1, 0.2, 0.3, 0.4]}, timeout=10)
+        r = httpx.post(f"{SERVING}/predict/{m['name']}", headers=h, json={"features": [0.1, 0.2, 0.3, 0.4]}, timeout=10)
         assert r.status_code == 200 and "prediction" in r.json(), r.text
 
 
