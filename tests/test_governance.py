@@ -55,9 +55,35 @@ def promote():
 
 @when("MLSecOps аппрувит версию")
 def approve():
-    r = httpx.post(f"{BASE}/api/models/{S['model_id']}/versions/{S['ver']}/approve", headers=tok("MLSecOps"),
-                   json={"reason": "ревью пройдено"}, timeout=10)
+    # аппрувит ДРУГОЙ MLSecOps (reviewer), не тот, кто будет промоутить (ACC-02)
+    r = httpx.post(f"{BASE}/api/models/{S['model_id']}/versions/{S['ver']}/approve",
+                   headers={"Authorization": "Bearer dev:reviewer:MLSecOps"}, json={"reason": "ревью пройдено"}, timeout=10)
     assert r.status_code == 200, r.text
+
+
+@when("MLSecOps сам аппрувит и сам промоутит")
+def self_approve_then_promote():
+    httpx.post(f"{BASE}/api/models/{S['model_id']}/versions/{S['ver']}/approve", headers=tok("MLSecOps"),
+               json={"reason": "самоаппрув"}, timeout=10)
+    S["resp"] = _promote()
+
+
+@given("воспроизводимая версия выведена из эксплуатации")
+def retired_version():
+    dv = httpx.post(f"{BASE}/api/datasets", headers=tok("DE"),
+                    json={"name": "d", "sensitivity": "open", "source": "internal://curated/d"}, timeout=10).json()["dataset_version_id"]
+    m = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
+                   json={"name": "m", "type": "boosting", "criticality": "internal"}, timeout=10).json()["model_id"]
+    v = httpx.post(f"{BASE}/api/models/{m}/versions", headers=tok("DS"),
+                   json={"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock"}, timeout=10).json()["version"]
+    assert httpx.post(f"{BASE}/api/models/{m}/versions/{v}/promote", headers=tok("MLSecOps"), timeout=10).status_code == 200
+    assert httpx.post(f"{BASE}/api/models/{m}/versions/{v}/retire", headers=tok("MLSecOps"), timeout=10).status_code == 200
+    S.update(model_id=m, ver=v)
+
+
+@when("MLSecOps промоутит изъятую версию")
+def promote_retired():
+    S["resp"] = _promote()
 
 
 @when("MLSecOps промоутит её снова")

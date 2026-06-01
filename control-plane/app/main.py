@@ -220,6 +220,9 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
         mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
         if not mv:
             raise HTTPException(status_code=404, detail="version not found")
+        if mv.stage == "retired":  # RB-01: откат на изъятую/уязвимую версию запрещён
+            audit.append_event(actor=p.sub, action="promote.blocked.retired", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+            raise HTTPException(status_code=409, detail="version retired — rollback to a withdrawn/vulnerable version is blocked (RB-01)")
         # MON-02: невоспроизводимое не пускаем в прод (fail-closed)
         missing = [f for f in ("dataset_version_id", "code_commit", "env_lock") if not getattr(mv, f)]
         if missing:
@@ -233,9 +236,12 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
             if not mv.signature:  # SUP-04: неподписанное в прод не пускаем («подпись ≠ безопасность»)
                 audit.append_event(actor=p.sub, action="promote.blocked.unsigned", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="unsigned artifact (SUP-04)")
-            if not s.query(domain.Approval).filter_by(model_version_id=mv.id).count():  # VIS-03: HITL
+            # VIS-03 (HITL) + ACC-02 (separation of duties): нужен аппрув от ДРУГОГО MLSecOps
+            others = s.query(domain.Approval).filter(domain.Approval.model_version_id == mv.id,
+                                                     domain.Approval.approver != p.sub).count()
+            if not others:
                 audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
-                raise HTTPException(status_code=422, detail="HITL approval required (VIS-03)")
+                raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps required (VIS-03/ACC-02)")
         mv.stage = "prod"
         s.add(domain.Deployment(model_version_id=mv.id, status="active"))
         s.commit()
@@ -269,6 +275,22 @@ def approve_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Dep
         s.commit()
         audit.append_event(actor=p.sub, action="model.approve", obj=f"model/{model_id}/v{ver}")
         return {"approved": True, "version": ver, "approver": p.sub}
+
+
+@app.post("/api/models/{model_id}/versions/{ver}/retire")
+def retire_version(model_id: int, ver: int, p: Principal = Depends(require("decommission"))):
+    """Вывод версии из эксплуатации: снимает активные деплои и помечает retired.
+    После этого откат на неё в прод запрещён (RB-01)."""
+    with SessionLocal() as s:
+        mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
+        if not mv:
+            raise HTTPException(status_code=404, detail="version not found")
+        mv.stage = "retired"
+        for d in s.query(domain.Deployment).filter_by(model_version_id=mv.id, status="active").all():
+            d.status = "retired"
+        s.commit()
+        audit.append_event(actor=p.sub, action="model.retire", obj=f"model/{model_id}/v{ver}")
+        return {"version": ver, "stage": "retired"}
 
 
 @app.get("/api/registry")

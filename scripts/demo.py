@@ -26,10 +26,10 @@ import urllib.request
 BASE = os.environ.get("SIRIUS_BASE_URL", "http://localhost:8080")
 
 
-def req(method, path, role=None, body=None):
+def req(method, path, role=None, body=None, sub=None):
     headers = {}
     if role:
-        headers["Authorization"] = f"Bearer dev:{role.lower()}:{role}"
+        headers["Authorization"] = f"Bearer dev:{sub or role.lower()}:{role}"
     data = None
     if isinstance(body, (bytes, bytearray)):
         data, headers["Content-Type"] = bytes(body), "application/octet-stream"
@@ -149,9 +149,9 @@ def main():
     cv = vj["version"]
     st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
     line(f"  промоушен критичной модели БЕЗ HITL-аппрува  →  HTTP {st} 🛑")
-    req("POST", f"/api/models/{cm}/versions/{cv}/approve", "MLSecOps", {"reason": "ревью пройдено"})
+    req("POST", f"/api/models/{cm}/versions/{cv}/approve", "MLSecOps", {"reason": "ревью пройдено"}, sub="reviewer")
     st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
-    line(f"  MLSecOps одобрил версию (в аудит)  →  промоушен  →  HTTP {st} ✅")
+    line(f"  другой MLSecOps (reviewer) одобрил версию  →  промоушен  →  HTTP {st} ✅ (separation of duties)")
 
     hr("6. VIS-02 — расхождение вердиктов сканеров + триаж фолза")
     vid = model("recommender", "internal")
