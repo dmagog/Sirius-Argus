@@ -103,11 +103,13 @@
 | A4 | RT-02, MON-01 | A15 | SC-01 |
 | A5 | DATA-01, DATA-03 | A16 | ESC-01 (egress allow-list) |
 | A6 | SUP-05, MON-04, RT-06 | A17 | ESC-01 |
-| A7 | ACC-01, ACC-02, ACC-07 | A18 | FB-01 |
-| A8 | ACC-06, SUP-03, DATA-04, MON-02 | A19 | RB-01 |
+| A7 | ACC-01, ACC-02, ACC-04, ACC-07 | A18 | FB-01 |
+| A8 | ACC-04, ACC-06, SUP-03, DATA-04, DATA-05, MON-02 | A19 | RB-01 |
 | A9 | ACC-03, MON-03 | A20 | TOCTOU-01 |
 | A10 | DATA-02 | A21 | DOW-01 |
 | A11 | RT-06 | — | VIS-04 (защита слоя видимости) |
+
+> Сценарии VIS-01/02/03 — на стороне защиты (роли D1/D4/D5), поэтому их нет в таблице атакующих персон. См. [bdd-catalog.md](bdd-catalog.md).
 
 ---
 

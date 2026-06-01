@@ -9,6 +9,7 @@
 - **Обработка** (risk treatment): `Mitigate` (есть контроль) · `Accept` (осознанно принимаем остаточный) · `Transfer` · `Avoid`.
 - **Владелец** — РОЛЬ (D1 MLSecOps · D3 DE · D8 Data Steward · D9 Platform/SRE · D7 IR), не личность.
 - Префикс ID = узел (CP/ML/MO/GT/PG/SC/SV/NET/SECR/ID/DATA/HOST).
+- ID рисков — **одна цифра** (`SC-1`); ID BDD-сценариев в [bdd-catalog.md](bdd-catalog.md) — **две цифры** (`SC-01`). Совпадающие префиксы (`DATA`/`SC`/`RB`) различаются числом цифр.
 
 ## Узлы и почему они — мишени
 
