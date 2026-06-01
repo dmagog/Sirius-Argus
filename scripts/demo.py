@@ -24,9 +24,10 @@ import urllib.error
 import urllib.request
 
 BASE = os.environ.get("SIRIUS_BASE_URL", "http://localhost:8080")
+SERVING = os.environ.get("SERVING_URL", "http://localhost:8001")
 
 
-def req(method, path, role=None, body=None, sub=None):
+def req(method, path, role=None, body=None, sub=None, base=None):
     headers = {}
     if role:
         headers["Authorization"] = f"Bearer dev:{sub or role.lower()}:{role}"
@@ -35,7 +36,7 @@ def req(method, path, role=None, body=None, sub=None):
         data, headers["Content-Type"] = bytes(body), "application/octet-stream"
     elif body is not None:
         data, headers["Content-Type"] = json.dumps(body).encode(), "application/json"
-    r = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
+    r = urllib.request.Request((base or BASE) + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(r, timeout=20) as resp:
             return resp.status, json.loads(resp.read() or "null")
@@ -152,6 +153,18 @@ def main():
     req("POST", f"/api/models/{cm}/versions/{cv}/approve", "MLSecOps", {"reason": "ревью пройдено"}, sub="reviewer")
     st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
     line(f"  другой MLSecOps (reviewer) одобрил версию  →  промоушен  →  HTTP {st} ✅ (separation of duties)")
+
+    hr("MONEY-SHOT #4 — рантайм: бёрст extraction → детект + троттлинг (RT-01)")
+    sc, mdl = req("GET", "/models", base=SERVING)
+    if sc == 200:
+        line(f"  задеплоено моделей: {len(mdl['models'])} — типы {[m['type'] for m in mdl['models']]}")
+        n429 = sum(1 for _ in range(70)
+                   if req("POST", "/predict/credit-linear", base=SERVING, body={"features": [0.1, 0.2, 0.3, 0.4]})[0] == 429)
+        line(f"  70 запросов одним клиентом  →  троттлинг 429: {n429} раз 🛑")
+        exts = [f for f in req("GET", "/api/findings", "MLSecOps")[1]["findings"] if f["verdict"] == "extraction"]
+        line(f"  сработка extraction в control-plane: {'есть ✅' if exts else 'нет'} (петля рантайм→реестр)")
+    else:
+        line("  (сервинг недоступен — пропуск; подними `make up`)")
 
     hr("6. VIS-02 — расхождение вердиктов сканеров + триаж фолза")
     vid = model("recommender", "internal")

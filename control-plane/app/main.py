@@ -293,6 +293,27 @@ def retire_version(model_id: int, ver: int, p: Principal = Depends(require("deco
         return {"version": ver, "stage": "retired"}
 
 
+class RuntimeEventIn(BaseModel):
+    type: str
+    endpoint: str = ""
+    client: str = ""
+    count: int = 0
+
+
+@app.post("/api/runtime/event")
+def runtime_event(body: RuntimeEventIn, p: Principal = Depends(require("runtime.event"))):
+    """Петля рантайм→реестр (RT-01): сервинг сообщает о детекте (extraction/DDoS) →
+    Finding(endpoint) + аудит. Основа для авто-ре-ревью / rollback."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with SessionLocal() as s:
+        s.add(domain.Finding(ts=now, tool="sirius-runtime", verdict=body.type, severity="high",
+                             status="open", asset_type="endpoint", asset_ref=f"endpoint/{body.endpoint}",
+                             detail=f"client={body.client} count={body.count}", actor=p.sub))
+        s.commit()
+    audit.append_event(actor=p.sub, action=f"runtime.{body.type}", obj=f"endpoint/{body.endpoint}")
+    return {"recorded": True, "type": body.type}
+
+
 @app.get("/api/registry")
 def list_registry(p: Principal = Depends(require("registry.read"))):
     with SessionLocal() as s:

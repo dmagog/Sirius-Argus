@@ -134,6 +134,16 @@ services:
         condition: service_healthy
     networks: [internal]
 
+  serving:
+    build: ./serving   # 3 НЕ-генеративные модели (sklearn, CPU) за рантайм-защитами
+    environment:
+      CONTROL_PLANE_URL: http://control-plane:8000
+      SERVICE_TOKEN: ${SERVING_SERVICE_TOKEN:-dev:serving:MLSecOps}
+    depends_on: [control-plane]
+    ports:
+      - "8001:8000"   # сервинг — второй внешний контур (кроме reverse-proxy), И4
+    networks: [internal, edge]
+
   reverse-proxy:
     image: caddy:2-alpine
     volumes:
