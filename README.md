@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/sirius-argus-mark.png" alt="Sirius Argus" width="140">
-</p>
+<img src="assets/sirius-argus-mark.png" alt="Sirius Argus" align="right" width="130">
 
 # Sirius Argus — безопасная MLOps-платформа
 
