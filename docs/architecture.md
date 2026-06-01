@@ -48,7 +48,7 @@
 | Столп | Что делает в Sirius Argus | Тип защиты |
 |---|---|---|
 | **Discover** (инвентаризация) | Реестр моделей/датасетов с версиями, гиперпараметрами, lineage, критичностью и чувствительностью; «нет тени» — всё, что в системе, видно. | непрерывный учёт |
-| **Secure supply chain** (целостность на сборке) | Скан артефактов (pickle/keras), скан зависимостей, SBOM/MLBOM, подпись, gitleaks, policy-gates на PR. | build-time |
+| **Secure supply chain** (целостность на сборке) | Скан кода (SAST), скан артефактов (pickle/keras), скан зависимостей, SBOM/MLBOM, подпись, политика форматов (convert-or-reject), gitleaks, policy-gates на PR. | build-time |
 | **Validate** (симуляция атак / red-team) | Adversarial-тестирование (ART), risk assessment, HITL-валидация критичных моделей перед релизом. | pre-prod |
 | **Protect runtime** (firewall + detect & respond) | AuthN, rate-limit, детект extraction/adversarial/drift на инференсе → сработки в общий таймлайн. | runtime |
 
@@ -237,7 +237,7 @@ flowchart LR
 | 2. Приём данных | 5 Данные, 7 Supply | poisoning, label-flipping, недоверенный источник, ПДн | классификация sensitivity, lineage, trusted sources, карантин UGC, проверки качества, бэкдор-детект | Control Plane + гейты |
 | 3. Подготовка/фичи | 5 Данные | training-serving skew, ПДн в логах | контракты фичей, consistency-тесты, маскирование ПДн | гейты + serving |
 | 4. Обучение | 2 Код, 3 IAM | секреты в коде, нерепродьюсибилити | gitleaks, фикс зависимостей, трекинг гиперпараметров/lineage | Gitea CI + MLflow |
-| 5. Упаковка/реестр | 6 Модели, 7 Supply | вредоносный pickle (RCE), typosquatting, отсутствие подписи | скан артефактов (picklescan/modelscan/fickling), safetensors-preference, SBOM/MLBOM, подпись, scan зависимостей | гейты + Реестр |
+| 5. Упаковка/реестр | 6 Модели, 7 Supply | вредоносный pickle (RCE), typosquatting, отсутствие подписи | скан артефактов (picklescan/modelscan/fickling), **автоконвертация pickle→safetensors или запрет небезопасного формата**, SBOM/MLBOM, подпись, scan зависимостей | гейты + Реестр |
 | 6. Валидация / red-team | 6 Модели, 8 Adversarial | необнаруженный бэкдор (ShadowLogic), хрупкость к adversarial | ART-тесты, risk assessment, **HITL-валидация** критичных | Control Plane (HITL) |
 | 7. Деплой | 7 Supply, 9 Governance | обход в прод, неподписанный артефакт | **gated PR**, branch protection, «в прод только подписанное и прошедшее гейты» | Gitea + Control Plane |
 | 8. Эксплуатация/рантайм | 4 Сеть, 8 Adversarial | extraction, evasion, DoS, неавторизованный доступ | authN, rate-limit, extraction-detect, adversarial/FGSM-detect, output reduction | Serving |

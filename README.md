@@ -12,12 +12,29 @@ Sirius Argus встраивает безопасность прямо в ML-па
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Архитектура: компоненты, ER-модель, жизненный цикл, потоки, карта покрытия (схемы Mermaid) |
 | [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A22) и защитников (D1–D10), с кодовыми именами |
-| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 42 BDD-сценария: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
+| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 44 BDD-сценария: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
 | [docs/threat-model/risk-register.md](docs/threat-model/risk-register.md) | Пер-узловой реестр рисков: приоритет L×I, обработка, владелец |
 | [docs/threat-model/security-kpis.md](docs/threat-model/security-kpis.md) | Измеримая безопасность: KPI и SLO |
 | [docs/adr/](docs/adr/) | Журнал архитектурных решений |
 | [docs/runbooks/incident-response.md](docs/runbooks/incident-response.md) | Реакция на инциденты, доступность и восстановление |
 | [SECURITY.md](SECURITY.md) | Безопасность самого репозитория |
+
+## Приоритеты кейса (рекомендации куратора) → где закрыто
+
+| Приоритет | Контроль / сценарий |
+|---|---|
+| Скан кода | Semgrep SAST (`CODE-01`, `ACC-07`) |
+| Реестр моделей | control-plane + MLflow (§6) |
+| Security gate перед продом | gated PR (`SUP-03`, `CI-01`) |
+| Скан моделей | modelscan/picklescan (`SUP-01`) |
+| Версионирование · история · lineage | MLflow + хеш-версии · `AuditEvent` + hash-chain (`MON-04`) · `Run` lineage (`MON-02`) |
+| Ролёвка (zero-trust) | RBAC (`ACC-01/02/05`, `ESC-01`) |
+| Подписи | `SUP-04`, `TOCTOU-01` (ADR-0006) |
+| Сканы данных · gate на закачку | `DATA-01..04` · ingestion-блок (`SUP-01`), карантин (`DATA-01`) |
+| Автоконвертация / запрет небезопасных форматов | `SUP-07` (convert-or-reject) |
+| Рантайм | `RT-01/02/05/06`, `DOS-01` |
+
+Порядок сборки И0–И6 следует этому приоритету; рантайм — поздний, как и в риск-реестре (см. [ADR-0005](docs/adr/0005-fail-closed-protect-enforcer.md)).
 
 ## Безопасность этого репозитория
 
