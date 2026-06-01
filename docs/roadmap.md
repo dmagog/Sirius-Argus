@@ -50,7 +50,7 @@
 
 ### И3 — Единая точка входа в прод + подписи + policy-гейт
 - 🎯 в прод только через gated PR; критичное — через HITL.
-- **статус:** ✅ ядро/планка (money-shots #2/#3) — gated промоушен внутренним пайплайном (fallback к Gitea-вебхуку): policy-матрица по критичности (воспроизводимость→модель-карта→подпись→HITL→separation). Green: `SUP-03/04`, `GOV-01`, `VIS-03`, `ACC-02/06`, `RB-01`, `SC-01`, `REG-01`. Пока `spec`: `SUP-08`, `CI-01`, `ACC-07`, полный Semgrep, Gitea-вебхук.
+- **статус:** ✅ ядро/планка (money-shots #2/#3) — gated промоушен внутренним пайплайном (fallback к Gitea-вебхуку): policy-матрица по критичности (воспроизводимость→модель-карта→подпись→HITL→separation). Green: `SUP-03/04`, `GOV-01`, `VIS-03`, `ACC-02/06`, `RB-01`, `SC-01`, `REG-01`, `CI-01` (control-plane как CI: security-гейт на коммит + HMAC-вебхук Gitea; commit-status обратно — best-effort). Пока `spec`: `SUP-08`, `ACC-07`, полный Semgrep на PR.
 - **срез:** Gitea webhook → control-plane как CI; gated promotion + branch protection (no bypass); `SUP-03` (CVE-PR блокируется); HITL (`VIS-03`); admission на сервинге.
 - **глубина:** подпись+провенанс ([ADR-0006](adr/0006-model-signing-provenance.md)); **policy-as-code матрица гейтов по критичности** (regulatory/financial → HITL + доп. сканы).
 - **green:** `SUP-03/04`, `SUP-08`, `CI-01`, `REG-01`, `RB-01`, `ACC-02/06/07`, `SC-01`, `VIS-03`, `GOV-01`.
@@ -68,7 +68,7 @@
 
 ### И5 — Карта покрытия + KPI + видимость
 - 🎯 статус защищённости виден; CEO-вью на реальных данных.
-- **статус:** ✅ сделано (money-shot #5) — карта покрытия + CEO-вью (`VIS-01`) на live-данных: 11 контролей угроза→контроль→статус по реальным `Finding`/аудиту + KPI (`/api/coverage`, HTML `/coverage`).
+- **статус:** ✅ сделано (money-shot #5) — карта покрытия + CEO-вью (`VIS-01`) на live-данных: 13 контролей угроза→контроль→статус по реальным `Finding`/аудиту + KPI (`/api/coverage`, HTML `/coverage`). Observability подключена: control-plane `/metrics` (Prometheus), логи в Loki через promtail, провижининг Grafana-дашборда (профиль `full`).
 - **срез:** `ThreatCoverage` + страница «Карта покрытия».
 - **глубина:** [security-KPIs](threat-model/security-kpis.md) (MTTD/MTTR, coverage); CEO-дашборд.
 - **green:** `VIS-01`.
@@ -77,7 +77,7 @@
 
 ### И6 — Конвейер + демо одной командой + харденинг
 - 🎯 весь поток одной командой у проверяющего.
-- **статус:** ⏳ в работе — `make demo` уже гонит 5 money-shot'ов одной командой; делаем сквозной lifecycle-конвейер одного актива (датасет→скан→регистрация→скан артефакта→gate→HITL→деплой→рантайм-атака→decommission) + `SUP-06` (ShadowLogic как честный остаток).
+- **статус:** ✅ сделано (money-shot #6) — `make pipeline` (scripts/pipeline.py) гонит весь ЖЦ одной модели одной командой (датасет→скан→версия→gate→HITL→деплой→рантайм-атака→decommission); E2E-тест ассертит все гейты. `SUP-06` — честный остаток (ShadowLogic не ловится сканером → HITL + residual в risk-register).
 - **срез:** оркестрация сценариев в конвейер (датасет→проверки→обучение→проверки→HITL→gated-деплой→рантайм-атака→decommission); README-runbook; финальная проверка портируемости.
 - **глубина:** `SUP-06` (ShadowLogic→ручная валидация) как честный остаток.
 - **риск/fallback:** время → конвейер не обязателен сразу; куратор допускает отдельные команды по стадиям.
