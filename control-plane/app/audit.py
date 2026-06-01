@@ -6,6 +6,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 
+from . import bus
 from .db import SessionLocal, AuditEvent
 
 
@@ -26,6 +27,7 @@ def append_event(actor: str, action: str, obj: str = "", was_authorized: bool = 
         )
         s.add(ev)
         s.commit()
+        bus.publish("audit", {"actor": actor, "action": action, "obj": obj, "authorized": was_authorized})
         return ev.id
 
 

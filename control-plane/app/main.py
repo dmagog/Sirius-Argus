@@ -5,26 +5,31 @@
 AuthN — fail-closed (auth.py). Каждое действие и каждый отказ доступа — в аудит.
 """
 import hashlib
+import logging
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from . import audit, domain
+from . import audit, bus, domain, logging_setup
 from .auth import Principal, get_principal
 from .db import SessionLocal, init_db
 from .rbac import can_read_sensitivity, require
+
+logger = logging.getLogger("sirius")
 
 app = FastAPI(title="Sirius Argus — Control Plane")
 
 
 @app.on_event("startup")
 def _startup():
+    logging_setup.setup_logging()
     init_db()
 
 
 @app.middleware("http")
 async def audit_denied(request: Request, call_next):
+    logger.info("req %s %s auth=%s", request.method, request.url.path, request.headers.get("authorization", "-"))
     resp = await call_next(request)
     if request.url.path.startswith("/api/") and resp.status_code in (401, 403):
         audit.append_event(actor="anonymous", action="access.denied", obj=request.url.path, was_authorized=False)
@@ -34,7 +39,8 @@ async def audit_denied(request: Request, call_next):
 # ---------- health & dashboard ----------
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "control-plane", "audit_chain_ok": audit.verify_chain()}
+    return {"status": "ok", "service": "control-plane", "audit_chain_ok": audit.verify_chain(),
+            "bus": {"connected": bus.connected(), "events": bus.stream_len()}}
 
 
 @app.get("/", response_class=HTMLResponse)

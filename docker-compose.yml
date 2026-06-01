@@ -35,10 +35,13 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-sirius}:${POSTGRES_PASSWORD:-sirius}@postgres:5432/sirius
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/sirius/protocol/openid-connect/certs
+      REDIS_URL: redis://:${REDIS_PASSWORD:-sirius-redis}@redis:6379/0
       DEV_AUTH: ${DEV_AUTH:-0}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks: [internal]   # наружу не публикуется — только через reverse-proxy
 
   keycloak-db:
@@ -75,7 +78,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-sirius-redis}"]
     volumes: [redis_data:/data]
     networks: [internal]
 
