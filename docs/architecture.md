@@ -54,21 +54,14 @@
 
 ```mermaid
 flowchart LR
-    subgraph PILLARS["4 столпа HiddenLayer"]
-        P1["1 Discover - инвентаризация"]
-        P2["2 Secure Supply Chain - build-time"]
-        P3["3 Validate - red-team / HITL"]
-        P4["4 Protect Runtime - detect/respond"]
-    end
-    P1 -->|"что есть в системе"| L1["Реестр: модели, датасеты, версии"]
-    P2 -->|"перед реестром и продом"| L2["Гейты: артефакт, зависимости, подпись"]
-    P3 -->|"перед релизом"| L3["ART, risk, аппрув критичных"]
-    P4 -->|"в проде"| L4["rate-limit, extraction, adversarial, drift"]
-    X["Сквозные: Finding, AuditEvent, Карта покрытия"]
-    P1 -.-> X
-    P2 -.-> X
-    P3 -.-> X
-    P4 -.-> X
+    P1[1 Discover] --> L1[Реестр и инвентаризация]
+    P2[2 Secure Supply Chain] --> L2[Гейты сборки]
+    P3[3 Validate] --> L3[Red-team и HITL]
+    P4[4 Protect Runtime] --> L4[Рантайм-детект]
+    P1 --> X[Сквозные сущности и карта покрытия]
+    P2 --> X
+    P3 --> X
+    P4 --> X
 ```
 
 Связка столпов через **сквозные сущности** `Finding` (сработки) и `AuditEvent` (история) и через **Карту покрытия** (§9).
@@ -79,30 +72,30 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    U["Пользователи - RBAC-акторы: DE, DS, MLSecOps, Product, CEO"]
-    CONS["Потребители инференса - внешние"]
-    subgraph INT["Внутренняя docker-сеть - наружу НЕ публикуется"]
-        CP["SIRIUS ARGUS CONTROL PLANE - FastAPI, RBAC, гейты, CI, Findings, Audit, Карта покрытия"]
-        ML["MLflow - tracking / registry-backend"]
-        MO["MinIO - S3: артефакты, датасеты"]
-        GT["Gitea - git, PR, branch protection"]
-        PG["PostgreSQL - метаданные, findings, audit"]
-        SEC["security/ - гейты: modelscan, Trivy, gitleaks, cosign, policy"]
+    U[Пользователи RBAC-акторы]
+    CONS[Внешние потребители инференса]
+    subgraph INT[Внутренняя docker-сеть наружу не публикуется]
+        CP[Sirius Argus Control Plane]
+        ML[MLflow трекинг и реестр]
+        MO[MinIO артефакты и датасеты]
+        GT[Gitea git PR branch protection]
+        PG[PostgreSQL метаданные findings audit]
+        SEC[security гейты modelscan Trivy gitleaks cosign]
     end
-    subgraph PRODSG["Прод-периметр"]
-        SV["SERVING - 3 модели за gateway, runtime-защиты"]
+    subgraph PRODSG[Прод-периметр]
+        SV[Serving 3 модели и рантайм-защиты]
     end
-    U -->|"HTTPS - единственная точка входа"| CP
+    U -->|единственная точка входа| CP
     CP --> ML
     CP --> MO
     CP --> PG
-    CP -->|"webhook PR, CI"| GT
-    GT -->|"webhook"| CP
-    CP -->|"запуск проверок"| SEC
+    CP -->|webhook и CI| GT
+    GT --> CP
+    CP -->|запуск проверок| SEC
     ML --> MO
-    CP -->|"деплой подписанного"| SV
-    SV -->|"runtime Findings"| CP
-    CONS -->|"inference API"| SV
+    CP -->|деплой подписанного| SV
+    SV -->|runtime findings| CP
+    CONS -->|inference API| SV
 ```
 
 ### 5.1 Компоненты и ответственность
@@ -223,17 +216,17 @@ erDiagram
 
 ```mermaid
 flowchart LR
-    S1["1 Требования + критичность"] --> S2["2 Приём данных"] --> G1{"Гейт данных"}
-    G1 --> S3["3 Подготовка / фичи"] --> S4["4 Обучение: Run, lineage"] --> S5["5 Упаковка / реестр"] --> G2{"Гейт артефакта"}
-    G2 --> S6["6 Валидация / red-team"] --> G3{"HITL для критичных"}
-    G3 --> S7["7 Деплой: gated PR"] --> G4{"Admission: подписано?"}
-    G4 --> S8["8 Рантайм: detect/respond"] --> S9["9 Мониторинг"] --> S10["10 Вывод из эксплуатации"]
-    G1 -.->|"fail"| F["Finding + AuditEvent"]
-    G2 -.->|"fail"| F
-    G3 -.->|"reject"| F
-    G4 -.->|"deny"| F
-    S8 -.->|"атака"| F
-    S9 -.->|"drift"| F
+    S1[1 Требования и критичность] --> S2[2 Приём данных] --> G1{Гейт данных}
+    G1 --> S3[3 Подготовка фичи] --> S4[4 Обучение] --> S5[5 Упаковка реестр] --> G2{Гейт артефакта}
+    G2 --> S6[6 Валидация red-team] --> G3{HITL для критичных}
+    G3 --> S7[7 Деплой gated PR] --> G4{Admission подписано}
+    G4 --> S8[8 Рантайм детект] --> S9[9 Мониторинг] --> S10[10 Вывод из эксплуатации]
+    G1 -.->|fail| F[Finding и AuditEvent]
+    G2 -.->|fail| F
+    G3 -.->|reject| F
+    G4 -.->|deny| F
+    S8 -.->|атака| F
+    S9 -.->|drift| F
 ```
 
 | Этап ЖЦ | Активы (категории) | Ключевые угрозы | Контроли Sirius Argus | Где в системе |
@@ -334,12 +327,12 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    THR["Угроза: OWASP-ML / ATLAS"] --> CTRL["Контроль Sirius Argus"]
-    CTRL --> TOOL["Инструмент / гейт"]
-    TOOL --> EVT["GateExecution + Finding: реальные события"]
-    EVT -->|"live pass/fail"| MAP["Карта покрытия: актив, угроза, контроль, статус"]
-    MAP --> CEO["CEO-дашборд: верхний агрегат"]
-    MAP --> MU["Модель Угроз: тот же реестр угроз"]
+    THR[Угроза OWASP-ML ATLAS] --> CTRL[Контроль Sirius Argus]
+    CTRL --> TOOL[Инструмент гейт]
+    TOOL --> EVT[GateExecution и Finding]
+    EVT -->|live pass или fail| MAP[Карта покрытия]
+    MAP --> CEO[CEO-дашборд]
+    MAP --> MU[Модель Угроз]
 ```
 
 ---
