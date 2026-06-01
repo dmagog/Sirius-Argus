@@ -32,8 +32,8 @@ def _is_dangerous(module: str, name: str) -> bool:
     return module.split(".")[0] in DANGEROUS_MODULES or name in DANGEROUS_CALLABLES
 
 
-def scan_pickle(data: bytes):
-    """Находки [{module,name,opcode}]; пусто = чисто. Артефакт НЕ исполняется."""
+def _scan_pickle_genops(data: bytes):
+    """Собственный genops-скан (baseline/fallback): находки [{module,name,opcode}]."""
     findings, recent = [], []
     try:
         for opcode, arg, _pos in pickletools.genops(data):
@@ -53,6 +53,49 @@ def scan_pickle(data: bytes):
     except Exception as e:                               # битый/не-pickle — подозрительно
         findings.append({"module": "?", "name": f"parse-error: {e}", "opcode": "ERROR"})
     return findings
+
+
+def _picklescan_scan(data: bytes):
+    """Реальный сканер picklescan (ядро modelscan). None, если недоступен/ошибся."""
+    try:
+        from picklescan.scanner import scan_file_path
+    except Exception:
+        return None
+    import os as _os
+    import tempfile
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
+            f.write(data)
+            path = f.name
+        res = scan_file_path(path)
+    except Exception:
+        return None
+    finally:
+        if path:
+            try:
+                _os.unlink(path)
+            except Exception:
+                pass
+    hits = []
+    for g in getattr(res, "globals", None) or []:
+        safety = str(getattr(g, "safety", "")).lower()
+        if "dangerous" in safety:  # только Dangerous → блок; Suspicious — домен нашей эвристики (VIS-02)
+            hits.append({"module": getattr(g, "module", "?"), "name": getattr(g, "name", "?"), "opcode": "picklescan"})
+    if not hits and getattr(res, "infected_files", 0):
+        hits.append({"module": "?", "name": "picklescan flagged", "opcode": "picklescan"})
+    return hits
+
+
+def scan_pickle(data: bytes):
+    """Скан pickle БЕЗ исполнения: собственный genops-baseline ∪ picklescan (если есть).
+    Объединение = defense-in-depth; зелёные тесты держатся на baseline, реальный тул добавляет."""
+    hits = _scan_pickle_genops(data)
+    ps = _picklescan_scan(data)
+    if ps:
+        seen = {(h["module"], h["name"], h["opcode"]) for h in hits}
+        hits = hits + [h for h in ps if (h["module"], h["name"], h["opcode"]) not in seen]
+    return hits
 
 
 _CODE_OPS = {"GLOBAL", "STACK_GLOBAL", "REDUCE", "INST", "OBJ", "NEWOBJ", "NEWOBJ_EX", "BUILD"}
@@ -199,11 +242,44 @@ _SECRET_PATTERNS = [
 ]
 
 
-def scan_secrets(text: str):
-    """ACC-06: поиск утёкших секретов в тексте кода/коммита (gitleaks-стиль, regex)."""
+def _scan_secrets_regex(text: str):
+    """Собственный regex-скан секретов (baseline/fallback)."""
     findings = []
     for pat, label in _SECRET_PATTERNS:
         if pat.search(text):
             findings.append({"tool": "sirius-secret-scan", "verdict": "secret-exposed", "severity": "high",
                              "detail": label})
     return findings
+
+
+def _detect_secrets_scan(text: str):
+    """Реальный сканер Yelp detect-secrets. None, если недоступен/ошибся.
+
+    Берём только ТОЧНЫЕ детекторы (ключевые слова/AWS/private-key); энтропийные
+    (Base64/Hex High Entropy) отключены — они шумят на обычном коде."""
+    try:
+        from detect_secrets.core import scan as ds_scan
+        from detect_secrets.settings import transient_settings
+    except Exception:
+        return None
+    plugins = [{"name": n} for n in ("KeywordDetector", "AWSKeyDetector", "PrivateKeyDetector")]
+    try:
+        out = []
+        with transient_settings({"plugins_used": plugins}):
+            for ln, line in enumerate(text.splitlines(), 1):
+                for s in ds_scan.scan_line(line):
+                    out.append({"tool": "detect-secrets", "verdict": "secret-exposed", "severity": "high",
+                                "detail": f"{getattr(s, 'type', 'secret')} @стр{ln}"})
+        return out
+    except Exception:
+        return None
+
+
+def scan_secrets(text: str):
+    """ACC-06: секреты в коде/коммите — собственный regex-baseline ∪ detect-secrets (если есть)."""
+    out = _scan_secrets_regex(text)
+    ds = _detect_secrets_scan(text)
+    if ds:
+        seen = {f["detail"] for f in out}
+        out = out + [f for f in ds if f["detail"] not in seen]
+    return out
