@@ -84,3 +84,14 @@ class Finding(Base):
     asset_ref = Column(String(128), default="")
     detail = Column(Text, default="")
     actor = Column(String(255), default="")
+
+
+class Approval(Base):
+    """HITL-аппрув критичной версии (VIS-03): ручное одобрение MLSecOps перед
+    промоушеном в прод. Кто/когда/почему — фиксируется и идёт в аудит."""
+    __tablename__ = "approvals"
+    id = Column(Integer, primary_key=True)
+    model_version_id = Column(Integer, ForeignKey("model_versions.id"), nullable=False)
+    approver = Column(String(255), default="")
+    ts = Column(String(32), default="")
+    reason = Column(Text, default="")

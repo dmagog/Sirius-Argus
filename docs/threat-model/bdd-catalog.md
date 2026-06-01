@@ -266,6 +266,17 @@ Feature: SAST на код (ML-aware)
 ```
 
 ```gherkin
+@governance @hitl @P0
+Feature: HITL-гейт критичных моделей
+  Scenario: VIS-03 — Критичная модель не идёт в прод без ручного аппрува
+    Given воспроизводимая модель критичности regulatory/financial
+    When запрашивается промоушен в прод без HITL-аппрува
+    Then промоушен блокируется (требуется ручное одобрение MLSecOps)
+    When MLSecOps одобряет версию (кто/когда/почему — в аудит)
+    Then промоушен проходит
+```
+
+```gherkin
 @identity @authn @keycloak @P1
 Feature: AuthN через Keycloak и устойчивость
   Scenario: AUTH-01 — Невалидный токен отвергается, недоступность IdP не открывает доступ

@@ -26,7 +26,7 @@ def _dataset(sensitivity):
 def _register_model_version(with_lineage):
     dv = _dataset("open")["dataset_version_id"] if with_lineage else None
     m = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
-                   json={"name": "m", "type": "boosting", "criticality": "financial"}, timeout=10).json()
+                   json={"name": "m", "type": "boosting", "criticality": "internal"}, timeout=10).json()
     body = {"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock"} if with_lineage else {}
     v = httpx.post(f"{BASE}/api/models/{m['model_id']}/versions", headers=tok("DS"), json=body, timeout=10).json()
     S.update(model_id=m["model_id"], ver=v["version"], dv=dv)

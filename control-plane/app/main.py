@@ -225,6 +225,10 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
         if missing:
             audit.append_event(actor=p.sub, action="promote.blocked", obj=f"model/{model_id}/v{ver}", was_authorized=False)
             raise HTTPException(status_code=422, detail=f"not reproducible, missing: {missing}")
+        # VIS-03 / policy-матрица по критичности: критичное (requires_validation) — только после HITL-аппрува
+        if mv.requires_validation and not s.query(domain.Approval).filter_by(model_version_id=mv.id).count():
+            audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+            raise HTTPException(status_code=422, detail="HITL approval required (critical model)")
         mv.stage = "prod"
         s.add(domain.Deployment(model_version_id=mv.id, status="active"))
         s.commit()
@@ -240,6 +244,24 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
             logger.warning("MLflow недоступен при промоуте model/%s v%s: %s", model_id, ver, e)
         audit.append_event(actor=p.sub, action="model.promote", obj=f"model/{model_id}/v{ver}")
         return {"model_version_id": mvid, "stage": "prod"}
+
+
+class ApproveIn(BaseModel):
+    reason: str = ""
+
+
+@app.post("/api/models/{model_id}/versions/{ver}/approve")
+def approve_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depends(require("model.approve"))):
+    """VIS-03 HITL: критичную версию вручную одобряет MLSecOps перед промоушеном."""
+    with SessionLocal() as s:
+        mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
+        if not mv:
+            raise HTTPException(status_code=404, detail="version not found")
+        s.add(domain.Approval(model_version_id=mv.id, approver=p.sub,
+                              ts=datetime.now(timezone.utc).isoformat(timespec="seconds"), reason=body.reason))
+        s.commit()
+        audit.append_event(actor=p.sub, action="model.approve", obj=f"model/{model_id}/v{ver}")
+        return {"approved": True, "version": ver, "approver": p.sub}
 
 
 @app.get("/api/registry")

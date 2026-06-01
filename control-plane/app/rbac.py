@@ -13,6 +13,7 @@ PERMISSIONS = {
     "model.register": {"DS"},
     "model.version": {"DS"},
     "model.promote": {"MLSecOps"},
+    "model.approve": {"MLSecOps"},
     "decommission": {"MLSecOps"},
     "model.ingest": {"DS", "MLSecOps"},
     "code.scan": {"DS", "DE", "MLSecOps"},
