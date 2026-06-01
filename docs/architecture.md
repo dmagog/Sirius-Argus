@@ -135,7 +135,7 @@ flowchart TB
 | Сущность | Ключевые поля | Связи |
 |---|---|---|
 | **User / Role** | роль, права; zero-trust | автор всех действий |
-| **Dataset / DatasetVersion** | источник, **sensitivity** (ПДн/банк.тайна/открытые), хеш, lineage | ← Run |
+| **Dataset / DatasetVersion** | источник, **sensitivity** (ПДн/коммерч.тайна/открытые), хеш, lineage | ← Run |
 | **Model / ModelVersion** | тип, **criticality** (регуляторная/финансовая/массовая/внутренняя), security profile, `requires_validation`, стадия (dev→staging→prod→retired) | ← Run, → Deployment |
 | **Run** | гиперпараметры, метрики, lineage (датасет→код→модель), автор, время | Dataset→Model |
 | **GateExecution / Scan** | тип гейта, инструмент, что/сколько сканировали, итог | → Finding |
@@ -419,14 +419,14 @@ flowchart LR
 
 | Слой | Технология |
 |---|---|
-| Control Plane / UI | Python, FastAPI, Jinja2, HTMX, Tailwind (CDN) |
+| Control Plane / UI | Python, FastAPI; UI — серверный HTML (Jinja/HTMX/Tailwind — целевое) |
 | Трекинг/реестр-backend | MLflow (во внутренней сети) |
 | Объектное хранилище | MinIO (S3) |
 | Git + CI-вход | Gitea (branch protection, webhooks) |
 | Метаданные | PostgreSQL |
 | AuthN / идентичность | Keycloak (OIDC, realm-as-code) |
-| Гейты безопасности | picklescan, modelscan, fickling, pip-audit, Trivy, Syft, gitleaks, cosign/sigstore, policy-as-code |
-| ML / валидация | scikit-learn, XGBoost, ART; deep — только pre-trained CPU-only (без обучения в демо) |
-| Брокер / шина событий | Redis Streams (очередь сканов + события, бэкенд rate-limit) |
-| Observability / лог-стор | Loki, Grafana, Prometheus |
-| Развёртывание | Docker Compose, профили `core` / `full` (full добавляет брокер + observability) |
+| Гейты безопасности | реализовано: собственные сканеры (pickle-опкоды / формат / зависимости / секреты / AST-SAST — `control-plane/app/scanners.py`); целевое: picklescan, modelscan, fickling, pip-audit, Trivy, Syft, gitleaks, cosign, policy-as-code |
+| ML / валидация | scikit-learn (3 модели: boosting / linear / anomaly, CPU-only); целевое: XGBoost, ART; deep — pre-trained CPU-only |
+| Брокер / шина событий | Redis Streams (события + бэкенд rate-limit) — в профиле `core` |
+| Observability / лог-стор | Loki, Grafana, Prometheus (профиль `full`) |
+| Развёртывание | Docker Compose, профили `core` / `full` (`full` добавляет observability Loki/Grafana/Prometheus + Gitea) |

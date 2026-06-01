@@ -3,7 +3,7 @@
 > Принцип: **test-first в BDD-стиле** (outside-in). Поведение — угроза и ответ системы — описывается сценарием **до кода**; код итерации делает сценарий зелёным. Сценарий = спека + приёмочный тест + шаг демо + строка карты покрытия ([ADR-0004](adr/0004-bdd-methodology.md)).
 
 ## Что значит «test-first» у нас
-- 44 BDD-сценария ([bdd-catalog](threat-model/bdd-catalog.md)) написаны раньше кода, статус `spec`.
+- 50 BDD-сценариев ([bdd-catalog](threat-model/bdd-catalog.md)) написаны раньше кода; код итераций И0–И5 перевёл ~35 из них в `green`, остальные пока `spec`.
 - Код каждой итерации переводит свой набор `spec` → `green`.
 - «Зелёный» = проходящий `pytest-bdd` против **живой системы** (`docker compose up`), не моки.
 - Зелёная колонка в [roadmap](roadmap.md) — это Definition of Done итерации.
@@ -14,7 +14,7 @@
 
 | Уровень | Что покрывает | Инструмент | Test-first |
 |---|---|---|---|
-| Приёмка (BDD) | 44 поведения против живого стека | pytest-bdd + httpx + проверки БД | да — сценарии раньше кода |
+| Приёмка (BDD) | поведения против живого стека (35 green из 50) | pytest-bdd + httpx + проверки БД | да — сценарии раньше кода |
 | Unit | security-критичная чистая логика: policy-движок (матрица гейтов по критичности), hash-chain аудита, RBAC/object-authz, политика форматов, extraction-детектор | pytest | да — TDD там, где окупается |
 | Smoke | UI / шаблоны / glue | pytest, минимально | нет — без фанатизма |
 
@@ -29,26 +29,28 @@
 
 ```gherkin
 Scenario: SUP-01 — Вредоносный артефакт блокируется до загрузки
-  Given актор DS затягивает модель из недоверенного источника
-  And  артефакт содержит pickle с исполняемым payload
+  Given DS зарегистрировал модель и затягивает внешний артефакт
+  And  артефакт содержит pickle с опасными опкодами (os.system через __reduce__)
   When артефакт проходит ingestion-гейт
-  Then создаётся Finding(severity=critical, tool=modelscan)
-  And  в аудит пишется "ingestion.blocked"
+  Then создаётся Finding(verdict=malicious, severity=critical, tool=sirius-pickle-scan)
+  And  в аудит пишется "model.ingest.blocked"
   And  модель не появляется в реестре
 ```
 
 ```python
 @when("артефакт проходит ingestion-гейт")
-def submit(ctx, client):
-    ctx.resp = client.post("/api/ingest", files={"f": MALICIOUS_PKL}, token=ctx.ds)
+def submit(ctx):
+    # сырые байты артефакта; control-plane сканирует опкоды и НЕ делает pickle.load
+    ctx.resp = httpx.post(f"{BASE}/api/models/{ctx.model_id}/ingest", headers=ds_token, content=MALICIOUS_PKL)
 
-@then('создаётся Finding(severity=critical, tool=modelscan)')
-def finding(db):
-    assert db.findings(severity="critical", tool="modelscan")      # реальная запись
+@then('создаётся Finding(verdict=malicious, severity=critical, tool=sirius-pickle-scan)')
+def finding():
+    fs = httpx.get(f"{BASE}/api/findings", headers=sec_token).json()["findings"]
+    assert any(f["verdict"] == "malicious" and f["severity"] == "critical" for f in fs)
 
 @then("модель не появляется в реестре")
-def not_registered(ctx, registry):
-    assert ctx.resp.status_code == 422 and not registry.has(MALICIOUS_PKL.hash)
+def not_registered(ctx):
+    assert ctx.resp.status_code == 422   # версия в реестр не попала
 ```
 
 ## Цикл итерации (outside-in red → green)

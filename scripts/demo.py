@@ -131,6 +131,8 @@ def main():
     line(f"  код с os.system/eval → clean={j['clean']}  ({j['findings'][0]['detail'] if j['findings'] else ''})")
     st, j = req("POST", "/api/scan/code", "DS", b"def add(a, b):\n    return a + b\n")
     line(f"  безопасный код       → clean={j['clean']} ✅")
+    _, js = req("POST", "/api/scan/code", "DS", b'TOKEN = "demoSecret123"\n')
+    line(f"  код с захардкоженным секретом → clean={js['clean']} (ACC-06: {[f['verdict'] for f in js['findings']]})")
 
     hr("MONEY-SHOT #2 — уязвимая зависимость не доходит до прода (SUP-03)")
     _, j = req("POST", "/api/scan/deps", "DS", b"numpy==1.26.4\nrequests==2.19.0\n")
