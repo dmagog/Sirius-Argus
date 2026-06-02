@@ -14,10 +14,10 @@ _CDN = ('<script src="https://cdn.tailwindcss.com"></script>'
 _STYLE = (
     "<style>"
     "@keyframes siriusPulse{"
-    "0%,100%{box-shadow:0 0 4px 1px rgba(250,204,21,.35);transform:scale(1)}"
-    "50%{box-shadow:0 0 12px 4px rgba(250,204,21,.70);transform:scale(1.06)}}"
-    ".sirius-badge{background:radial-gradient(circle at 50% 45%,#f8fafc 0%,#e2e8f0 65%,rgba(226,232,240,0) 100%);"
-    "animation:siriusPulse 2.6s ease-in-out infinite}"
+    "0%,100%{box-shadow:0 0 3px 1px rgba(250,204,21,.20);transform:scale(1)}"
+    "50%{box-shadow:0 0 9px 3px rgba(250,204,21,.45);transform:scale(1.04)}}"
+    ".sirius-badge{background:radial-gradient(circle at 50% 45%,rgba(248,250,252,.30) 0%,rgba(226,232,240,.12) 60%,rgba(226,232,240,0) 100%);"
+    "animation:siriusPulse 5.2s ease-in-out infinite}"
     "@media(prefers-reduced-motion:reduce){.sirius-badge{animation:none}}"
     "</style>"
 )
