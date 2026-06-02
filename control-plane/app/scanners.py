@@ -481,3 +481,52 @@ def scan_secrets(text: str):
         seen = {f["detail"] for f in out}
         out = out + [f for f in ds if f["detail"] not in seen]
     return out
+
+
+# ---------- Качество/целостность данных: DATA-02/03/05 + FB-01 (scoped-детекторы) ----------
+# Без реального датасета — поверх статистик/сэмплов/провенанса из payload. Честно scoped:
+# демонстрируют ПОВЕДЕНИЕ контроля (аномалия → Finding → карантин), не претендуя на полноту.
+_ZERO_WIDTH = ("​", "‌", "‍", "﻿", "⁠")
+_TRUSTED_PROVENANCE = {"verified", "curated", "internal", "trusted"}
+
+
+def scan_dataset(payload: dict):
+    """DATA-02 label-flip, DATA-03 UGC-бэкдор-триггер, DATA-05 train-serve skew, FB-01 провенанс петли."""
+    findings = []
+    # DATA-02: подмена меток поставщиком — метка вне словаря или сдвиг распределения от baseline
+    labels = [str(x) for x in (payload.get("labels") or [])]
+    expected = {str(x) for x in (payload.get("expected_labels") or [])}
+    baseline = payload.get("baseline_dist") or {}
+    if labels:
+        oov = sorted(set(labels) - expected) if expected else []
+        if oov:
+            findings.append({"tool": "sirius-data-scan", "verdict": "label-flip", "severity": "high",
+                             "detail": f"метки вне словаря: {oov} — подмена меток поставщиком (DATA-02)"})
+        elif baseline:
+            n = len(labels)
+            dist = {k: labels.count(k) / n for k in set(labels) | set(baseline)}
+            shifted = sorted(k for k, b in baseline.items() if abs(dist.get(k, 0.0) - b) > 0.3)
+            if shifted:
+                findings.append({"tool": "sirius-data-scan", "verdict": "label-flip", "severity": "high",
+                                 "detail": f"сдвиг распределения меток {shifted} > 0.3 от baseline — возможный label-flip (DATA-02)"})
+    # DATA-03: UGC-бэкдор-триггер — невидимые/управляющие символы в сэмплах → карантин
+    trig = [i for i, s in enumerate(payload.get("samples") or []) if any(z in str(s) for z in _ZERO_WIDTH)]
+    if trig:
+        findings.append({"tool": "sirius-data-scan", "verdict": "backdoor-trigger", "severity": "high",
+                         "detail": f"невидимые символы-триггеры в сэмплах #{trig} — UGC-бэкдор, карантин (DATA-03)"})
+    # DATA-05: train-serving skew — расхождение средних признаков train vs serve
+    tr, sv = payload.get("train_stats") or {}, payload.get("serve_stats") or {}
+    if tr and sv:
+        skew = sorted(k for k in tr if k in sv
+                      and abs(float(sv[k]) - float(tr[k])) / (abs(float(tr[k])) + 1e-9) > 0.5)
+        if skew:
+            findings.append({"tool": "sirius-data-scan", "verdict": "train-serve-skew", "severity": "medium",
+                             "detail": f"признаки {skew} расходятся train↔serve > 50% — обучение≠инференс (DATA-05)"})
+    # FB-01: отравление петли дообучения — фидбек без доверенного провенанса
+    fb = payload.get("feedback") or []
+    untrusted = [i for i, e in enumerate(fb)
+                 if str((e or {}).get("provenance", "")).lower() not in _TRUSTED_PROVENANCE]
+    if fb and untrusted:
+        findings.append({"tool": "sirius-data-scan", "verdict": "feedback-poisoning", "severity": "high",
+                         "detail": f"фидбек без доверенного провенанса #{untrusted} — отравление петли дообучения (FB-01)"})
+    return findings

@@ -20,6 +20,7 @@ PERMISSIONS = {
     "offboard": {"MLSecOps"},
     "model.ingest": {"DS", "MLSecOps"},
     "code.scan": {"DS", "DE", "MLSecOps"},
+    "dataset.scan": {"DS", "DE", "MLSecOps"},
     "ci.scan": {"DS", "DE", "MLSecOps"},
     "finding.read": {"DS", "DE", "MLSecOps", "Product", "CEO"},
     "finding.triage": {"MLSecOps"},

@@ -824,3 +824,31 @@ async def scan_deps_endpoint(request: Request, filename: str = Query("requiremen
         return {"filename": filename, "clean": False, "findings": findings}
     audit.append_event(actor=p.sub, action="deps.scan.clean", obj=f"deps/{filename}")
     return {"filename": filename, "clean": True, "findings": []}
+
+
+class DatasetScanIn(BaseModel):
+    labels: list = []
+    expected_labels: list = []
+    baseline_dist: dict = {}
+    samples: list = []
+    train_stats: dict = {}
+    serve_stats: dict = {}
+    feedback: list = []
+
+
+@app.post("/api/scan/dataset")
+def scan_dataset_endpoint(body: DatasetScanIn, p: Principal = Depends(require("dataset.scan"))):
+    """Гейт качества/целостности данных (scoped): DATA-02 label-flip, DATA-03 UGC-бэкдор-триггер,
+    DATA-05 train-serve skew, FB-01 провенанс петли дообучения. Аномалия → Finding + карантин-сигнал."""
+    findings = scanners.scan_dataset(body.model_dump())
+    if findings:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with SessionLocal() as s:
+            for r in findings:
+                s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
+                                     status="open", asset_type="dataset", asset_ref="dataset/scan", detail=r["detail"], actor=p.sub))
+            s.commit()
+        audit.append_event(actor=p.sub, action="dataset.scan.flagged", obj="dataset/scan")
+        return {"clean": False, "findings": findings}
+    audit.append_event(actor=p.sub, action="dataset.scan.clean", obj="dataset/scan")
+    return {"clean": True, "findings": []}
