@@ -325,14 +325,19 @@ def _req_name(line: str) -> str:
 
 
 def _edit_distance_le1(a: str, b: str) -> bool:
-    """True, если между a и b ровно одна правка (замена/вставка/удаление) — типичный тайпсквоттинг."""
+    """True, если между a и b одна правка по Дамерау-Левенштейну: замена/вставка/удаление
+    ИЛИ транспозиция соседних символов (`reqeusts`↔`requests`) — типичный тайпсквоттинг."""
     if a == b:
         return False
     la, lb = len(a), len(b)
     if abs(la - lb) > 1:
         return False
-    if la == lb:                                   # одна замена
-        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    if la == lb:
+        diffs = [i for i in range(la) if a[i] != b[i]]
+        if len(diffs) == 1:                        # одна замена
+            return True
+        return (len(diffs) == 2 and diffs[1] == diffs[0] + 1      # транспозиция соседних (Дамерау)
+                and a[diffs[0]] == b[diffs[1]] and a[diffs[1]] == b[diffs[0]])
     if la > lb:                                    # нормализуем: a короче
         a, b, la, lb = b, a, lb, la
     i = j = diff = 0                               # одна вставка/удаление

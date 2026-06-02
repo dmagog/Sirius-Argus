@@ -27,8 +27,8 @@ BASE = os.environ.get("SIRIUS_BASE_URL", "http://localhost:8080")
 SERVING = os.environ.get("SERVING_URL", "http://localhost:8001")
 
 
-def req(method, path, role=None, body=None, sub=None, base=None):
-    headers = {}
+def req(method, path, role=None, body=None, sub=None, base=None, extra_headers=None):
+    headers = dict(extra_headers or {})
     if role:
         headers["Authorization"] = f"Bearer dev:{sub or role.lower()}:{role}"
     data = None
@@ -184,7 +184,7 @@ def main():
         line(f"  MLSecOps закрывает как FP → HTTP {st_ok} ✅ (в аудите: кто/почему)")
 
     hr("8. Расширенные гейты — supply-chain и качество данных")
-    _, sd = req("POST", "/api/scan/deps", "DS", b"numpyy==1.26.4\nsirius-ml\n")
+    _, sd = req("POST", "/api/scan/deps", "DS", b"numpyy==1.26.4\nreqeusts==2.0\nsirius-ml\n")
     line(f"  тайпсквоттинг + dependency confusion → clean={sd['clean']} {[f['verdict'] for f in sd['findings']]}")
     _, hc = req("POST", "/api/scan/code", "DS", b"def approve(score):\n    if score > 0.75:\n        return True\n    return False\n")
     line(f"  захардкоженный бизнес-порог (ACC-07) → {[f['verdict'] for f in hc['findings']]}")
@@ -194,6 +194,31 @@ def main():
     _, fb = req("POST", "/api/scan/dataset", "DE", {"feedback": [{"provenance": "user-submitted"}]})
     verdicts = [r["findings"][0]["verdict"] for r in (lf, bd, sk, fb) if r["findings"]]
     line(f"  гейт данных (DATA-02/03/05 + FB-01): {verdicts}")
+
+    hr("9. Прогрев карты — рантайм и governance-контроли")
+    sc2, _ = req("GET", "/health", base=SERVING)
+    if sc2 == 200:
+        req("POST", "/predict/iris-linear", base=SERVING, body={"features": [99.0, 99.0, 99.0, 99.0]}, extra_headers={"X-Client-Id": "warm-ood"})  # RT-02 OOD
+        req("POST", "/predict/iris-linear", base=SERVING, body={"features": [1.0, 2.0]}, extra_headers={"X-Client-Id": "warm-bad"})  # RT-05 malformed
+        for _ in range(18):  # MON-01 дрейф распределения
+            req("POST", "/predict/iris-linear", base=SERVING, body={"features": [12.0, 9.0, 10.0, 8.0]}, extra_headers={"X-Client-Id": "warm-drift"})
+        for _ in range(33):  # DOW-01 стоимостная квота тенанта
+            req("POST", "/predict/iris-linear", base=SERVING, body={"features": [5.1, 3.5, 1.4, 0.2]}, extra_headers={"X-Client-Id": "warm-dow", "X-Tenant-Id": "demo-tenant"})
+        dosn = sum(1 for i in range(200)  # DOS-01 распределённый флуд → глобальный load-shed (последним: дальше serving не зовём)
+                   if req("POST", "/predict/iris-linear", base=SERVING, body={"features": [5.1, 3.5, 1.4, 0.2]}, extra_headers={"X-Client-Id": f"flood-{i % 40}"})[0] == 503)
+        line(f"  рантайм: RT-02 OOD · RT-05 malformed · MON-01 drift · DOW-01 квота · DOS-01 load-shed×{dosn}")
+    tm = model("tamper-demo", "internal")
+    _, iv = req("POST", f"/api/models/{tm}/ingest", "DS", SAFETENSORS)
+    req("POST", f"/api/models/{tm}/versions/{iv.get('version')}/verify-artifact", "MLSecOps", SAFETENSORS + b"TAMPER")  # TOCTOU-01/SUP-05
+    ex = model("export-demo", "internal")
+    for _ in range(20):
+        req("GET", f"/api/models/{ex}/export", "DS")  # EXF-01
+    rm = model("retire-demo", "internal")
+    _, rv = req("POST", f"/api/models/{rm}/ingest", "DS", SAFETENSORS)
+    req("POST", f"/api/models/{rm}/versions/{rv.get('version')}/retire", "MLSecOps")  # MON-03
+    req("POST", "/api/ci/scan", "DE", {"ref": "feature/warm", "files": [{"path": "x.py", "content": "import os\nos.system('echo hi')\n"}]})  # CI-01
+    req("POST", "/api/offboard", "MLSecOps", {"actor": "warm-ex-employee"})  # ACC-03
+    line("  governance: TOCTOU-01/SUP-05 · EXF-01 · MON-03 · CI-01 · ACC-03")
 
     hr("MONEY-SHOT #5 — карта покрытия угроз + CEO-вью (VIS-01)")
     _, cov = req("GET", "/api/coverage", "CEO")

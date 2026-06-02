@@ -194,7 +194,10 @@ def coverage_page(data):
              f"</thead><tbody>{rows}</tbody></table>")
     body = ("<h1 class='text-xl font-semibold'>Карта покрытия угроз — CEO-вью</h1>"
             f"<div class='grid grid-cols-2 md:grid-cols-4 gap-3'>{cards}</div>{table}"
-            "<p class='text-xs text-slate-400'>Статус «live» — реальные сработки/блокировки в аудите по этому контролю.</p>")
+            "<p class='text-xs text-slate-400'>Статус «live» — реальные сработки/блокировки в аудите по этому контролю. "
+            "Карта отражает <b>детективные</b> контроли (дают сработку). <b>Превентивные</b> "
+            "(output-reduction <code>RT-03/04</code>, сетевая сегментация рантайма <code>RT-06</code>, "
+            "fail-closed authN, separation of duties) проверяются приёмочными тестами и не порождают сработок.</p>")
     return _page("Sirius Argus — карта покрытия", body, "coverage")
 
 
