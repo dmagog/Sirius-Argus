@@ -16,10 +16,12 @@
 ВАЖНО: payload вредоносного pickle безвреден (echo) и НИКОГДА не исполняется —
 control-plane не делает pickle.load, а pickle.dumps лишь сериализует инструкцию.
 """
+import hashlib
 import json
 import os
 import pickle
 import struct
+import subprocess
 import urllib.error
 import urllib.request
 
@@ -45,6 +47,9 @@ def req(method, path, role=None, body=None, sub=None, base=None, extra_headers=N
             return e.code, json.loads(e.read() or "null")
         except Exception:
             return e.code, None
+    except (urllib.error.URLError, OSError):
+        # соединение оборвано: напр. сервер отверг оверсайз (413), не читая огромное тело — это и есть защита
+        return 0, None
 
 
 def hr(title):
@@ -89,6 +94,7 @@ def main():
     line(f"status={h['status']}  audit_chain_ok={h['audit_chain_ok']}")
     line(f"шина событий: connected={h['bus']['connected']}  events={h['bus']['events']}")
     line(f"MLflow-реестр: connected={h['mlflow']['connected']}  (порт наружу НЕ публикуется)")
+    line(f"секреты: source={h['vault']['secrets_source']}  (HashiCorp Vault: AppRole + политика + аудит + revoke)")
 
     hr("1. MONEY-SHOT #1 — затянули ВРЕДОНОСНУЮ модель → БЛОК")
     mid = model("fraud-detector", "internal")
@@ -218,7 +224,47 @@ def main():
     req("POST", f"/api/models/{rm}/versions/{rv.get('version')}/retire", "MLSecOps")  # MON-03
     req("POST", "/api/ci/scan", "DE", {"ref": "feature/warm", "files": [{"path": "x.py", "content": "import os\nos.system('echo hi')\n"}]})  # CI-01
     req("POST", "/api/offboard", "MLSecOps", {"actor": "warm-ex-employee"})  # ACC-03
-    line("  governance: TOCTOU-01/SUP-05 · EXF-01 · MON-03 · CI-01 · ACC-03")
+    req("POST", f"/api/models/{rm}/ingest", "DS", b"\x00" * (26 * 1024 * 1024))  # DOS-02 оверсайз → 413
+    line("  governance: TOCTOU-01/SUP-05 · EXF-01 · MON-03 · CI-01 · ACC-03 · DOS-02(оверсайз→413)")
+
+    hr("MONEY-SHOT #7 — GRC: принятие остаточного риска под условиями (GOV-02)")
+    dvr = req("POST", "/api/datasets", "DE", {"name": "risk-ds", "source": "internal://curated/risk"})[1]["dataset_version_id"]
+    rkm = model("risk-model", "internal")
+    rkv = req("POST", f"/api/models/{rkm}/versions", "DS",
+              {"dataset_version_id": dvr, "code_commit": "abc", "env_lock": "lock",
+               "artifact_hash": hashlib.sha256(b"orig").hexdigest()})[1]["version"]
+    req("POST", f"/api/models/{rkm}/versions/{rkv}/verify-artifact", "MLSecOps", b"TAMPERED")  # инъекция critical (artifact-tampered)
+    st_b = req("POST", f"/api/models/{rkm}/versions/{rkv}/promote", "MLSecOps")[0]
+    line(f"  открытая critical-сработка на версии → промоушен: HTTP {st_b} 🛑 (open-critical gate)")
+    st_ds = req("POST", "/api/risk-acceptance", "DS", {"ref": f"model/{rkm}/v{rkv}", "justification": "x"})[0]
+    line(f"  DS пытается принять риск → HTTP {st_ds} (нет прав — принимает старшая роль, separation)")
+    req("POST", "/api/risk-acceptance", "CEO",
+        {"ref": f"model/{rkm}/v{rkv}", "scope": "version", "justification": "осознанный приём: низкий blast-radius, актив internal",
+         "conditions": "ре-скан и закрытие сработки в 7 дней", "expires_at": "2099-12-31T00:00:00+00:00"})
+    st_c, jc = req("POST", f"/api/models/{rkm}/versions/{rkv}/promote", "MLSecOps")
+    line(f"  CEO принял риск под условиями+сроком → промоушен: HTTP {st_c}, conditional={jc.get('conditional')} ✅ (в аудите: кто/почему/срок)")
+
+    hr("MONEY-SHOT #8 — Vault: секреты по политике + мгновенный revoke (CRED-02)")
+    line(f"  control-plane берёт секреты из Vault: source={h['vault']['secrets_source']} ✅ (по AppRole, не из env)")
+    _vscript = (
+        'export VAULT_ADDR=http://127.0.0.1:8200\n'
+        'RID=$(vault read -field=role_id auth/approle/role/control-plane/role-id)\n'
+        'SID=$(vault write -f -field=secret_id auth/approle/role/control-plane/secret-id)\n'
+        'TOK=$(vault write -field=token auth/approle/login role_id=$RID secret_id=$SID)\n'
+        'VAULT_TOKEN=$TOK vault kv get -field=seed secret/sirius/signing >/dev/null 2>&1 && echo ALLOWED_OK\n'
+        'VAULT_TOKEN=$TOK vault kv get secret/forbidden/x >/dev/null 2>&1 || echo DENIED_OK\n'
+        'vault write -f auth/approle/role/control-plane/secret-id/destroy secret_id=$SID >/dev/null 2>&1\n'
+        'vault write auth/approle/login role_id=$RID secret_id=$SID >/dev/null 2>&1 || echo REVOKE_OK\n'
+    )
+    try:
+        _repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _out = subprocess.run(["docker", "compose", "exec", "-T", "-e", "VAULT_TOKEN=sirius-root-dev", "vault", "sh", "-c", _vscript],
+                              cwd=_repo, capture_output=True, text=True, timeout=40).stdout
+        line(f"  свой секрет по политике: {'выдан ✅' if 'ALLOWED_OK' in _out else '—'} · "
+             f"чужой путь: {'403 ✅' if 'DENIED_OK' in _out else '—'} · "
+             f"отзыв secret-id → логин: {'отклонён ✅ (revoke мгновенный)' if 'REVOKE_OK' in _out else '—'}")
+    except Exception as e:
+        line(f"  (revoke-демо через контейнер vault пропущено: {e})")
 
     hr("MONEY-SHOT #5 — карта покрытия угроз + CEO-вью (VIS-01)")
     _, cov = req("GET", "/api/coverage", "CEO")
