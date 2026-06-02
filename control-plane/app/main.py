@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 import requests
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 from pydantic import BaseModel
@@ -27,6 +28,9 @@ from .rbac import PERMISSIONS, can_read_sensitivity, require
 logger = logging.getLogger("sirius")
 
 app = FastAPI(title="Sirius Argus — Control Plane")
+
+# Статика (аватар/лого) — /static/*, пакуется в образ из app/static; путь от __file__, не от cwd.
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 # Prometheus-метрики (observability, ADR-0009): аудит ≠ метрики — аудит авторитетен в Postgres
 _REQS = Counter("sirius_http_requests_total", "HTTP-запросы control-plane", ["status"])
@@ -84,6 +88,25 @@ def ui_findings():
     return ui.findings_fragment(items)
 
 
+def _findings_query(status="", severity=""):
+    """Сработки (read-only) с опциональными фильтрами по статусу/критичности."""
+    with SessionLocal() as s:
+        q = s.query(domain.Finding)
+        if status:
+            q = q.filter(domain.Finding.status == status)
+        if severity:
+            q = q.filter(domain.Finding.severity == severity)
+        rows = q.order_by(domain.Finding.id.desc()).limit(200).all()
+        return [{"ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
+                 "asset": f.asset_ref, "detail": f.detail, "status": f.status} for f in rows]
+
+
+@app.get("/ui/findings/list", response_class=HTMLResponse)
+def ui_findings_list(status: str = Query(""), severity: str = Query("")):
+    """HTMX-фрагмент для /findings: полный отфильтрованный список (детали + статус)."""
+    return ui.findings_table(_findings_query(status, severity))
+
+
 @app.get("/ui/audit", response_class=HTMLResponse)
 def ui_audit():
     """HTMX-фрагмент: хвост аудит-таймлайна (append-only, hash-chain)."""
@@ -95,6 +118,37 @@ def roles_view():
     """Матрица прав (zero-trust RBAC): кто какое действие может выполнить."""
     roles = set().union(*PERMISSIONS.values()) if PERMISSIONS else set()
     return ui.roles_page(PERMISSIONS, roles)
+
+
+@app.get("/registry", response_class=HTMLResponse)
+def registry_view():
+    """Read-only витрина реестра (как дашборд, без логина): модели, версии, стадии.
+    Чувствительные операции и lineage — через /api/* под RBAC."""
+    with SessionLocal() as s:
+        models, versions_total, prod, critical = [], 0, 0, 0
+        for m in s.query(domain.Model).all():
+            vers = (s.query(domain.ModelVersion).filter_by(model_id=m.id)
+                    .order_by(domain.ModelVersion.version).all())
+            versions_total += len(vers)
+            prod += sum(1 for v in vers if v.stage == "prod")
+            critical += 1 if m.criticality in ("regulatory", "financial") else 0
+            models.append({"id": m.id, "name": m.name, "criticality": m.criticality,
+                           "versions": [{"version": v.version, "stage": v.stage} for v in vers]})
+    kpi = {"models": len(models), "versions": versions_total, "prod": prod, "critical": critical}
+    return ui.registry_page(models, kpi)
+
+
+@app.get("/findings", response_class=HTMLResponse)
+def findings_view(status: str = Query(""), severity: str = Query("")):
+    """Read-only журнал сработок с фильтрами и live-обновлением.
+    Триаж (смена статуса) — VIS-04: через /api/findings/{id}/triage под ролью MLSecOps."""
+    with SessionLocal() as s:
+        statuses = [x for (x,) in s.query(domain.Finding.status).all()]
+    kpi = {"total": len(statuses),
+           "open": sum(1 for x in statuses if x == "open"),
+           "TP": sum(1 for x in statuses if x == "TP"),
+           "FP": sum(1 for x in statuses if x == "FP")}
+    return ui.findings_page(kpi, status, severity)
 
 
 @app.get("/api/whoami")
