@@ -20,7 +20,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_late
 from pydantic import BaseModel
 
 from . import audit, bus, domain, logging_setup, registry, scanners, signing
-from .auth import Principal, get_principal
+from .auth import Principal, get_principal, revoke
 from .db import AuditEvent, SessionLocal, init_db
 from .rbac import can_read_sensitivity, require
 
@@ -330,6 +330,42 @@ def sign_version(model_id: int, ver: int, p: Principal = Depends(require("model.
         return {"signed": True, "version": ver, "signature": mv.signature[:20] + "…"}
 
 
+@app.post("/api/models/{model_id}/versions/{ver}/verify-artifact")
+async def verify_artifact_endpoint(model_id: int, ver: int, request: Request, p: Principal = Depends(require("registry.read"))):
+    """TOCTOU-01/SUP-05: ре-верификация артефакта при загрузке — hash должен совпасть
+    с зарегистрированным; иначе подмена/перезапись после скана → Finding(critical) + блок."""
+    body = await request.body()
+    actual = hashlib.sha256(body).hexdigest()
+    with SessionLocal() as s:
+        mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
+        if not mv:
+            raise HTTPException(status_code=404, detail="version not found")
+        if not mv.artifact_hash:
+            raise HTTPException(status_code=422, detail="у версии нет зарегистрированного artifact_hash")
+        if actual != mv.artifact_hash:
+            s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                 tool="sirius-integrity", verdict="artifact-tampered", severity="critical",
+                                 status="open", asset_type="model", asset_ref=f"model/{model_id}/v{ver}",
+                                 detail="hash при загрузке ≠ зарегистрированного (TOCTOU-01/SUP-05)", actor=p.sub))
+            s.commit()
+            audit.append_event(actor=p.sub, action="artifact.tamper.detected", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+            raise HTTPException(status_code=409, detail="artifact integrity violation (TOCTOU-01/SUP-05): hash mismatch")
+    audit.append_event(actor=p.sub, action="artifact.verify.ok", obj=f"model/{model_id}/v{ver}")
+    return {"verified": True, "version": ver}
+
+
+class OffboardIn(BaseModel):
+    actor: str
+
+
+@app.post("/api/offboard")
+def offboard(body: OffboardIn, p: Principal = Depends(require("offboard"))):
+    """ACC-03: вывод сотрудника — доступ субъекта отзывается немедленно (fail-closed на всех эндпоинтах)."""
+    revoke(body.actor)
+    audit.append_event(actor=p.sub, action="offboard", obj=f"actor/{body.actor}")
+    return {"offboarded": body.actor}
+
+
 class RuntimeEventIn(BaseModel):
     type: str
     endpoint: str = ""
@@ -407,6 +443,9 @@ COVERAGE = [
     {"id": "RT-02", "threat": "adversarial/OOD-вход в рантайме", "control": "OOD-детект моделью аномалий", "match": ("verdict", "adversarial-suspect")},
     {"id": "DOS-01", "threat": "распределённый DDoS на сервинг", "control": "глобальный load-shedding", "match": ("verdict", "ddos")},
     {"id": "RT-05", "threat": "malformed-запрос (DoS)", "control": "валидация входа (fail-closed 422)", "match": ("verdict", "malformed-input")},
+    {"id": "TOCTOU-01", "threat": "подмена артефакта после скана", "control": "ре-верификация hash при загрузке", "match": ("verdict", "artifact-tampered")},
+    {"id": "SUP-05", "threat": "перезапись/подмена артефакта", "control": "integrity-проверка hash", "match": ("verdict", "artifact-tampered")},
+    {"id": "ACC-03", "threat": "неотозванный доступ (offboarding)", "control": "немедленный отзыв субъекта", "match": ("prefix", "offboard")},
 ]
 
 

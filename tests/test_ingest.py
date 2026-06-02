@@ -190,3 +190,21 @@ def suspicious_finding():
           and f["tool"] == "sirius-heuristic-scan"]
     assert fs, r.text
     S["finding_id"] = fs[0]["id"]
+
+
+# --- TOCTOU-01 / SUP-05 (целостность артефакта при загрузке) ---
+@when("DS подаёт безопасный артефакт и проверяет целостность")
+def ingest_and_verify():
+    art = _clean_bytes()
+    r = httpx.post(f"{BASE}/api/models/{S['model_id']}/ingest", headers=tok("DS"), content=art, timeout=15)
+    assert r.status_code == 200, r.text
+    ver = r.json()["version"]
+    base = f"{BASE}/api/models/{S['model_id']}/versions/{ver}/verify-artifact"
+    S["verify_ok"] = httpx.post(base, headers=tok("MLSecOps"), content=art, timeout=10).status_code
+    S["verify_tampered"] = httpx.post(base, headers=tok("MLSecOps"), content=art + b"TAMPER", timeout=10).status_code
+
+
+@then("целостность подтверждается для исходного и нарушается для подменённого")
+def integrity_checks():
+    assert S["verify_ok"] == 200, S
+    assert S["verify_tampered"] == 409, S

@@ -13,6 +13,16 @@ from jwt import PyJWKClient
 DEV_AUTH = os.environ.get("DEV_AUTH", "0") == "1"
 JWKS_URL = os.environ.get("KEYCLOAK_JWKS_URL", "")
 ROLES = {"DS", "DE", "MLSecOps", "Product", "CEO"}
+_REVOKED = set()  # ACC-03: отозванные (offboarded) субъекты — доступ закрывается немедленно
+
+
+def revoke(sub: str):
+    _REVOKED.add(sub)
+
+
+def is_revoked(sub: str) -> bool:
+    return sub in _REVOKED
+
 
 _jwks_client = None
 
@@ -39,6 +49,8 @@ def get_principal(authorization: str = Header(default="")) -> "Principal":
         parts = token.split(":", 2)
         if len(parts) != 3 or parts[2] not in ROLES:
             raise HTTPException(status_code=401, detail="bad dev token")
+        if parts[1] in _REVOKED:
+            raise HTTPException(status_code=401, detail="access revoked (offboarded)")
         return Principal(parts[1], [parts[2]])
 
     client = _jwks()
@@ -51,4 +63,7 @@ def get_principal(authorization: str = Header(default="")) -> "Principal":
     except Exception:
         raise HTTPException(status_code=401, detail="invalid token")
     roles = (claims.get("realm_access") or {}).get("roles", [])
-    return Principal(claims.get("sub", "unknown"), [r for r in roles if r in ROLES])
+    sub = claims.get("sub", "unknown")
+    if sub in _REVOKED:
+        raise HTTPException(status_code=401, detail="access revoked (offboarded)")
+    return Principal(sub, [r for r in roles if r in ROLES])

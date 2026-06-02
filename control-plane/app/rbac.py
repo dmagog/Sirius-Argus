@@ -17,6 +17,7 @@ PERMISSIONS = {
     "model.sign": {"MLSecOps"},
     "runtime.event": {"MLSecOps"},
     "decommission": {"MLSecOps"},
+    "offboard": {"MLSecOps"},
     "model.ingest": {"DS", "MLSecOps"},
     "code.scan": {"DS", "DE", "MLSecOps"},
     "ci.scan": {"DS", "DE", "MLSecOps"},
