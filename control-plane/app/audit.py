@@ -4,10 +4,15 @@
 """
 import hashlib
 import json
+import threading
 from datetime import datetime, timezone
 
 from . import bus
 from .db import SessionLocal, AuditEvent
+
+# hash-chain должен строиться строго последовательно: сериализуем read-prev + insert,
+# иначе конкурентные запросы (напр. флуд рантайм-событий) читают один prev_hash и рвут цепочку.
+_chain_lock = threading.Lock()
 
 
 def _digest(prev_hash: str, payload: dict) -> str:
@@ -18,17 +23,19 @@ def _digest(prev_hash: str, payload: dict) -> str:
 def append_event(actor: str, action: str, obj: str = "", was_authorized: bool = True) -> int:
     ts = datetime.now(timezone.utc).isoformat()
     payload = {"ts": ts, "actor": actor, "action": action, "obj": obj, "was_authorized": was_authorized}
-    with SessionLocal() as s:
-        last = s.query(AuditEvent).order_by(AuditEvent.id.desc()).first()
-        prev = last.hash if last else ""
-        ev = AuditEvent(
-            ts=ts, actor=actor, action=action, obj=obj,
-            was_authorized=was_authorized, prev_hash=prev, hash=_digest(prev, payload),
-        )
-        s.add(ev)
-        s.commit()
-        bus.publish("audit", {"actor": actor, "action": action, "obj": obj, "authorized": was_authorized})
-        return ev.id
+    with _chain_lock:
+        with SessionLocal() as s:
+            last = s.query(AuditEvent).order_by(AuditEvent.id.desc()).first()
+            prev = last.hash if last else ""
+            ev = AuditEvent(
+                ts=ts, actor=actor, action=action, obj=obj,
+                was_authorized=was_authorized, prev_hash=prev, hash=_digest(prev, payload),
+            )
+            s.add(ev)
+            s.commit()
+            eid = ev.id
+    bus.publish("audit", {"actor": actor, "action": action, "obj": obj, "authorized": was_authorized})
+    return eid
 
 
 def recent(limit: int = 50):

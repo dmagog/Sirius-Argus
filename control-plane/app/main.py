@@ -404,6 +404,9 @@ COVERAGE = [
     {"id": "EXF-01", "threat": "инсайдерская эксфильтрация", "control": "детект объёма выгрузок", "match": ("verdict", "bulk-exfiltration")},
     {"id": "MON-03", "threat": "вывод из эксплуатации", "control": "decommission снимает деплои", "match": ("prefix", "model.retire")},
     {"id": "CI-01", "threat": "отравленный коммит / шаг пайплайна", "control": "control-plane как CI + HMAC-вебхук", "match": ("prefix", "ci.")},
+    {"id": "RT-02", "threat": "adversarial/OOD-вход в рантайме", "control": "OOD-детект моделью аномалий", "match": ("verdict", "adversarial-suspect")},
+    {"id": "DOS-01", "threat": "распределённый DDoS на сервинг", "control": "глобальный load-shedding", "match": ("verdict", "ddos")},
+    {"id": "RT-05", "threat": "malformed-запрос (DoS)", "control": "валидация входа (fail-closed 422)", "match": ("verdict", "malformed-input")},
 ]
 
 

@@ -16,3 +16,14 @@ Feature: Сервинг моделей + рантайм-защиты
     When клиент шлёт бёрст инференс-запросов
     Then сервинг троттлит запросы со статусом 429
     And в control-plane появляется сработка extraction
+
+  Scenario: RT-02 — OOD/adversarial вход детектится
+    Given поднятый сервинг
+    When на инференс приходит аномальный (OOD) вход
+    Then ответ помечен adversarial_suspect
+    And в control-plane появляется сработка adversarial-suspect
+
+  Scenario: RT-05 — malformed-запрос смягчён, сервис не падает
+    Given поднятый сервинг
+    When на инференс приходит malformed-запрос
+    Then ответ 422 без падения сервиса
