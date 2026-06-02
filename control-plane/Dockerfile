@@ -7,6 +7,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+# modelaudit — в ИЗОЛИРОВАННОМ venv: его protobuf>=5 несовместим с semgrep otel<5 в одном
+# окружении. Вызываем CLI через subprocess (как semgrep) → оба реальных тула сосуществуют.
+RUN python -m venv /opt/modelaudit-venv \
+ && /opt/modelaudit-venv/bin/pip install --no-cache-dir modelaudit==0.2.45
+
 COPY app ./app
 
 # непривилегированный пользователь (least privilege)

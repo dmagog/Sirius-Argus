@@ -10,6 +10,7 @@ pickle-RCE на приёме. Он не претендует на полноту
 """
 import ast
 import json
+import os
 import pickletools
 import re
 import struct
@@ -55,46 +56,62 @@ def _scan_pickle_genops(data: bytes):
     return findings
 
 
-def _picklescan_scan(data: bytes):
-    """Реальный сканер picklescan (ядро modelscan). None, если недоступен/ошибся."""
-    try:
-        from picklescan.scanner import scan_file_path
-    except Exception:
-        return None
-    import os as _os
+# modelaudit живёт в изолированном venv (его protobuf>=5 несовместим с semgrep otel<5),
+# поэтому зовём CLI через subprocess — как semgrep. Путь к бинарю настраивается env.
+_MODELAUDIT_BIN = os.environ.get("MODELAUDIT_BIN", "/opt/modelaudit-venv/bin/modelaudit")
+
+
+def _modelaudit_scan(data: bytes, fmt: str = "pickle"):
+    """Реальный многоформатный артефакт-скан **modelaudit** (OpenSSF/promptfoo) через CLI.
+    None, если недоступен/ошибся. Возвращает (dangerous, suspicious): dangerous — обращения к
+    ОПАСНЫМ глобалам (block); suspicious — реконструкция кастомных классов/__main__ (НЕ блокируем,
+    чтобы не ломать VIS-02 — это норма для ML-pickle, нужен триаж, а не авто-отказ)."""
+    import shutil
+    import subprocess
     import tempfile
-    path = None
+    binp = _MODELAUDIT_BIN if os.path.exists(_MODELAUDIT_BIN) else shutil.which("modelaudit")
+    if not binp:
+        return None
+    ext = {"pickle": ".pkl", "safetensors": ".safetensors"}.get(fmt, ".bin")
+    path, dangerous, suspicious = None, [], []
     try:
-        with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
             f.write(data)
             path = f.name
-        res = scan_file_path(path)
+        out = subprocess.run([binp, "scan", path, "--format", "json"],
+                             capture_output=True, text=True, timeout=90)
+        for i in (json.loads(out.stdout or "{}").get("issues") or []):
+            sev = str(i.get("severity", "")).lower()
+            msg = str(i.get("message", ""))
+            glob = msg.split("global:", 1)[1].strip() if "global:" in msg else ""
+            module, _, name = glob.partition(".")
+            is_dang = (bool(glob) and _is_dangerous(module, name)) or "dangerous" in msg.lower()
+            entry = {"module": module or "?", "name": name or msg[:48], "opcode": "modelaudit"}
+            if sev in ("critical", "error") and is_dang:
+                dangerous.append(entry)
+            elif sev in ("critical", "error", "warning"):
+                suspicious.append(entry)
     except Exception:
         return None
     finally:
         if path:
             try:
-                _os.unlink(path)
+                os.unlink(path)
             except Exception:
                 pass
-    hits = []
-    for g in getattr(res, "globals", None) or []:
-        safety = str(getattr(g, "safety", "")).lower()
-        if "dangerous" in safety:  # только Dangerous → блок; Suspicious — домен нашей эвристики (VIS-02)
-            hits.append({"module": getattr(g, "module", "?"), "name": getattr(g, "name", "?"), "opcode": "picklescan"})
-    if not hits and getattr(res, "infected_files", 0):
-        hits.append({"module": "?", "name": "picklescan flagged", "opcode": "picklescan"})
-    return hits
+    return dangerous, suspicious
 
 
 def scan_pickle(data: bytes):
-    """Скан pickle БЕЗ исполнения: собственный genops-baseline ∪ picklescan (если есть).
-    Объединение = defense-in-depth; зелёные тесты держатся на baseline, реальный тул добавляет."""
+    """Скан pickle БЕЗ исполнения: собственный genops-baseline ∪ **modelaudit** (если есть).
+    Только ОПАСНЫЕ глобалы блокируют; реконструкция кастомных классов — в suspicious-тир
+    (VIS-02), не в block. Объединение = defense-in-depth, baseline держит зелёные тесты."""
     hits = _scan_pickle_genops(data)
-    ps = _picklescan_scan(data)
-    if ps:
-        seen = {(h["module"], h["name"], h["opcode"]) for h in hits}
-        hits = hits + [h for h in ps if (h["module"], h["name"], h["opcode"]) not in seen]
+    ma = _modelaudit_scan(data, "pickle")
+    if ma:
+        dangerous, _suspicious = ma
+        seen = {(h["module"], h["name"]) for h in hits}
+        hits = hits + [h for h in dangerous if (h["module"], h["name"]) not in seen]
     return hits
 
 
@@ -329,6 +346,7 @@ _POPULAR_PACKAGES = {
     "typing-extensions", "attrs", "idna", "charset-normalizer", "markupsafe",
     "werkzeug", "itsdangerous", "greenlet", "anyio", "transformers", "xgboost",
     "lightgbm", "joblib", "threadpoolctl", "mlflow", "minio",
+    "modelaudit", "model-signing", "botocore",  # реальные deps платформы (артефакт-скан/подпись/S3)
 }
 _INTERNAL_PREFIXES = ("sirius-", "sirius_")  # внутренние пакеты платформы
 
