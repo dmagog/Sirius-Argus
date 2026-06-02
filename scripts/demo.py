@@ -148,8 +148,9 @@ def main():
     cm = cmj["model_id"]
     _, vj = req("POST", f"/api/models/{cm}/versions", "DS",
                 {"dataset_version_id": dvj["dataset_version_id"], "code_commit": "abc123", "env_lock": "req.lock",
-                 "intended_use": "скоринг заявок", "limitations": "не для физлиц", "signature": "cosign:abc"})
+                 "intended_use": "скоринг заявок", "limitations": "не для физлиц"})
     cv = vj["version"]
+    req("POST", f"/api/models/{cm}/versions/{cv}/sign", "MLSecOps")  # крипто-подпись Ed25519 (SUP-04)
     st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
     line(f"  промоушен критичной модели БЕЗ HITL-аппрува  →  HTTP {st} 🛑")
     req("POST", f"/api/models/{cm}/versions/{cv}/approve", "MLSecOps", {"reason": "ревью пройдено"}, sub="reviewer")

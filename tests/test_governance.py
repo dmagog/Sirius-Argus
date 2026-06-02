@@ -17,26 +17,29 @@ def tok(role):
     return {"Authorization": f"Bearer dev:{role.lower()}:{role}"}
 
 
-def _critical_version(intended_use="прогноз риска дефолта", limitations="не для физлиц; не финсовет",
-                      signature="cosign:abc123"):
+def _critical_version(card=True, signed=True):
     dv = httpx.post(f"{BASE}/api/datasets", headers=tok("DE"),
                     json={"name": "d", "sensitivity": "open", "source": "internal://curated/d"}, timeout=10).json()["dataset_version_id"]
     m = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
                    json={"name": "credit", "type": "boosting", "criticality": "financial"}, timeout=10).json()["model_id"]
-    body = {"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock",
-            "intended_use": intended_use, "limitations": limitations, "signature": signature}
+    body = {"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock"}
+    if card:
+        body["intended_use"] = "прогноз риска дефолта"
+        body["limitations"] = "не для физлиц; не финсовет"
     v = httpx.post(f"{BASE}/api/models/{m}/versions", headers=tok("DS"), json=body, timeout=10).json()["version"]
+    if signed:  # крипто-подпись через платформу (SUP-04, Ed25519)
+        assert httpx.post(f"{BASE}/api/models/{m}/versions/{v}/sign", headers=tok("MLSecOps"), timeout=10).status_code == 200
     S.update(model_id=m, ver=v)
 
 
 @given("критичная версия без модель-карты")
 def no_card():
-    _critical_version(intended_use="", limitations="")
+    _critical_version(card=False)
 
 
 @given("критичная версия без подписи")
 def no_signature():
-    _critical_version(signature="")
+    _critical_version(signed=False)
 
 
 @given("полная критичная версия (карта и подпись на месте)")

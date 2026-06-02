@@ -41,6 +41,7 @@ services:
       CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:-change-me-ci-webhook}
       GITEA_BASE_URL: http://gitea:3000
       GITEA_TOKEN: ${GITEA_TOKEN:-}
+      SIGNING_SEED: ${SIGNING_SEED:-}
       DEV_AUTH: ${DEV_AUTH:-0}
     depends_on:
       postgres:

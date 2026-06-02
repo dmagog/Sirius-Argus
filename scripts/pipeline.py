@@ -83,8 +83,9 @@ def main():
     step(4, "DS регистрирует обученную версию: lineage + модель-карта + подпись")
     _, v = req("POST", f"/api/models/{mid}/versions", "DS",
                {"dataset_version_id": ds["dataset_version_id"], "code_commit": "abc123", "env_lock": "req.lock",
-                "intended_use": "скоринг кредитных заявок", "limitations": "не для физлиц; не финсовет", "signature": "cosign:abc123"})
+                "intended_use": "скоринг кредитных заявок", "limitations": "не для физлиц; не финсовет"})
     ver = v["version"]
+    req("POST", f"/api/models/{mid}/versions/{ver}/sign", "MLSecOps")  # крипто-подпись Ed25519 (SUP-04)
     ok(f"версия v{ver} (stage=dev), синхронизирована в MLflow={v['backend_synced']}")
 
     step(5, "SUP-06 — честный остаток")

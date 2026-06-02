@@ -37,7 +37,8 @@ def lifecycle():
     # 2) документированная версия (lineage + карта + подпись)
     ver = httpx.post(f"{BASE}/api/models/{mid}/versions", headers=tok("DS"),
                      json={"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock",
-                           "intended_use": "скоринг", "limitations": "не для физлиц", "signature": "cosign:abc"}, timeout=10).json()["version"]
+                           "intended_use": "скоринг", "limitations": "не для физлиц"}, timeout=10).json()["version"]
+    httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/sign", headers=tok("MLSecOps"), timeout=10)  # крипто-подпись (SUP-04)
     # 3) promote без HITL → блок
     S["promote_no_hitl"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=10).status_code
     # 4) аппрув другим MLSecOps (reviewer) + promote → прод
