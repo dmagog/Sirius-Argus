@@ -251,7 +251,7 @@ flowchart LR
 | 2. Приём данных | 5 Данные, 7 Supply | poisoning, label-flipping, недоверенный источник, ПДн | классификация sensitivity, lineage, trusted sources, карантин UGC, проверки качества, бэкдор-детект | Control Plane + гейты |
 | 3. Подготовка/фичи | 5 Данные | training-serving skew, ПДн в логах | контракты фичей, consistency-тесты, маскирование ПДн | гейты + serving |
 | 4. Обучение | 2 Код, 3 IAM | секреты в коде, нерепродьюсибилити | gitleaks, фикс зависимостей, трекинг гиперпараметров/lineage | Gitea CI + MLflow |
-| 5. Упаковка/реестр | 6 Модели, 7 Supply | вредоносный pickle (RCE), typosquatting, отсутствие подписи | скан артефактов (picklescan/modelscan/fickling), **автоконвертация pickle→safetensors или запрет небезопасного формата**, SBOM/MLBOM, подпись, scan зависимостей | гейты + Реестр |
+| 5. Упаковка/реестр | 6 Модели, 7 Supply | вредоносный pickle (RCE), typosquatting, отсутствие подписи | скан артефактов (**modelaudit**, изолир. venv), **автоконвертация pickle→safetensors или запрет небезопасного формата**, SBOM/MLBOM, подпись (**model-signing**), scan зависимостей | гейты + Реестр |
 | 6. Валидация / red-team | 6 Модели, 8 Adversarial | необнаруженный бэкдор (ShadowLogic), хрупкость к adversarial | ART-тесты, risk assessment, **HITL-валидация** критичных | Control Plane (HITL) |
 | 7. Деплой | 7 Supply, 9 Governance | обход в прод, неподписанный артефакт | **gated PR**, branch protection, «в прод только подписанное и прошедшее гейты» | Gitea + Control Plane |
 | 8. Эксплуатация/рантайм | 4 Сеть, 8 Adversarial | extraction, evasion, DoS, неавторизованный доступ | authN, rate-limit, extraction-detect, adversarial/FGSM-detect, output reduction | Serving |
@@ -425,7 +425,8 @@ flowchart LR
 | Git + CI-вход | Gitea (branch protection, webhooks) |
 | Метаданные | PostgreSQL |
 | AuthN / идентичность | Keycloak (OIDC, realm-as-code) |
-| Гейты безопасности | реализовано: **picklescan** (модели) + **Semgrep** + **detect-secrets** (код/секреты) + **pip-audit** (CVE зависимостей, best-effort/онлайн-гейт) + крипто-подпись **Ed25519** ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST — `control-plane/app/scanners.py`); целевое: modelscan, fickling, Trivy, Syft, gitleaks, cosign |
+| Гейты безопасности | реализовано: **modelaudit** (артефакты, изолир. venv) + **Semgrep** + **detect-secrets** (код/секреты) + **pip-audit** (CVE, best-effort) + подпись **OpenSSF model-signing** (офлайн-ключ, над реальными байтами) ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST / typosquat·dep-confusion / качество данных — `control-plane/app/scanners.py`); целевое: Trivy, Syft, gitleaks, cosign |
+| Секрет-менеджмент | **HashiCorp Vault** (AppRole, политика least-privilege, аудит доступа, revoke/rotate); в демо dev-backend, прод — file/raft + auto-unseal (KMS/HSM) |
 | ML / валидация | scikit-learn (3 модели: boosting / linear / anomaly, CPU-only); целевое: XGBoost, ART; deep — pre-trained CPU-only |
 | Брокер / шина событий | Redis Streams (события + бэкенд rate-limit) — в профиле `core` |
 | Observability / лог-стор | Loki, Grafana, Prometheus (профиль `full`) — подключено: control-plane `/metrics`, promtail→Loki, провижининг Grafana-дашборда |

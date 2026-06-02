@@ -15,3 +15,4 @@
 | [0007](0007-keycloak-authn.md) | AuthN через Keycloak (OIDC); object-authz — в control-plane | Accepted (заменяет 0003) |
 | [0008](0008-message-broker.md) | Межсервис: лёгкий брокер (Redis) — шина событий + очередь сканов | Accepted |
 | [0009](0009-observability-logstore.md) | Логи/observability: отдельный лог-стор (Loki/Grafana/Prometheus); аудит ≠ observability | Accepted |
+| [0010](0010-secrets-vault.md) | Секреты в HashiCorp Vault: выдача по AppRole-политике + аудит + revoke/rotate | Accepted (scoped) |
