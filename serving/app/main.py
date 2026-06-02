@@ -39,6 +39,15 @@ _GLOBAL_THRESHOLD = 150
 _global = deque()
 _ANOMALY = None  # RT-02: модель аномалий как OOD/adversarial-детектор
 
+# MON-01: монитор дрейфа данных — окно входов на (модель,клиент) против обучающей базы.
+# Дрейф = популяционный сдвиг распределения (не одиночный OOD, как RT-02): среднее окна
+# уезжает от обучающего μ больше чем на _DRIFT_THRESHOLD σ. Низкообъёмный, не ловится rate-limit.
+_DRIFT_WINDOW = 15
+_DRIFT_THRESHOLD = 3.0
+_drift_hist = defaultdict(lambda: deque(maxlen=_DRIFT_WINDOW))
+_BASELINE_MU = None
+_BASELINE_SD = None
+
 MODELS = {}
 
 
@@ -53,8 +62,10 @@ def _startup():
                              "est": LogisticRegression(max_iter=500).fit(X, y)}
     MODELS["iris-anomaly"] = {"type": "anomaly", "task": "anomaly-detection", "dataset": "iris", "labels": ["inlier", "outlier"],
                               "est": IsolationForest(n_estimators=80, random_state=42).fit(X)}
-    global _ANOMALY
+    global _ANOMALY, _BASELINE_MU, _BASELINE_SD
     _ANOMALY = MODELS["iris-anomaly"]["est"]
+    _BASELINE_MU = X.mean(axis=0)            # MON-01: эталон распределения признаков (обучающая база)
+    _BASELINE_SD = X.std(axis=0) + 1e-9
     logger.info("обучены модели на iris: %s", sorted(MODELS))
 
 
@@ -141,4 +152,14 @@ def predict(name: str, body: PredictIn, request: Request):
             _report(client, name, "adversarial-suspect")
     except Exception:
         pass
+    # MON-01: дрейф распределения входов (популяционный сдвиг, не одиночный OOD).
+    # Накапливаем окно на (модель,клиент); среднее окна далеко от обучающего μ → drift-сработка.
+    dq = _drift_hist[(name, client)]
+    dq.append(x.ravel())
+    if len(dq) >= _DRIFT_WINDOW and _BASELINE_MU is not None:
+        drift_score = float(np.mean(np.abs(np.mean(np.stack(dq), axis=0) - _BASELINE_MU) / _BASELINE_SD))
+        if drift_score > _DRIFT_THRESHOLD:
+            _report(client, name, "drift", int(drift_score))
+    # RT-03/04: output reduction — отдаём категорию (label) и класс, НЕ вероятности/скоры/логиты;
+    # это ограничивает membership inference и model inversion (атаки опираются на confidence).
     return {"model": name, "type": MODELS[name]["type"], "prediction": raw, "label": label, "adversarial_suspect": suspect}

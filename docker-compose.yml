@@ -5,6 +5,10 @@ name: sirius-argus
 networks:
   internal:
     internal: true
+  # RT-06: отдельный изолированный тир «рантайм» — serving↔control-plane, без доступа
+  # к MLflow/MinIO/БД. Боковое движение из сервинга к хранилищам отрезано на уровне сети.
+  runtime:
+    internal: true
   edge: {}
 
 volumes:
@@ -51,7 +55,7 @@ services:
         condition: service_started
       mlflow:
         condition: service_started
-    networks: [internal]   # наружу не публикуется — только через reverse-proxy
+    networks: [internal, runtime]   # internal — к БД/MLflow/MinIO; runtime — приём событий от serving
 
   keycloak-db:
     image: postgres:17-alpine
@@ -147,7 +151,7 @@ services:
     depends_on: [control-plane]
     ports:
       - "8001:8000"   # сервинг — второй внешний контур (кроме reverse-proxy), И4
-    networks: [internal, edge]
+    networks: [runtime, edge]   # RT-06: только control-plane (runtime) + внешний контур (edge); НЕ internal
 
   reverse-proxy:
     image: caddy:2-alpine
