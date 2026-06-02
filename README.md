@@ -29,7 +29,7 @@ Sirius Argus встраивает безопасность прямо в ML-па
 
 | Приоритет | Контроль / сценарий |
 |---|---|
-| Скан кода | AST-SAST (`CODE-01`) + detect-secrets; Semgrep — целевое |
+| Скан кода | Semgrep + AST-SAST (`CODE-01`) + detect-secrets |
 | Реестр моделей | control-plane + MLflow (§6) |
 | Security gate перед продом | gated PR (`SUP-03`, `CI-01`) |
 | Скан моделей | picklescan + собств. opcode-скан (`SUP-01`) |

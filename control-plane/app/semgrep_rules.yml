@@ -1,0 +1,38 @@
+rules:
+  - id: sirius-eval-exec
+    languages: [python]
+    severity: ERROR
+    message: "опасный вызов eval/exec/compile (исполнение произвольного кода)"
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: exec(...)
+          - pattern: compile(...)
+  - id: sirius-os-shell
+    languages: [python]
+    severity: ERROR
+    message: "shell-вызов os.system/os.popen"
+    patterns:
+      - pattern-either:
+          - pattern: os.system(...)
+          - pattern: os.popen(...)
+  - id: sirius-subprocess
+    languages: [python]
+    severity: ERROR
+    message: "вызов subprocess (риск shell-инъекции)"
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.call(...)
+          - pattern: subprocess.Popen(...)
+          - pattern: subprocess.run(...)
+          - pattern: subprocess.check_output(...)
+  - id: sirius-insecure-deserialize
+    languages: [python]
+    severity: ERROR
+    message: "небезопасная десериализация (pickle/yaml/marshal)"
+    patterns:
+      - pattern-either:
+          - pattern: pickle.loads(...)
+          - pattern: pickle.load(...)
+          - pattern: yaml.load(...)
+          - pattern: marshal.loads(...)

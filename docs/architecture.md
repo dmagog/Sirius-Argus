@@ -425,7 +425,7 @@ flowchart LR
 | Git + CI-вход | Gitea (branch protection, webhooks) |
 | Метаданные | PostgreSQL |
 | AuthN / идентичность | Keycloak (OIDC, realm-as-code) |
-| Гейты безопасности | реализовано: **picklescan** (модели) + **detect-secrets** (секреты) ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST-SAST — `control-plane/app/scanners.py`); целевое: modelscan, fickling, pip-audit, Trivy, Syft, gitleaks, cosign, policy-as-code |
+| Гейты безопасности | реализовано: **picklescan** (модели) + **Semgrep** + **detect-secrets** (код/секреты) + крипто-подпись **Ed25519** ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST — `control-plane/app/scanners.py`); целевое: modelscan, fickling, pip-audit, Trivy, Syft, gitleaks, cosign |
 | ML / валидация | scikit-learn (3 модели: boosting / linear / anomaly, CPU-only); целевое: XGBoost, ART; deep — pre-trained CPU-only |
 | Брокер / шина событий | Redis Streams (события + бэкенд rate-limit) — в профиле `core` |
 | Observability / лог-стор | Loki, Grafana, Prometheus (профиль `full`) — подключено: control-plane `/metrics`, promtail→Loki, провижининг Grafana-дашборда |

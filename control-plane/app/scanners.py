@@ -176,16 +176,18 @@ _CODE_DANGEROUS_ATTRS = {
 }
 
 
-def scan_code(src: str, filename: str = "submitted.py"):
-    """ML-aware SAST на ast: опасные вызовы в коде/ноутбуке. Код НЕ исполняется —
-    только разбирается в AST. Pattern-based MVP; полный Semgrep-гейт на PR — в И3.
-    Возвращает список находок ([] = чисто)."""
+def _extract_code(src: str, filename: str) -> str:
     if filename.endswith(".ipynb"):
         try:
             nb = json.loads(src)
-            src = "\n".join("".join(c.get("source", [])) for c in nb.get("cells", []) if c.get("cell_type") == "code")
+            return "\n".join("".join(c.get("source", [])) for c in nb.get("cells", []) if c.get("cell_type") == "code")
         except Exception:
-            pass
+            return src
+    return src
+
+
+def _scan_code_ast(src: str):
+    """Собственный AST-SAST (baseline): опасные вызовы. Код НЕ исполняется (только ast.parse)."""
     try:
         tree = ast.parse(src)
     except SyntaxError as e:
@@ -203,8 +205,56 @@ def scan_code(src: str, filename: str = "submitted.py"):
             hits.append(f"{fn.value.id}.{fn.attr}() @стр{node.lineno}")
     if not hits:
         return []
-    return [{"tool": "sirius-code-scan", "verdict": "insecure-code", "severity": "high",
-             "detail": "; ".join(hits)}]
+    return [{"tool": "sirius-code-scan", "verdict": "insecure-code", "severity": "high", "detail": "; ".join(hits)}]
+
+
+def _semgrep_scan(src: str):
+    """Реальный Semgrep с локальными офлайн-правилами. None, если недоступен/ошибся."""
+    import os as _os
+    import shutil
+    import subprocess
+    import tempfile
+    if not shutil.which("semgrep"):
+        return None
+    rules = _os.path.join(_os.path.dirname(__file__), "semgrep_rules.yml")
+    if not _os.path.exists(rules):
+        return None
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+            f.write(src)
+            path = f.name
+        env = {**_os.environ, "SEMGREP_ENABLE_VERSION_CHECK": "0", "SEMGREP_SEND_METRICS": "off"}
+        out = subprocess.run(["semgrep", "scan", "--config", rules, "--json", "--quiet", "--no-git-ignore",
+                              "--metrics=off", "--disable-version-check", path],
+                             capture_output=True, text=True, timeout=120, env=env)
+        data = json.loads(out.stdout or "{}")
+        findings = []
+        for r in data.get("results", []):
+            msg = r.get("extra", {}).get("message", r.get("check_id", "semgrep"))
+            ln = r.get("start", {}).get("line", "?")
+            findings.append({"tool": "semgrep", "verdict": "insecure-code", "severity": "high", "detail": f"{msg} @стр{ln}"})
+        return findings
+    except Exception:
+        return None
+    finally:
+        if path:
+            try:
+                _os.unlink(path)
+            except Exception:
+                pass
+
+
+def scan_code(src: str, filename: str = "submitted.py"):
+    """ML-aware SAST: собственный AST-baseline ∪ реальный Semgrep (если доступен).
+    Код НЕ исполняется. Поддерживает .ipynb (код-ячейки)."""
+    code = _extract_code(src, filename)
+    findings = _scan_code_ast(code)
+    sg = _semgrep_scan(code)
+    if sg:
+        seen = {f["detail"] for f in findings}
+        findings = findings + [f for f in sg if f["detail"] not in seen]
+    return findings
 
 
 # Крошечная встроенная база известно уязвимых пинов (демо; в проде — pip-audit/OSV/Trivy)
