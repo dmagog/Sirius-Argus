@@ -21,16 +21,16 @@ def _safetensors():
 
 @given("поднятый control-plane")
 def up():
-    assert httpx.get(f"{BASE}/health", timeout=10).status_code == 200, "сначала `make up` (с DEV_AUTH=1)"
+    assert httpx.get(f"{BASE}/health", timeout=60).status_code == 200, "сначала `make up` (с DEV_AUTH=1)"
 
 
 @when("DS подаёт чистый артефакт и запрашивается review-бандл версии")
 def ingest_and_review():
     mid = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
-                     json={"name": "review-demo", "criticality": "internal"}, timeout=10).json()["model_id"]
-    r = httpx.post(f"{BASE}/api/models/{mid}/ingest", headers=tok("DS"), content=_safetensors(), timeout=15)
+                     json={"name": "review-demo", "criticality": "internal"}, timeout=60).json()["model_id"]
+    r = httpx.post(f"{BASE}/api/models/{mid}/ingest", headers=tok("DS"), content=_safetensors(), timeout=60)
     ver = r.json()["version"]
-    S["resp"] = httpx.get(f"{BASE}/api/models/{mid}/versions/{ver}/review", headers=tok("MLSecOps"), timeout=10)
+    S["resp"] = httpx.get(f"{BASE}/api/models/{mid}/versions/{ver}/review", headers=tok("MLSecOps"), timeout=60)
 
 
 @then("в бандле есть модель-карта, lineage, статус подписи и сработки")

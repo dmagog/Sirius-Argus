@@ -20,6 +20,9 @@ import requests
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 from pydantic import BaseModel
 
+from . import vault
+vault.hydrate_env()  # подтянуть секреты из Vault в env ДО импорта signing/auth (фолбэк — env-дефолты)
+
 from . import audit, bus, domain, logging_setup, registry, scanners, signing, storage, ui
 from .auth import Principal, get_principal, revoke
 from .db import AuditEvent, SessionLocal, init_db
@@ -45,6 +48,8 @@ MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024))
 def _startup():
     logging_setup.setup_logging()
     init_db()
+    audit.append_event(actor="control-plane", action=f"secrets.loaded.{vault.source()}",
+                       obj=("vault" if vault.connected() else "env"))  # CRED-02: источник секретов в аудит
 
 
 @app.middleware("http")
@@ -77,7 +82,8 @@ async def observe_and_audit(request: Request, call_next):
 def health():
     return {"status": "ok", "service": "control-plane", "audit_chain_ok": audit.verify_chain(),
             "bus": {"connected": bus.connected(), "events": bus.stream_len()},
-            "mlflow": {"configured": registry.configured(), "connected": registry.connected()}}
+            "mlflow": {"configured": registry.configured(), "connected": registry.connected()},
+            "vault": {"connected": vault.connected(), "secrets_source": vault.source()}}
 
 
 @app.get("/metrics")
@@ -629,6 +635,7 @@ COVERAGE = [
     {"id": "DOW-01", "threat": "denial-of-wallet (исчерпание бюджета)", "control": "стоимостная квота на тенанта", "match": ("verdict", "denial-of-wallet")},
     {"id": "DOS-02", "threat": "оверсайз-загрузка (resource exhaustion)", "control": "лимит размера тела — 413 (Caddy + app)", "match": ("verdict", "oversized-upload")},
     {"id": "GOV-02", "threat": "принятие остаточного риска под условиями", "control": "risk-acceptance (роль+обоснование+срок) → conditional-деплой", "match": ("prefix", "risk.accept")},
+    {"id": "CRED-02", "threat": "секреты в env/коде (утечка, нет отзыва)", "control": "Vault: выдача по политике (AppRole) + аудит + revoke/rotate", "match": ("exact", "secrets.loaded.vault")},
 ]
 
 

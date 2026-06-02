@@ -12,6 +12,7 @@ semgrep==1.95.0
 setuptools<81  # pkg_resources для semgrep на py3.12
 pip-audit==2.7.3
 boto3==1.35.99  # S3-клиент к MinIO: карантин-стор проверенных артефактов (persist + verify-on-consume)
+hvac==2.3.0  # клиент HashiCorp Vault (AppRole): секреты по политике + аудит + revoke/rotate
 model-signing==1.1.1  # OpenSSF model-signing: подпись реальных байтов артефакта офлайн-ключом (SUP-04)
 # modelaudit — в ИЗОЛИРОВАННОМ venv (Dockerfile): его protobuf>=5 несовместим с semgrep otel<5
 # в одном окружении. Вызываем CLI через subprocess (как semgrep) → semgrep, pip-audit и modelaudit сосуществуют.

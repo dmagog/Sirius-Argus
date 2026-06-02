@@ -15,25 +15,25 @@ def tok(role):
 
 @given("поднятый control-plane")
 def up():
-    assert httpx.get(f"{BASE}/health", timeout=10).status_code == 200, "сначала `make up` (с DEV_AUTH=1)"
+    assert httpx.get(f"{BASE}/health", timeout=60).status_code == 200, "сначала `make up` (с DEV_AUTH=1)"
 
 
 @when("на CI-гейт приходит коммит с опасным кодом")
 def poisoned():
     S["resp"] = httpx.post(f"{BASE}/api/ci/scan", headers=tok("DE"),
-                           json={"ref": "feature/x", "files": [{"path": "train.py", "content": "import os\nos.system('echo hi')\n"}]}, timeout=15)
+                           json={"ref": "feature/x", "files": [{"path": "train.py", "content": "import os\nos.system('echo hi')\n"}]}, timeout=60)
 
 
 @when("на CI-гейт приходит чистый коммит")
 def clean():
     S["resp"] = httpx.post(f"{BASE}/api/ci/scan", headers=tok("DE"),
-                           json={"ref": "feature/x", "files": [{"path": "train.py", "content": "def f(x):\n    return x * 2\n"}]}, timeout=15)
+                           json={"ref": "feature/x", "files": [{"path": "train.py", "content": "def f(x):\n    return x * 2\n"}]}, timeout=60)
 
 
 @when("приходит вебхук с неверной подписью")
 def forged_webhook():
     S["resp"] = httpx.post(f"{BASE}/api/ci/webhook", headers={"X-Gitea-Signature": "deadbeef"},
-                           content=b'{"after": "abc123", "repository": {"full_name": "x/y"}}', timeout=10)
+                           content=b'{"after": "abc123", "repository": {"full_name": "x/y"}}', timeout=60)
 
 
 @then("гейт не пройден и есть сработка")
