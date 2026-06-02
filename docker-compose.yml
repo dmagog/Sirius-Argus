@@ -42,6 +42,7 @@ services:
       GITEA_BASE_URL: http://gitea:3000
       GITEA_TOKEN: ${GITEA_TOKEN:-}
       SIGNING_SEED: ${SIGNING_SEED:-}
+      DEPS_AUDIT_ONLINE: ${DEPS_AUDIT_ONLINE:-0}
       DEV_AUTH: ${DEV_AUTH:-0}
     depends_on:
       postgres:

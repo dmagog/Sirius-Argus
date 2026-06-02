@@ -268,9 +268,8 @@ KNOWN_VULNERABLE = {
 }
 
 
-def scan_dependencies(requirements_text: str):
-    """SUP-03/SC-01: проверка пинов из requirements против базы известных CVE.
-    Возвращает список находок ([] = чисто)."""
+def _scan_deps_db(requirements_text: str):
+    """Собственная офлайн-база известных CVE (baseline, без egress)."""
     findings = []
     for raw in requirements_text.splitlines():
         line = raw.split("#", 1)[0].strip()
@@ -281,6 +280,52 @@ def scan_dependencies(requirements_text: str):
         if ver.strip() in bad:
             findings.append({"tool": "sirius-dep-scan", "verdict": "vulnerable-dependency", "severity": "high",
                              "detail": f"{pkg.strip()}=={ver.strip()}: {bad[ver.strip()]}"})
+    return findings
+
+
+def _pip_audit_scan(requirements_text: str):
+    """Реальный pip-audit (OSV). None, если недоступен или нет egress (internal-сеть).
+    Работает при наличии сети (например, в CI); в офлайн-демо — фолбэк на базу."""
+    import os as _os
+    import shutil
+    import subprocess
+    import tempfile
+    if _os.environ.get("DEPS_AUDIT_ONLINE") != "1":
+        return None  # офлайн по умолчанию: не вешаем запрос на сетевой таймаут OSV (вкл. флагом в CI/egress)
+    if not shutil.which("pip-audit"):
+        return None
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w") as f:
+            f.write(requirements_text)
+            path = f.name
+        out = subprocess.run(["pip-audit", "-r", path, "--format", "json", "--progress-spinner", "off"],
+                             capture_output=True, text=True, timeout=60)
+        data = json.loads(out.stdout or "{}")
+        deps = data.get("dependencies", data) if isinstance(data, dict) else data
+        findings = []
+        for dep in (deps or []):
+            for v in dep.get("vulns", []) or []:
+                findings.append({"tool": "pip-audit", "verdict": "vulnerable-dependency", "severity": "high",
+                                 "detail": f"{dep.get('name')}=={dep.get('version')}: {v.get('id')}"})
+        return findings
+    except Exception:
+        return None
+    finally:
+        if path:
+            try:
+                _os.unlink(path)
+            except Exception:
+                pass
+
+
+def scan_dependencies(requirements_text: str):
+    """SUP-03/SC-01: офлайн-база CVE (baseline) ∪ pip-audit/OSV (реальный, при egress)."""
+    findings = _scan_deps_db(requirements_text)
+    pa = _pip_audit_scan(requirements_text)
+    if pa:
+        seen = {f["detail"] for f in findings}
+        findings = findings + [f for f in pa if f["detail"] not in seen]
     return findings
 
 
