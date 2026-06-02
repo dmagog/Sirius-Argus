@@ -83,7 +83,7 @@ flowchart TB
         MO[MinIO артефакты и датасеты]
         GT[Gitea git PR branch protection]
         PG[PostgreSQL метаданные findings audit]
-        SEC[security гейты modelscan Trivy gitleaks cosign]
+        SEC[security гейты modelaudit Semgrep detect-secrets model-signing]
         BUS[Redis шина событий и очередь сканов]
         OBS[Observability Loki Grafana Prometheus]
     end
@@ -285,7 +285,7 @@ sequenceDiagram
     Note over CP,SEC: артефакт не загружается в память
 ```
 
-**B. Обучение.** DS обучает → `Run` (гиперпараметры, метрики, lineage) в MLflow, артефакт в MinIO → авто-генерится Model Card / security profile → артефакт **подписывается с провенанс-аттестацией** (in-toto/cosign), и дальше принимается только подписанным ([ADR-0006](adr/0006-model-signing-provenance.md)).
+**B. Обучение.** DS обучает → `Run` (гиперпараметры, метрики, lineage) в MLflow, артефакт в MinIO → авто-генерится Model Card / security profile → артефакт **подписывается** (OpenSSF model-signing, офлайн-ключ из Vault), и дальше принимается только подписанным ([ADR-0006](adr/0006-model-signing-provenance.md), [ADR-0010](adr/0010-secrets-vault.md)).
 
 **C. Промоушен через единую точку входа.** PR в `main` → вебхук Gitea → Control Plane (как CI) гоняет гейты `security/` → `commit-status` обратно в PR + синк `Finding` к версии/стадии. Уязвимая зависимость → красный чек → **merge заблокирован**. Чистый PR + (для критичной модели) **HITL-аппрув MLSecOps** → промоушен в прод, артефакт подписан. Обходных путей нет.
 
@@ -425,7 +425,7 @@ flowchart LR
 | Git + CI-вход | Gitea (branch protection, webhooks) |
 | Метаданные | PostgreSQL |
 | AuthN / идентичность | Keycloak (OIDC, realm-as-code) |
-| Гейты безопасности | реализовано: **modelaudit** (артефакты, изолир. venv) + **Semgrep** + **detect-secrets** (код/секреты) + **pip-audit** (CVE, best-effort) + подпись **OpenSSF model-signing** (офлайн-ключ, над реальными байтами) ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST / typosquat·dep-confusion / качество данных — `control-plane/app/scanners.py`); целевое: Trivy, Syft, gitleaks, cosign |
+| Гейты безопасности | реализовано: **modelaudit** (артефакты, изолир. venv) + **Semgrep** + **detect-secrets** (код/секреты) + **pip-audit** (CVE, best-effort) + подпись **OpenSSF model-signing** (офлайн-ключ, над реальными байтами) ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST / typosquat·dep-confusion / качество данных — `control-plane/app/scanners.py`); целевое: Trivy, Syft, gitleaks |
 | Секрет-менеджмент | **HashiCorp Vault** (AppRole, политика least-privilege, аудит доступа, revoke/rotate); в демо dev-backend, прод — file/raft + auto-unseal (KMS/HSM) |
 | ML / валидация | scikit-learn (3 модели: boosting / linear / anomaly, CPU-only); целевое: XGBoost, ART; deep — pre-trained CPU-only |
 | Брокер / шина событий | Redis Streams (события + бэкенд rate-limit) — в профиле `core` |

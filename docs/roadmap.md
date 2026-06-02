@@ -7,7 +7,7 @@
 ## Готовность к сдаче
 - **Этап 1 (документы на проверку) — готов сейчас:** архитектура, Модель Угроз (персоны, BDD, риски, KPI), ADR, эта карта.
 - **Живое демо** копится по итерациям: первый money-shot (блок вредоносной модели) — к И2; оцениваемое ядро демо — к И3–И4; полный конвейер — И6.
-- **Сейчас (факт):** И0–И6 + добор residual — **49 сценариев каталога green** (58 pytest-функций), все money-shot'ы гоняются одной командой (`make demo` / `make pipeline`); все обязательные дедливераблы покрыты. Закрыты рантайм (DOS-load-shed, OOD, malformed, дрейф `MON-01`, output-reduction `RT-03/04`, сетевая сегментация `RT-06`, стоимостная квота `DOW-01`), supply-chain (typosquat `SUP-02`, dependency confusion `SUP-08`), hardcoded-логика (`ACC-07`), качество данных (label-flip, UGC-триггер, skew, петля дообучения — `DATA-02/03/05`, `FB-01`), TOCTOU/целостность, offboarding, сервис-аккаунт сервинга (рантайм-петля без DEV_AUTH) и веб-UI; **64 pytest-функции**. Supply-chain/GRC-доводка: артефакт в карантин-MinIO + reject архивов, подпись через OpenSSF **model-signing** (офлайн-ключ, реальные байты), артефакт-скан **modelaudit** (изолированный venv), evidence-based HITL + аппрув привязан к hash, **risk-acceptance** под условиями (GOV-02), защита от оверсайз-загрузок (DOS-02), секреты в **HashiCorp Vault** (AppRole+политика+аудит+revoke, CRED-02). Честный остаток — **1 из 50** (`SUP-06` ShadowLogic, предел статического анализа → HITL), см. [risk-register](threat-model/risk-register.md).
+- **Сейчас (факт):** И0–И6 + добор residual — **49 сценариев каталога green** (64 pytest-функции), все money-shot'ы гоняются одной командой (`make demo` / `make pipeline`); все обязательные дедливераблы покрыты. Закрыты рантайм (DOS-load-shed, OOD, malformed, дрейф `MON-01`, output-reduction `RT-03/04`, сетевая сегментация `RT-06`, стоимостная квота `DOW-01`), supply-chain (typosquat `SUP-02`, dependency confusion `SUP-08`), hardcoded-логика (`ACC-07`), качество данных (label-flip, UGC-триггер, skew, петля дообучения — `DATA-02/03/05`, `FB-01`), TOCTOU/целостность, offboarding, сервис-аккаунт сервинга (рантайм-петля без DEV_AUTH) и веб-UI; **64 pytest-функции**. Supply-chain/GRC-доводка: артефакт в карантин-MinIO + reject архивов, подпись через OpenSSF **model-signing** (офлайн-ключ, реальные байты), артефакт-скан **modelaudit** (изолированный venv), evidence-based HITL + аппрув привязан к hash, **risk-acceptance** под условиями (GOV-02), защита от оверсайз-загрузок (DOS-02), секреты в **HashiCorp Vault** (AppRole+политика+аудит+revoke, CRED-02). Честный остаток — **1 из 50** (`SUP-06` ShadowLogic, предел статического анализа → HITL), см. [risk-register](threat-model/risk-register.md).
 
 ## Модели (решение)
 Три модели **разных типов**, домен нейтральный: бустинг (XGBoost, табличная) · классическая (linear + TF-IDF, текст) · третий тип задачи (regression или anomaly detection). **torch/CNN для обучения не тащим** — вес образа, ARM, время cold-start; если нужен «глубокий» тип под adversarial-демо, берём pre-trained CPU-only чекпойнт без обучения в демо. **Toy-модель** (sklearn) — уже в И1 для прогона флоу регистрации; полное трио — к И4.
@@ -42,10 +42,10 @@
 ### И2 — Скан моделей + gate на закачку + данные + код
 - 🎯 вредоносная внешняя модель блокируется до загрузки; сработки видны.
 - **статус:** ✅ сделано (money-shot #1) — green: `SUP-01`, `SUP-07`, `DATA-01/02`, `DATA-04`, `CODE-01`, `VIS-02`. Сканеры — собственные ∪ реальные (`control-plane/app/scanners.py`).
-- **срез:** `security/` (modelscan/picklescan + Trivy); `Finding` + триаж; ingestion-гейт (карантин→скан→admit/reject); блок вредоносного pickle.
+- **срез:** `security/` (modelaudit ∪ собств. opcode-скан); `Finding` + триаж; ingestion-гейт (карантин→скан→admit/reject); блок вредоносного pickle.
 - **глубина:** политика форматов (`SUP-07`); ML-aware SAST (`CODE-01`); скан архивов датасетов; сканы данных.
 - **green:** `SUP-01` (showpiece), `SUP-07`, `DATA-01/02/04`, `CODE-01`, `VIS-02`.
-- **риск/fallback:** установка/версии сканеров в контейнере → пины образов; fallback — минимально picklescan.
+- **риск/fallback:** установка/версии сканеров в контейнере → пины образов; modelaudit в изолир. venv; fallback — собств. genops-baseline.
 - **демо money-shot #1:** «затянули модель → pickle-RCE → БЛОК + сработка».
 
 ### И3 — Единая точка входа в прод + подписи + policy-гейт
