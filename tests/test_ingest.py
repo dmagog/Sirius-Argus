@@ -167,6 +167,13 @@ def ingest_safetensors():
                            content=_safetensors_bytes(), timeout=15)
 
 
+@when("DS подаёт артефакт-архив (zip)")
+def ingest_archive():
+    # архив = контейнер с произвольными файлами; принимаем только одиночный проверенный артефакт
+    S["resp"] = httpx.post(f"{BASE}/api/models/{S['model_id']}/ingest", headers=tok("DS"),
+                           content=b"PK\x03\x04" + b"\x00" * 40, timeout=15)
+
+
 @then("появляется сработка о небезопасном формате")
 def unsafe_format_finding():
     r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)

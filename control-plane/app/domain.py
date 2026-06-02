@@ -56,7 +56,9 @@ class ModelVersion(Base):
     env_lock = Column(String(255), default="")
     # профиль безопасности / модель-карта (GOV-01)
     artifact_hash = Column(String(64), default="")
+    artifact_object_key = Column(String(255), default="")  # ключ проверенного артефакта в карантин-MinIO
     signature = Column(String(128), default="")
+    signature_bundle = Column(Text, default="")            # манифест/подпись model-signing (офлайн-ключ)
     intended_use = Column(Text, default="")
     limitations = Column(Text, default="")
     requires_validation = Column(Boolean, default=False)
@@ -95,3 +97,21 @@ class Approval(Base):
     approver = Column(String(255), default="")
     ts = Column(String(32), default="")
     reason = Column(Text, default="")
+    artifact_hash = Column(String(64), default="")  # к какому артефакту привязан аппрув (anti-TOCTOU)
+
+
+class RiskAcceptance(Base):
+    """Принятие остаточного риска (GRC exception): уполномоченная старшая роль формально
+    принимает проваленный контроль/остаточный риск с обоснованием, условиями и сроком.
+    Промоушен при проваленном гейте проходит ТОЛЬКО при валидном непросроченном принятии
+    → деплой помечается conditional/risk-accepted (не clean), всё в аудит."""
+    __tablename__ = "risk_acceptances"
+    id = Column(Integer, primary_key=True)
+    scope = Column(String(16), default="version")    # version | finding
+    ref = Column(String(128), default="")             # model/<id>/v<ver> или finding/<id>
+    accepted_by = Column(String(255), default="")
+    justification = Column(Text, default="")
+    conditions = Column(Text, default="")
+    expires_at = Column(String(32), default="")       # ISO-дата; пусто = бессрочно (не рекомендуется)
+    ts = Column(String(32), default="")
+    active = Column(Boolean, default=True)

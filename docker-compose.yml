@@ -49,9 +49,15 @@ services:
       DEPS_AUDIT_ONLINE: ${DEPS_AUDIT_ONLINE:-0}
       DEV_AUTH: ${DEV_AUTH:-0}
       SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:-svc-serving-local-dev-7f3a9c}  # сервис-аккаунт сервинга (=serving)
+      MINIO_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
+      ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-sirius-quarantine}
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
       redis:
         condition: service_started
       mlflow:

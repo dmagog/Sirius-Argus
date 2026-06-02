@@ -20,7 +20,7 @@ import requests
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 from pydantic import BaseModel
 
-from . import audit, bus, domain, logging_setup, registry, scanners, signing, ui
+from . import audit, bus, domain, logging_setup, registry, scanners, signing, storage, ui
 from .auth import Principal, get_principal, revoke
 from .db import AuditEvent, SessionLocal, init_db
 from .rbac import PERMISSIONS, can_read_sensitivity, require
@@ -750,7 +750,9 @@ async def ingest_model(model_id: int, request: Request, p: Principal = Depends(r
             raise HTTPException(status_code=422, detail={"blocked": True, "format": assessment["format"],
                                                          "tools": [r["tool"] for r in assessment["findings"]]})
         n = s.query(domain.ModelVersion).filter_by(model_id=model_id).count() + 1
+        obj_key = storage.put(f"models/{model_id}/v{n}/artifact.bin", body)  # карантин-стор проверенных байтов
         mv = domain.ModelVersion(model_id=model_id, version=n, stage="dev", artifact_hash=digest,
+                                 artifact_object_key=obj_key,
                                  requires_validation=(m.criticality in ("regulatory", "financial")))
         s.add(mv)
         s.commit()
@@ -763,7 +765,8 @@ async def ingest_model(model_id: int, request: Request, p: Principal = Depends(r
         except registry.RegistryError as e:
             logger.warning("MLflow недоступен при ingest model/%s v%s: %s", model_id, n, e)
         audit.append_event(actor=p.sub, action="model.ingest.admitted", obj=f"model/{model_id}/v{n}")
-        return {"admitted": True, "version": n, "artifact_hash": digest, "format": assessment["format"]}
+        return {"admitted": True, "version": n, "artifact_hash": digest, "format": assessment["format"],
+                "artifact_object_key": obj_key, "persisted": bool(obj_key)}
 
 
 @app.get("/api/findings")

@@ -113,8 +113,22 @@ def scan_heuristic(data: bytes):
         return ["parse-error"]
 
 
+# Архивы (zip/tar/gz/bz2/xz/7z/lz4/rar) на приёме НЕ принимаем: модель — одиночный
+# проверенный артефакт, а не контейнер с произвольными файлами («не тянуть лишнее»).
+_ARCHIVE_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08", b"\x1f\x8b", b"BZh",
+                  b"\xfd7zXZ\x00", b"7z\xbc\xaf\x27\x1c", b"\x04\x22\x4d\x18", b"Rar!")
+
+
+def _is_archive(data: bytes) -> bool:
+    if any(data.startswith(m) for m in _ARCHIVE_MAGIC):
+        return True
+    return len(data) > 262 and data[257:262] == b"ustar"  # tar
+
+
 def detect_format(data: bytes) -> str:
-    """Классификация формата по сигнатуре: safetensors | pickle | unknown."""
+    """Классификация формата по сигнатуре: archive | safetensors | pickle | unknown."""
+    if _is_archive(data):
+        return "archive"
     if len(data) >= 8:
         try:
             n = struct.unpack("<Q", data[:8])[0]
@@ -145,6 +159,10 @@ def assess_artifact(data: bytes, criticality: str = "internal"):
     """
     fmt = detect_format(data)
     findings, admit = [], True
+    if fmt == "archive":  # «не тянуть лишнее»: контейнер с произвольными файлами не принимаем
+        findings.append({"tool": "sirius-format-policy", "verdict": "unsafe-format", "severity": "high",
+                         "detail": "архив (zip/tar/gz/…) не принимается — модель должна быть одиночным проверенным артефактом, а не контейнером с произвольными файлами"})
+        return {"format": fmt, "findings": findings, "admit": False}
     if fmt == "pickle":
         hits = scan_pickle(data)
         if hits:
