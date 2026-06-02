@@ -45,7 +45,7 @@ def lifecycle():
                headers={"Authorization": "Bearer dev:reviewer:MLSecOps"}, json={"reason": "валидация ок"}, timeout=10)
     S["promote_hitl"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=10).status_code
     # 5) инференс (уникальный client-id — изоляция от бёрстов по host-IP)
-    S["predict"] = httpx.post(f"{SERVING}/predict/credit-linear", headers={"X-Client-Id": "pipeline-test"},
+    S["predict"] = httpx.post(f"{SERVING}/predict/iris-linear", headers={"X-Client-Id": "pipeline-test"},
                               json={"features": [0.1, 0.2, 0.3, 0.4]}, timeout=10).status_code
     # 6) decommission + запрет отката
     S["retire"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/retire", headers=tok("MLSecOps"), timeout=10).status_code

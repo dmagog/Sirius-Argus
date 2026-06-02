@@ -39,7 +39,7 @@ def each_predicts():
 def burst():
     last = None
     for _ in range(60):
-        last = httpx.post(f"{SERVING}/predict/credit-linear", headers={"X-Client-Id": "attacker-001"},
+        last = httpx.post(f"{SERVING}/predict/iris-linear", headers={"X-Client-Id": "attacker-001"},
                           json={"features": [0.1, 0.2, 0.3, 0.4]}, timeout=10)
     S["last"] = last
 

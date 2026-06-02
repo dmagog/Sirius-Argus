@@ -103,14 +103,14 @@ def main():
     sc, mdl = req("GET", "/models", base=SERVING)
     if sc == 200:
         ok(f"задеплоено моделей: {len(mdl['models'])} — типы {[x['type'] for x in mdl['models']]}")
-        _, pr = req("POST", "/predict/credit-linear", base=SERVING, body={"features": [0.1, 0.2, 0.3, 0.4]})
-        ok(f"предсказание credit-linear: {pr.get('prediction')}")
+        _, pr = req("POST", "/predict/iris-linear", base=SERVING, body={"features": [0.1, 0.2, 0.3, 0.4]})
+        ok(f"предсказание iris-linear: {pr.get('prediction')}")
     else:
         blocked("сервинг недоступен — пропуск (подними `make up`)")
 
     step(8, "Рантайм-атака: бёрст extraction одним клиентом")
     n429 = sum(1 for _ in range(70)
-               if req("POST", "/predict/credit-linear", base=SERVING, body={"features": [0.1, 0.2, 0.3, 0.4]})[0] == 429)
+               if req("POST", "/predict/iris-linear", base=SERVING, body={"features": [0.1, 0.2, 0.3, 0.4]})[0] == 429)
     blocked(f"extraction-детект: {n429}×429 (троттлинг) + сработка в control-plane (петля рантайм→реестр)")
 
     step(9, "Инцидент → вывод версии из эксплуатации (decommission)")

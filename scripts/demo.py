@@ -161,7 +161,7 @@ def main():
     if sc == 200:
         line(f"  задеплоено моделей: {len(mdl['models'])} — типы {[m['type'] for m in mdl['models']]}")
         n429 = sum(1 for _ in range(70)
-                   if req("POST", "/predict/credit-linear", base=SERVING, body={"features": [0.1, 0.2, 0.3, 0.4]})[0] == 429)
+                   if req("POST", "/predict/iris-linear", base=SERVING, body={"features": [0.1, 0.2, 0.3, 0.4]})[0] == 429)
         line(f"  70 запросов одним клиентом  →  троттлинг 429: {n429} раз 🛑")
         exts = [f for f in req("GET", "/api/findings", "MLSecOps")[1]["findings"] if f["verdict"] == "extraction"]
         line(f"  сработка extraction в control-plane: {'есть ✅' if exts else 'нет'} (петля рантайм→реестр)")
