@@ -48,6 +48,13 @@ _drift_hist = defaultdict(lambda: deque(maxlen=_DRIFT_WINDOW))
 _BASELINE_MU = None
 _BASELINE_SD = None
 
+# DOW-01: стоимостная квота на тенанта (denial-of-wallet). Тенант — заголовок X-Tenant-Id;
+# каждый инференс = 1 единица стоимости, окно _DOW_WINDOW_S. Без тенанта квота не применяется
+# (действует только burst RT-01) — это опциональная защита бюджета для платных клиентов.
+_DOW_WINDOW_S = 60.0
+_DOW_BUDGET = 30
+_tenant_hits = defaultdict(deque)
+
 MODELS = {}
 
 
@@ -94,6 +101,15 @@ def _global_rate() -> int:
     return len(_global)
 
 
+def _tenant_rate(tenant: str) -> int:
+    now = time.monotonic()
+    dq = _tenant_hits[tenant]
+    dq.append(now)
+    while dq and now - dq[0] > _DOW_WINDOW_S:
+        dq.popleft()
+    return len(dq)
+
+
 def _report(client: str, model: str, etype: str, count: int = 0):
     """Унифицированный отчёт о рантайм-детекте в control-plane (→ Finding + audit).
     Дедуп по (client, model, type), чтобы не флудить."""
@@ -132,6 +148,12 @@ def predict(name: str, body: PredictIn, request: Request):
     if count > _THRESHOLD:  # RT-01: бёрст одного клиента → экстракция
         _report(client, name, "extraction", count)
         raise HTTPException(status_code=429, detail=f"extraction/rate limit: {count} за {int(_WINDOW_S)}s — троттлинг (RT-01)")
+    tenant = request.headers.get("x-tenant-id")
+    if tenant:  # DOW-01: стоимостная квота тенанта (cost-прокси по числу инференсов)
+        tcount = _tenant_rate(tenant)
+        if tcount > _DOW_BUDGET:
+            _report(client, name, "denial-of-wallet", tcount)
+            raise HTTPException(status_code=429, detail=f"denial-of-wallet: бюджет тенанта '{tenant}' исчерпан ({_DOW_BUDGET}/{int(_DOW_WINDOW_S)}s) — DOW-01")
     try:  # RT-05: malformed-вход смягчён (422), сервис не падает
         x = np.array(body.features, dtype=float).reshape(1, -1)
         if x.shape[1] != FEATURES:

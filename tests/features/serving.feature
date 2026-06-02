@@ -41,3 +41,9 @@ Feature: Сервинг моделей + рантайм-защиты
   Scenario: RT-06 — сервинг не достаёт MLflow/MinIO (сетевая сегментация)
     Given поднятый сервинг
     Then из сервинга недоступны MLflow и MinIO, но доступен control-plane
+
+  Scenario: DOW-01 — исчерпание стоимостного бюджета тенанта
+    Given поднятый сервинг
+    When тенант превышает свой бюджет запросов
+    Then сервинг отвечает 429 denial-of-wallet
+    And в control-plane появляется сработка denial-of-wallet

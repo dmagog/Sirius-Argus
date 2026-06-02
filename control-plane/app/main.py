@@ -520,6 +520,7 @@ COVERAGE = [
     {"id": "DATA-03", "threat": "UGC-бэкдор-триггер", "control": "детект скрытых символов + карантин", "match": ("verdict", "backdoor-trigger")},
     {"id": "DATA-05", "threat": "train-serving skew", "control": "consistency train↔serve", "match": ("verdict", "train-serve-skew")},
     {"id": "FB-01", "threat": "отравление петли дообучения", "control": "провенанс фидбека дообучения", "match": ("verdict", "feedback-poisoning")},
+    {"id": "DOW-01", "threat": "denial-of-wallet (исчерпание бюджета)", "control": "стоимостная квота на тенанта", "match": ("verdict", "denial-of-wallet")},
 ]
 
 

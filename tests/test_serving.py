@@ -123,6 +123,28 @@ def no_scores():
     assert not (set(k.lower() for k in j) & banned), j
 
 
+@when("тенант превышает свой бюджет запросов")
+def dow_burst():
+    # уникальный client-id → burst RT-01 (50) не срабатывает; X-Tenant-Id → действует cost-квота DOW-01 (30)
+    h = {"X-Client-Id": "dow-client", "X-Tenant-Id": "acme-pay"}
+    last = None
+    for _ in range(33):
+        last = httpx.post(f"{SERVING}/predict/iris-linear", headers=h, json={"features": [5.1, 3.5, 1.4, 0.2]}, timeout=10)
+    S["resp"] = last
+
+
+@then("сервинг отвечает 429 denial-of-wallet")
+def dow_throttled():
+    assert S["resp"].status_code == 429, S["resp"].text
+    assert "denial-of-wallet" in S["resp"].text.lower(), S["resp"].text
+
+
+@then("в control-plane появляется сработка denial-of-wallet")
+def dow_finding():
+    r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
+    assert any(f["verdict"] == "denial-of-wallet" for f in r.json()["findings"]), r.text
+
+
 @then("из сервинга недоступны MLflow и MinIO, но доступен control-plane")
 def lateral_blocked():
     # RT-06: serving в изолированном тире runtime — DNS/маршрут к хранилищам отрезан,
