@@ -1,35 +1,75 @@
-"""Крипто-подпись версий моделей (ADR-0006), офлайн, без внешних бинарей.
+"""Подпись артефактов моделей через OpenSSF **model-signing** (офлайн EC-ключ).
 
-Реальная Ed25519-подпись через `cryptography` (тянется как зависимость pyjwt[crypto]).
-Платформа подписывает канонический message(model,ver,artifact_hash); промоушен
-верифицирует подпись публичным ключом (SUP-04). Ключ — из SIGNING_SEED (демо;
-в проде — HSM/KMS или офлайн-cosign-ключ, см. ADR-0006). «Подпись ≠ безопасность» —
-она про целостность/провенанс, а не про отсутствие зловреда (для зловреда — сканы).
+Не своя крипто-схема: `model_signing` подписывает РЕАЛЬНЫЕ байты артефакта (когда он сохранён
+в карантин-сторе) и даёт стандартный манифест/подпись; верификация пересчитывает хэш и
+проверяет публичным ключом. Офлайн private-key режим — без keyless Sigstore (egress нет; ADR-0006).
+
+Когда подписываем: после ingest-скана и регистрации версии (sign-after-scan).
+Что защищаем: целостность + провенанс — что в прод уходят ИМЕННО проверенные байты,
+подписанные авторизованным ключом. Подпись ≠ безопасность (зловред ловит скан; подпись —
+против подмены/несанкц. замены). Если байты артефакта недоступны (версия без загруженного
+артефакта), подписываем канонический манифест model:ver:artifact_hash — деградация, но та же тулза.
+Ключ — из SIGNING_KEY_PEM или детерминированно из SIGNING_SEED (демо; в проде — KMS/HSM/cosign).
 """
-import base64
+import hashlib
 import os
+import tempfile
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
-_SEED = bytes.fromhex((os.environ.get("SIGNING_SEED") or "5e1f17a0").ljust(64, "0")[:64])
-_KEY = Ed25519PrivateKey.from_private_bytes(_SEED)
-_PUB = _KEY.public_key()
-
-
-def _message(model_id, ver, artifact_hash: str) -> bytes:
-    return f"{model_id}:{ver}:{artifact_hash or ''}".encode()
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+import model_signing.signing as _sign
+import model_signing.verifying as _verify
 
 
-def sign(model_id, ver, artifact_hash: str = "") -> str:
-    return base64.b64encode(_KEY.sign(_message(model_id, ver, artifact_hash))).decode()
+def _load_key():
+    pem = os.environ.get("SIGNING_KEY_PEM")
+    if pem:
+        return serialization.load_pem_private_key(pem.encode(), password=None)
+    seed = (os.environ.get("SIGNING_SEED") or "5e1f17a0").encode()
+    secret = (int.from_bytes(hashlib.sha256(seed).digest(), "big") % (2 ** 256 - 2)) + 1
+    return ec.derive_private_key(secret, ec.SECP256R1())
 
 
-def verify(model_id, ver, artifact_hash: str, signature: str) -> bool:
-    if not signature:
+_KEY = _load_key()
+_DIR = tempfile.mkdtemp(prefix="sirius-signing-")
+_PRIV = os.path.join(_DIR, "priv.pem")
+_PUB = os.path.join(_DIR, "pub.pem")
+with open(_PRIV, "wb") as _f:
+    _f.write(_KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption()))
+with open(_PUB, "wb") as _f:
+    _f.write(_KEY.public_key().public_bytes(serialization.Encoding.PEM,
+                                            serialization.PublicFormat.SubjectPublicKeyInfo))
+
+
+def _signed_object(model_id, ver, artifact_hash, artifact_bytes) -> bytes:
+    """Что именно подписываем: реальные байты артефакта, если есть; иначе канонический манифест."""
+    return artifact_bytes if artifact_bytes else f"{model_id}:{ver}:{artifact_hash or ''}".encode()
+
+
+def sign(model_id, ver, artifact_hash: str = "", artifact_bytes: bytes = None) -> str:
+    obj = _signed_object(model_id, ver, artifact_hash, artifact_bytes)
+    with tempfile.TemporaryDirectory() as t:
+        art, sig = os.path.join(t, "artifact"), os.path.join(t, "artifact.sig")
+        with open(art, "wb") as f:
+            f.write(obj)
+        _sign.Config().use_elliptic_key_signer(private_key=_PRIV).sign(art, sig)
+        with open(sig) as f:
+            return f.read()
+
+
+def verify(model_id, ver, artifact_hash: str = "", signature_bundle: str = "", artifact_bytes: bytes = None) -> bool:
+    if not signature_bundle:
         return False
-    try:
-        _PUB.verify(base64.b64decode(signature), _message(model_id, ver, artifact_hash))
-        return True
-    except (InvalidSignature, ValueError, Exception):
-        return False
+    obj = _signed_object(model_id, ver, artifact_hash, artifact_bytes)
+    with tempfile.TemporaryDirectory() as t:
+        art, sig = os.path.join(t, "artifact"), os.path.join(t, "artifact.sig")
+        with open(art, "wb") as f:
+            f.write(obj)
+        with open(sig, "w") as f:
+            f.write(signature_bundle)
+        try:
+            _verify.Config().use_elliptic_key_verifier(public_key=_PUB).verify(art, sig)
+            return True
+        except Exception:
+            return False

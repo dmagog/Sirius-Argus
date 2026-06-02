@@ -322,7 +322,8 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
             if not (mv.intended_use and mv.limitations):  # GOV-01: полнота модель-карты
                 audit.append_event(actor=p.sub, action="promote.blocked.modelcard", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="incomplete model card (GOV-01): need intended_use + limitations")
-            if not signing.verify(model_id, ver, mv.artifact_hash or "", mv.signature or ""):  # SUP-04: крипто-верификация Ed25519
+            art_bytes = storage.get(mv.artifact_object_key) if mv.artifact_object_key else None
+            if not signing.verify(model_id, ver, mv.artifact_hash or "", mv.signature_bundle or "", art_bytes):  # SUP-04: model-signing над реальным артефактом (admission/verify-on-consume)
                 audit.append_event(actor=p.sub, action="promote.blocked.unsigned", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="unsigned or invalid signature (SUP-04)")
             # VIS-03 (HITL) + ACC-02 (separation of duties): нужен аппрув от ДРУГОГО MLSecOps
@@ -384,16 +385,19 @@ def retire_version(model_id: int, ver: int, p: Principal = Depends(require("deco
 
 @app.post("/api/models/{model_id}/versions/{ver}/sign")
 def sign_version(model_id: int, ver: int, p: Principal = Depends(require("model.sign"))):
-    """SUP-04 (ADR-0006): крипто-подпись версии (Ed25519) над model:ver:artifact_hash.
-    Без неё промоушен критичной модели не проходит (admission-control)."""
+    """SUP-04 (ADR-0006): подпись версии через OpenSSF model-signing (офлайн-ключ) над
+    РЕАЛЬНЫМ артефактом из карантин-стора (или манифестом, если байты не сохранены).
+    Без валидной подписи промоушен критичной модели не проходит (admission-control)."""
     with SessionLocal() as s:
         mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
         if not mv:
             raise HTTPException(status_code=404, detail="version not found")
-        mv.signature = signing.sign(model_id, ver, mv.artifact_hash or "")
+        art_bytes = storage.get(mv.artifact_object_key) if mv.artifact_object_key else None
+        mv.signature_bundle = signing.sign(model_id, ver, mv.artifact_hash or "", art_bytes)  # подпись реальных байтов (или манифеста, если артефакт не сохранён)
+        mv.signature = "model-signing/" + ("artifact" if art_bytes else "manifest")
         s.commit()
         audit.append_event(actor=p.sub, action="model.sign", obj=f"model/{model_id}/v{ver}")
-        return {"signed": True, "version": ver, "signature": mv.signature[:20] + "…"}
+        return {"signed": True, "version": ver, "tool": "model-signing", "over": "artifact" if art_bytes else "manifest"}
 
 
 @app.post("/api/models/{model_id}/versions/{ver}/verify-artifact")
