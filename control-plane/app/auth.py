@@ -4,6 +4,7 @@
 - Object-level authz — отдельно, в эндпоинтах (Keycloak даёт роль, не право на объект).
 - DEV_AUTH=1 включает локальные токены `Bearer dev:<user>:<role>` для каркаса/тестов без Keycloak.
 """
+import hmac
 import os
 
 import jwt
@@ -13,6 +14,10 @@ from jwt import PyJWKClient
 DEV_AUTH = os.environ.get("DEV_AUTH", "0") == "1"
 JWKS_URL = os.environ.get("KEYCLOAK_JWKS_URL", "")
 ROLES = {"DS", "DE", "MLSecOps", "Product", "CEO"}
+# Сервис-аккаунт (service-to-service): pre-shared токен для serving→control-plane.
+# Не human-роль, а системный актор Service с узким правом (runtime.event). Независим от DEV_AUTH.
+SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
+SERVICE_SUB = os.environ.get("SERVICE_SUB", "svc:serving")
 _REVOKED = set()  # ACC-03: отозванные (offboarded) субъекты — доступ закрывается немедленно
 
 
@@ -44,6 +49,11 @@ def get_principal(authorization: str = Header(default="")) -> "Principal":
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
     token = authorization[len("Bearer "):]
+
+    # Сервис-аккаунт: pre-shared токен (constant-time сравнение), независим от DEV_AUTH и Keycloak.
+    # Узкая роль Service — рантайм-петля serving→control-plane работает и в проде (DEV_AUTH=0).
+    if SERVICE_TOKEN and hmac.compare_digest(token, SERVICE_TOKEN):
+        return Principal(SERVICE_SUB, ["Service"])
 
     if DEV_AUTH and token.startswith("dev:"):
         parts = token.split(":", 2)

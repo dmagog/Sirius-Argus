@@ -15,7 +15,7 @@ PERMISSIONS = {
     "model.promote": {"MLSecOps"},
     "model.approve": {"MLSecOps"},
     "model.sign": {"MLSecOps"},
-    "runtime.event": {"MLSecOps"},
+    "runtime.event": {"MLSecOps", "Service"},  # Service — сервис-аккаунт сервинга (рантайм-петля)
     "decommission": {"MLSecOps"},
     "offboard": {"MLSecOps"},
     "model.ingest": {"DS", "MLSecOps"},

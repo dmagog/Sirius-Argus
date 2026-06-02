@@ -48,6 +48,7 @@ services:
       SIGNING_SEED: ${SIGNING_SEED:-}
       DEPS_AUDIT_ONLINE: ${DEPS_AUDIT_ONLINE:-0}
       DEV_AUTH: ${DEV_AUTH:-0}
+      SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:-svc-serving-local-dev-7f3a9c}  # сервис-аккаунт сервинга (=serving)
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,7 +148,7 @@ services:
     build: ./serving   # 3 НЕ-генеративные модели (sklearn, CPU) за рантайм-защитами
     environment:
       CONTROL_PLANE_URL: http://control-plane:8000
-      SERVICE_TOKEN: ${SERVING_SERVICE_TOKEN:-dev:serving:MLSecOps}
+      SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:-svc-serving-local-dev-7f3a9c}  # тот же сервис-токен, что валидирует control-plane
     depends_on: [control-plane]
     ports:
       - "8001:8000"   # сервинг — второй внешний контур (кроме reverse-proxy), И4
