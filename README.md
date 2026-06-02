@@ -16,6 +16,7 @@
 
 | Документ | О чём |
 |---|---|
+| [docs/overview.md](docs/overview.md) | Пакет к сдаче: обзор всех узлов и защит на одной странице — читать первым |
 | [docs/roadmap.md](docs/roadmap.md) | Итеративный план реализации (И0–И6), привязка к приоритетам куратора и сценариям |
 | [docs/architecture.md](docs/architecture.md) | Архитектура: компоненты, ER-модель, жизненный цикл, потоки, карта покрытия (схемы Mermaid) |
 | [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A22) и защитников (D1–D10), с кодовыми именами |
