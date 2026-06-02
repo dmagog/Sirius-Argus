@@ -208,6 +208,33 @@ def _scan_code_ast(src: str):
     return [{"tool": "sirius-code-scan", "verdict": "insecure-code", "severity": "high", "detail": "; ".join(hits)}]
 
 
+_TRIVIAL_NUMS = {-2, -1, 0, 1, 2}  # индексы/счётчики/флаги — не бизнес-пороги
+
+
+def _scan_hardcoded_logic(src: str):
+    """ACC-07: захардкоженные числовые пороги в условной логике (бизнес-правила в коде).
+
+    Сравнение переменной с НЕтривиальным числовым литералом (`if score > 0.75`,
+    `if amount >= 1000000`) — кандидат на вынос в конфиг/policy, а не зашитый в код.
+    Арифметику (`x * 2`) и сравнения с именованными константами (`!= FEATURES`) НЕ трогаем."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return []
+    hits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Compare):
+            continue
+        for operand in [node.left, *node.comparators]:
+            if (isinstance(operand, ast.Constant) and isinstance(operand.value, (int, float))
+                    and not isinstance(operand.value, bool) and operand.value not in _TRIVIAL_NUMS):
+                hits.append(f"порог {operand.value!r} @стр{node.lineno}")
+    if not hits:
+        return []
+    return [{"tool": "sirius-policy-scan", "verdict": "hardcoded-logic", "severity": "medium",
+             "detail": "захардкоженные бизнес-пороги (" + "; ".join(sorted(set(hits))) + ") — вынести в конфиг/policy, review-гейт"}]
+
+
 def _semgrep_scan(src: str):
     """Реальный Semgrep с локальными офлайн-правилами. None, если недоступен/ошибся."""
     import os as _os
@@ -249,7 +276,7 @@ def scan_code(src: str, filename: str = "submitted.py"):
     """ML-aware SAST: собственный AST-baseline ∪ реальный Semgrep (если доступен).
     Код НЕ исполняется. Поддерживает .ipynb (код-ячейки)."""
     code = _extract_code(src, filename)
-    findings = _scan_code_ast(code)
+    findings = _scan_code_ast(code) + _scan_hardcoded_logic(code)  # AST-RCE + ACC-07 пороги
     sg = _semgrep_scan(code)
     if sg:
         seen = {f["detail"] for f in findings}
@@ -266,6 +293,81 @@ KNOWN_VULNERABLE = {
     "urllib3": {"1.24.1": "CVE-2019-11324 (обход проверки сертификата)"},
     "numpy": {"1.16.0": "CVE-2019-6446 (небезопасный pickle в np.load)"},
 }
+
+
+# Имя-ориентированные supply-chain эвристики (SUP-02/SUP-08).
+# POPULAR — allow-list известных пакетов (вкл. собственные зависимости платформы),
+# чтобы не флагать легитимное; typosquat срабатывает на «почти-имя» вне списка.
+_POPULAR_PACKAGES = {
+    # зависимости платформы (SC-01 — собственные requirements должны быть чисты)
+    "fastapi", "uvicorn", "starlette", "sqlalchemy", "psycopg2-binary", "psycopg2",
+    "pyjwt", "requests", "jinja2", "redis", "prometheus-client", "picklescan",
+    "detect-secrets", "semgrep", "setuptools", "pip-audit", "httpx", "pydantic",
+    # широко используемые (топ PyPI)
+    "numpy", "pandas", "scipy", "scikit-learn", "sklearn", "matplotlib", "flask",
+    "django", "torch", "tensorflow", "keras", "boto3", "botocore", "urllib3",
+    "certifi", "click", "pytest", "pyyaml", "pillow", "cryptography", "aiohttp",
+    "celery", "gunicorn", "wheel", "pip", "six", "python-dateutil", "packaging",
+    "typing-extensions", "attrs", "idna", "charset-normalizer", "markupsafe",
+    "werkzeug", "itsdangerous", "greenlet", "anyio", "transformers", "xgboost",
+    "lightgbm", "joblib", "threadpoolctl", "mlflow", "minio",
+}
+_INTERNAL_PREFIXES = ("sirius-", "sirius_")  # внутренние пакеты платформы
+
+
+def _req_name(line: str) -> str:
+    """Имя пакета из строки requirements (без версии/экстры/опций)."""
+    line = line.split("#", 1)[0].strip()
+    if not line or line.startswith("-"):
+        return ""
+    m = re.match(r"[A-Za-z0-9._-]+", line)
+    return (m.group(0) if m else "").lower().replace("_", "-")
+
+
+def _edit_distance_le1(a: str, b: str) -> bool:
+    """True, если между a и b ровно одна правка (замена/вставка/удаление) — типичный тайпсквоттинг."""
+    if a == b:
+        return False
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:                                   # одна замена
+        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    if la > lb:                                    # нормализуем: a короче
+        a, b, la, lb = b, a, lb, la
+    i = j = diff = 0                               # одна вставка/удаление
+    while i < la and j < lb:
+        if a[i] != b[j]:
+            diff += 1
+            if diff > 1:
+                return False
+            j += 1
+        else:
+            i += 1
+            j += 1
+    return True
+
+
+def _scan_deps_supply(requirements_text: str):
+    """SUP-02 (typosquat) + SUP-08 (dependency confusion) — имя-ориентированные эвристики."""
+    findings = []
+    for raw in requirements_text.splitlines():
+        name = _req_name(raw)
+        if not name:
+            continue
+        line = raw.split("#", 1)[0].strip()
+        if any(name.startswith(p) for p in _INTERNAL_PREFIXES) and "==" not in line:  # SUP-08
+            findings.append({"tool": "sirius-dep-scan", "verdict": "dependency-confusion", "severity": "high",
+                             "detail": f"{name}: внутренний пакет без пина — риск подмены публичным (dependency confusion); закрепить версию + внутренний индекс"})
+            continue
+        if name in _POPULAR_PACKAGES:
+            continue
+        for k in _POPULAR_PACKAGES:                                                     # SUP-02
+            if len(k) >= 4 and _edit_distance_le1(name, k):
+                findings.append({"tool": "sirius-dep-scan", "verdict": "typosquat-dependency", "severity": "high",
+                                 "detail": f"{name}: тайпсквоттинг — в одной правке от '{k}' (allow-list + пины зависимостей)"})
+                break
+    return findings
 
 
 def _scan_deps_db(requirements_text: str):
@@ -320,8 +422,9 @@ def _pip_audit_scan(requirements_text: str):
 
 
 def scan_dependencies(requirements_text: str):
-    """SUP-03/SC-01: офлайн-база CVE (baseline) ∪ pip-audit/OSV (реальный, при egress)."""
-    findings = _scan_deps_db(requirements_text)
+    """SUP-03/SC-01: офлайн-база CVE (baseline) ∪ pip-audit/OSV (реальный, при egress);
+    плюс имя-ориентированные SUP-02 (typosquat) и SUP-08 (dependency confusion)."""
+    findings = _scan_deps_db(requirements_text) + _scan_deps_supply(requirements_text)
     pa = _pip_audit_scan(requirements_text)
     if pa:
         seen = {f["detail"] for f in findings}

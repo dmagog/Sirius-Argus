@@ -16,3 +16,10 @@ Feature: Скан зависимостей (gate перед продом)
     Given поднятый control-plane
     When сканируются собственные requirements платформы
     Then скан помечает зависимости чистыми
+
+  Scenario: SUP-02/08 — тайпсквоттинг и dependency confusion флагаются
+    Given поднятый control-plane
+    When DS отправляет на скан requirements с тайпсквоттингом и неприпиненным внутренним пакетом
+    Then скан помечает зависимости небезопасными
+    And создаётся сработка typosquat-dependency
+    And создаётся сработка dependency-confusion

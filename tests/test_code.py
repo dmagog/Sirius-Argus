@@ -59,3 +59,15 @@ def scan_secret():
 def secret_finding():
     r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
     assert any(f["verdict"] == "secret-exposed" for f in r.json()["findings"]), r.text
+
+
+@when("DS отправляет на скан код с захардкоженным порогом")
+def scan_hardcoded():
+    code = b"def approve(score):\n    if score > 0.75:\n        return True\n    return False\n"
+    S["resp"] = httpx.post(f"{BASE}/api/scan/code", headers=tok("DS"), content=code, timeout=10)
+
+
+@then("создаётся сработка hardcoded-logic")
+def hardcoded_finding():
+    r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
+    assert any(f["verdict"] == "hardcoded-logic" for f in r.json()["findings"]), r.text

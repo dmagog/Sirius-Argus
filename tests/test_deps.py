@@ -54,3 +54,21 @@ def scan_self():
 def deps_clean():
     assert S["resp"].status_code == 200, S["resp"].text
     assert S["resp"].json()["clean"] is True, S["resp"].text
+
+
+@when("DS отправляет на скан requirements с тайпсквоттингом и неприпиненным внутренним пакетом")
+def scan_supply():
+    reqs = b"numpyy==1.26.4\nsirius-ml\n"  # тайпсквоттинг numpy (SUP-02) + внутренний пакет без пина (SUP-08)
+    S["resp"] = httpx.post(f"{BASE}/api/scan/deps", headers=tok("DS"), content=reqs, timeout=10)
+
+
+@then("создаётся сработка typosquat-dependency")
+def typosquat_finding():
+    r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
+    assert any(f["verdict"] == "typosquat-dependency" for f in r.json()["findings"]), r.text
+
+
+@then("создаётся сработка dependency-confusion")
+def confusion_finding():
+    r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10)
+    assert any(f["verdict"] == "dependency-confusion" for f in r.json()["findings"]), r.text
