@@ -1,6 +1,11 @@
 # Единственная точка входа для людей (ADR-0005).
 # /auth/* -> Keycloak (OIDC-логин), всё остальное -> control-plane.
 :80 {
+	# периметр: жёсткий потолок тела — экстремальный оверсайз режется на входе (413),
+	# до control-plane (defense-in-depth; app-уровень имеет более строгий policy-лимит + аудит).
+	request_body {
+		max_size 50MB
+	}
 	handle_path /auth/* {
 		reverse_proxy keycloak:8080
 	}

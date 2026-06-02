@@ -53,6 +53,7 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
       AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
       ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-sirius-quarantine}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}  # 25 МиБ: лимит тела (resource-exhaustion guard)
     depends_on:
       postgres:
         condition: service_healthy

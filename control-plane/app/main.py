@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 import requests
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
@@ -37,6 +37,9 @@ _REQS = Counter("sirius_http_requests_total", "HTTP-запросы control-plane
 _FINDINGS_G = Gauge("sirius_findings_total", "Всего сработок (Finding)")
 _AUDIT_OK_G = Gauge("sirius_audit_chain_ok", "Целостность аудита: 1=ок, 0=нарушена")
 
+# Защита от resource-exhaustion: тело запроса больше лимита → 413 (не читаем в память).
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+
 
 @app.on_event("startup")
 def _startup():
@@ -48,6 +51,20 @@ def _startup():
 async def observe_and_audit(request: Request, call_next):
     if request.url.path not in ("/metrics", "/health"):
         logger.info("req %s %s auth=%s", request.method, request.url.path, request.headers.get("authorization", "-"))
+    cl = request.headers.get("content-length")
+    if cl and cl.isdigit() and int(cl) > MAX_UPLOAD_BYTES:  # resource-exhaustion guard: не читаем огромное тело
+        try:
+            with SessionLocal() as s:
+                s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                     tool="sirius-ingress", verdict="oversized-upload", severity="medium", status="open",
+                                     asset_type="endpoint", asset_ref=f"endpoint{request.url.path}",
+                                     detail=f"тело {int(cl)} Б > лимита {MAX_UPLOAD_BYTES} Б — защита от resource-exhaustion (DoS)", actor="anonymous"))
+                s.commit()
+        except Exception:
+            pass
+        audit.append_event(actor="anonymous", action="upload.oversized.blocked", obj=request.url.path, was_authorized=False)
+        _REQS.labels(status="413").inc()
+        return JSONResponse(status_code=413, content={"detail": f"payload too large: {int(cl)} > {MAX_UPLOAD_BYTES} bytes (resource-exhaustion guard)"})
     resp = await call_next(request)
     _REQS.labels(status=str(resp.status_code)).inc()
     if request.url.path.startswith("/api/") and resp.status_code in (401, 403):
@@ -525,6 +542,7 @@ COVERAGE = [
     {"id": "DATA-05", "threat": "train-serving skew", "control": "consistency train↔serve", "match": ("verdict", "train-serve-skew")},
     {"id": "FB-01", "threat": "отравление петли дообучения", "control": "провенанс фидбека дообучения", "match": ("verdict", "feedback-poisoning")},
     {"id": "DOW-01", "threat": "denial-of-wallet (исчерпание бюджета)", "control": "стоимостная квота на тенанта", "match": ("verdict", "denial-of-wallet")},
+    {"id": "DOS-02", "threat": "оверсайз-загрузка (resource exhaustion)", "control": "лимит размера тела — 413 (Caddy + app)", "match": ("verdict", "oversized-upload")},
 ]
 
 
