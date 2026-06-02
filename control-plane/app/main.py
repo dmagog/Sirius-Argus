@@ -320,6 +320,22 @@ def create_version(model_id: int, body: VersionIn, p: Principal = Depends(requir
                 "registry_backend": "mlflow", "backend_synced": synced, "mlflow_version": mlflow_ver}
 
 
+def _valid_risk_acceptance(s, ref: str):
+    """Действующее (непросроченное) принятие риска для объекта или None."""
+    now = datetime.now(timezone.utc)
+    for ra in s.query(domain.RiskAcceptance).filter_by(ref=ref, active=True).all():
+        if ra.expires_at:
+            try:
+                exp = datetime.fromisoformat(ra.expires_at)
+                exp = exp.replace(tzinfo=timezone.utc) if exp.tzinfo is None else exp
+                if exp < now:
+                    continue  # просрочено → невалидно
+            except ValueError:
+                continue
+        return ra
+    return None
+
+
 @app.post("/api/models/{model_id}/versions/{ver}/promote")
 def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promote"))):
     with SessionLocal() as s:
@@ -334,6 +350,17 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
         if missing:
             audit.append_event(actor=p.sub, action="promote.blocked", obj=f"model/{model_id}/v{ver}", was_authorized=False)
             raise HTTPException(status_code=422, detail=f"not reproducible, missing: {missing}")
+        # open-critical gate: незакрытые critical-сработки на ЭТОЙ версии блокируют промоушен —
+        # кроме явного принятия риска уполномоченной ролью (GRC exception, см. /api/risk-acceptance)
+        crit = s.query(domain.Finding).filter(
+            domain.Finding.asset_ref == f"model/{model_id}/v{ver}",
+            domain.Finding.status == "open", domain.Finding.severity == "critical").count()
+        risk_accepted = False
+        if crit:
+            if not _valid_risk_acceptance(s, f"model/{model_id}/v{ver}"):
+                audit.append_event(actor=p.sub, action="promote.blocked.open-critical", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+                raise HTTPException(status_code=422, detail=f"{crit} незакрытая(ых) critical-сработка(ок) на версии — закрыть или оформить принятие риска (risk.accept)")
+            risk_accepted = True
         # policy-матрица для критичных моделей (regulatory/financial): модель-карта + подпись + HITL
         if mv.requires_validation:
             if not (mv.intended_use and mv.limitations):  # GOV-01: полнота модель-карты
@@ -352,7 +379,7 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
                 audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps, bound to current artifact hash, required (VIS-03/ACC-02)")
         mv.stage = "prod"
-        s.add(domain.Deployment(model_version_id=mv.id, status="active"))
+        s.add(domain.Deployment(model_version_id=mv.id, status="active"))  # активен; «conditional» — в аудите/ответе
         s.commit()
         mvid = mv.id
         m = s.get(domain.Model, model_id)
@@ -364,8 +391,9 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
                 registry.set_version_tag(name, mlflow_ver, "stage", "prod")
         except registry.RegistryError as e:
             logger.warning("MLflow недоступен при промоуте model/%s v%s: %s", model_id, ver, e)
-        audit.append_event(actor=p.sub, action="model.promote", obj=f"model/{model_id}/v{ver}")
-        return {"model_version_id": mvid, "stage": "prod"}
+        audit.append_event(actor=p.sub, action=("model.promote.risk-accepted" if risk_accepted else "model.promote"),
+                            obj=f"model/{model_id}/v{ver}")
+        return {"model_version_id": mvid, "stage": "prod", "conditional": risk_accepted}
 
 
 class ApproveIn(BaseModel):
@@ -412,6 +440,33 @@ def review_bundle(model_id: int, ver: int, p: Principal = Depends(require("findi
             "findings": [{"tool": f.tool, "verdict": f.verdict, "severity": f.severity, "status": f.status} for f in findings],
             "approvals": [{"approver": a.approver, "ts": a.ts, "reason": a.reason, "artifact_hash": a.artifact_hash} for a in approvals],
         }
+
+
+class RiskAcceptanceIn(BaseModel):
+    scope: str = "version"
+    ref: str
+    justification: str
+    conditions: str = ""
+    expires_at: str = ""
+
+
+@app.post("/api/risk-acceptance")
+def accept_risk(body: RiskAcceptanceIn, p: Principal = Depends(require("risk.accept"))):
+    """GRC exception: уполномоченная старшая роль (CEO) формально принимает остаточный риск /
+    проваленный контроль — с обоснованием, условиями и сроком. Промоушен при проваленном
+    open-critical гейте проходит только при валидном непросроченном принятии → деплой
+    помечается risk-accepted (conditional). Всё в аудит, отдельно от того, кто промоутит."""
+    if not body.justification:
+        raise HTTPException(status_code=422, detail="justification required")
+    with SessionLocal() as s:
+        ra = domain.RiskAcceptance(scope=body.scope, ref=body.ref, accepted_by=p.sub,
+                                   justification=body.justification, conditions=body.conditions, expires_at=body.expires_at,
+                                   ts=datetime.now(timezone.utc).isoformat(timespec="seconds"), active=True)
+        s.add(ra)
+        s.commit()
+        rid = ra.id
+    audit.append_event(actor=p.sub, action="risk.accept", obj=body.ref)
+    return {"accepted": True, "id": rid, "ref": body.ref, "conditions": body.conditions, "expires_at": body.expires_at}
 
 
 @app.post("/api/models/{model_id}/versions/{ver}/retire")
@@ -573,6 +628,7 @@ COVERAGE = [
     {"id": "FB-01", "threat": "отравление петли дообучения", "control": "провенанс фидбека дообучения", "match": ("verdict", "feedback-poisoning")},
     {"id": "DOW-01", "threat": "denial-of-wallet (исчерпание бюджета)", "control": "стоимостная квота на тенанта", "match": ("verdict", "denial-of-wallet")},
     {"id": "DOS-02", "threat": "оверсайз-загрузка (resource exhaustion)", "control": "лимит размера тела — 413 (Caddy + app)", "match": ("verdict", "oversized-upload")},
+    {"id": "GOV-02", "threat": "принятие остаточного риска под условиями", "control": "risk-acceptance (роль+обоснование+срок) → conditional-деплой", "match": ("prefix", "risk.accept")},
 ]
 
 
