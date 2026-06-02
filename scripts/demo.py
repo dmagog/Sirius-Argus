@@ -183,6 +183,18 @@ def main():
         st_ok, _ = req("POST", f"/api/findings/{fid}/triage", "MLSecOps", {"status": "FP", "reason": "ложное срабатывание"})
         line(f"  MLSecOps закрывает как FP → HTTP {st_ok} ✅ (в аудите: кто/почему)")
 
+    hr("8. Расширенные гейты — supply-chain и качество данных")
+    _, sd = req("POST", "/api/scan/deps", "DS", b"numpyy==1.26.4\nsirius-ml\n")
+    line(f"  тайпсквоттинг + dependency confusion → clean={sd['clean']} {[f['verdict'] for f in sd['findings']]}")
+    _, hc = req("POST", "/api/scan/code", "DS", b"def approve(score):\n    if score > 0.75:\n        return True\n    return False\n")
+    line(f"  захардкоженный бизнес-порог (ACC-07) → {[f['verdict'] for f in hc['findings']]}")
+    _, lf = req("POST", "/api/scan/dataset", "DE", {"labels": ["fraud"] * 9 + ["legit"], "baseline_dist": {"fraud": 0.05, "legit": 0.95}})
+    _, bd = req("POST", "/api/scan/dataset", "DE", {"samples": ["обычный отзыв", "товар​​купи сейчас"]})
+    _, sk = req("POST", "/api/scan/dataset", "DE", {"train_stats": {"amount": 100.0}, "serve_stats": {"amount": 900.0}})
+    _, fb = req("POST", "/api/scan/dataset", "DE", {"feedback": [{"provenance": "user-submitted"}]})
+    verdicts = [r["findings"][0]["verdict"] for r in (lf, bd, sk, fb) if r["findings"]]
+    line(f"  гейт данных (DATA-02/03/05 + FB-01): {verdicts}")
+
     hr("MONEY-SHOT #5 — карта покрытия угроз + CEO-вью (VIS-01)")
     _, cov = req("GET", "/api/coverage", "CEO")
     k = cov["kpi"]

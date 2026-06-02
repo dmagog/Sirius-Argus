@@ -7,7 +7,7 @@
 ## Готовность к сдаче
 - **Этап 1 (документы на проверку) — готов сейчас:** архитектура, Модель Угроз (персоны, BDD, риски, KPI), ADR, эта карта.
 - **Живое демо** копится по итерациям: первый money-shot (блок вредоносной модели) — к И2; оцениваемое ядро демо — к И3–И4; полный конвейер — И6.
-- **Сейчас (факт):** И0–И6 — ядро и хвосты сделаны, **37 сценариев каталога green** (47 pytest-функций), все money-shot'ы гоняются одной командой (`make demo` / `make pipeline`); все обязательные дедливераблы покрыты. Добиты residual-сценарии безопасности (рантайм: DOS-load-shed, OOD/adversarial-детект, malformed; TOCTOU/целостность артефакта; offboarding) и веб-UI (live-дашборд сработок/аудита + RBAC-матрица). Остаток — честный, см. [risk-register](threat-model/risk-register.md).
+- **Сейчас (факт):** И0–И6 + добор residual — **48 сценариев каталога green** (56 pytest-функций), все money-shot'ы гоняются одной командой (`make demo` / `make pipeline`); все обязательные дедливераблы покрыты. Закрыты рантайм (DOS-load-shed, OOD, malformed, дрейф `MON-01`, output-reduction `RT-03/04`, сетевая сегментация `RT-06`), supply-chain (typosquat `SUP-02`, dependency confusion `SUP-08`), hardcoded-логика (`ACC-07`), качество данных (label-flip, UGC-триггер, skew, петля дообучения — `DATA-02/03/05`, `FB-01`), TOCTOU/целостность, offboarding и веб-UI. Честный остаток — **2 из 50** (`SUP-06` ShadowLogic, `DOW-01` стоимостные квоты), см. [risk-register](threat-model/risk-register.md).
 
 ## Модели (решение)
 Три модели **разных типов**, домен нейтральный: бустинг (XGBoost, табличная) · классическая (linear + TF-IDF, текст) · третий тип задачи (regression или anomaly detection). **torch/CNN для обучения не тащим** — вес образа, ARM, время cold-start; если нужен «глубокий» тип под adversarial-демо, берём pre-trained CPU-only чекпойнт без обучения в демо. **Toy-модель** (sklearn) — уже в И1 для прогона флоу регистрации; полное трио — к И4.
@@ -41,34 +41,34 @@
 
 ### И2 — Скан моделей + gate на закачку + данные + код
 - 🎯 вредоносная внешняя модель блокируется до загрузки; сработки видны.
-- **статус:** ✅ сделано (money-shot #1) — green: `SUP-01`, `SUP-07`, `DATA-01`, `DATA-04`, `CODE-01`, `VIS-02`. Пока `spec`: `DATA-02`. Сканеры — собственные (`control-plane/app/scanners.py`).
+- **статус:** ✅ сделано (money-shot #1) — green: `SUP-01`, `SUP-07`, `DATA-01/02`, `DATA-04`, `CODE-01`, `VIS-02`. Сканеры — собственные ∪ реальные (`control-plane/app/scanners.py`).
 - **срез:** `security/` (modelscan/picklescan + Trivy); `Finding` + триаж; ingestion-гейт (карантин→скан→admit/reject); блок вредоносного pickle.
 - **глубина:** политика форматов (`SUP-07`); ML-aware SAST (`CODE-01`); скан архивов датасетов; сканы данных.
-- **green:** `SUP-01` (showpiece), `SUP-07`, `DATA-01/04`, `CODE-01`, `VIS-02`.
+- **green:** `SUP-01` (showpiece), `SUP-07`, `DATA-01/02/04`, `CODE-01`, `VIS-02`.
 - **риск/fallback:** установка/версии сканеров в контейнере → пины образов; fallback — минимально picklescan.
 - **демо money-shot #1:** «затянули модель → pickle-RCE → БЛОК + сработка».
 
 ### И3 — Единая точка входа в прод + подписи + policy-гейт
 - 🎯 в прод только через gated PR; критичное — через HITL.
-- **статус:** ✅ ядро/планка (money-shots #2/#3) — gated промоушен внутренним пайплайном (fallback к Gitea-вебхуку): policy-матрица по критичности (воспроизводимость→модель-карта→подпись→HITL→separation). Green: `SUP-03/04`, `GOV-01`, `VIS-03`, `ACC-02/06`, `RB-01`, `SC-01`, `REG-01`, `CI-01` (control-plane как CI: security-гейт на коммит + HMAC-вебхук Gitea; commit-status обратно — best-effort). Полный Semgrep на коммит реализован (AST ∪ Semgrep, офлайн-правила). Пока `spec`: `SUP-08`, `ACC-07`.
+- **статус:** ✅ ядро/планка (money-shots #2/#3) — gated промоушен внутренним пайплайном (fallback к Gitea-вебхуку): policy-матрица по критичности (воспроизводимость→модель-карта→подпись→HITL→separation). Green: `SUP-03/04`, `GOV-01`, `VIS-03`, `ACC-02/06`, `RB-01`, `SC-01`, `REG-01`, `CI-01` (control-plane как CI: security-гейт на коммит + HMAC-вебхук Gitea; commit-status обратно — best-effort). Полный Semgrep на коммит реализован (AST ∪ Semgrep, офлайн-правила); добавлены `SUP-08` (dependency confusion) и `ACC-07` (hardcoded-логика) — весь И3 green.
 - **срез:** Gitea webhook → control-plane как CI; gated promotion + branch protection (no bypass); `SUP-03` (CVE-PR блокируется); HITL (`VIS-03`); admission на сервинге.
 - **глубина:** подпись+провенанс ([ADR-0006](adr/0006-model-signing-provenance.md)); **policy-as-code матрица гейтов по критичности** (regulatory/financial → HITL + доп. сканы).
-- **green:** `SUP-03/04`, `CI-01`, `REG-01`, `RB-01`, `ACC-02/06`, `SC-01`, `VIS-03`, `GOV-01`.
+- **green:** `SUP-03/04`, `SUP-08`, `CI-01`, `REG-01`, `RB-01`, `ACC-02/06/07`, `SC-01`, `VIS-03`, `GOV-01`.
 - **риск/fallback (главный):** вебхук Gitea↔CI хрупок → **fallback: внутренний промоушен-пайплайн в control-plane** (гейт без git-слоя); Gitea — слой сверху, не блокер демо.
 - **демо money-shots #2/#3:** «уязвимый PR не доходит до прода» + «критичная модель — только после HITL».
 
 ### И4 — Рантайм + вывод из эксплуатации
 - 🎯 рантайм-атаки детектятся; decommission отзывает доступы.
-- **статус:** ✅ ядро (money-shot #4) — 3 НЕ-генеративные модели задеплоены (бустинг/линейная/anomaly, sklearn CPU) за рантайм-защитами; extraction-detect (`RT-01`) + петля рантайм→реестр; retire/decommission снимает деплои. Добавлено: OOD/adversarial-детект (`RT-02`), глобальный load-shed (`DOS-01`), валидация malformed (`RT-05`), ре-верификация целостности артефакта (`TOCTOU-01`/`SUP-05`), decommission-сценарий (`MON-03`), эксфильтрация (`EXF-01`). Пока `spec`: `DOW-01`, `MON-01`, `DATA-03/05`, `FB-01`.
+- **статус:** ✅ ядро (money-shot #4) — 3 НЕ-генеративные модели задеплоены (бустинг/линейная/anomaly, sklearn CPU) за рантайм-защитами; extraction-detect (`RT-01`) + петля рантайм→реестр; retire/decommission снимает деплои. Добавлено: OOD/adversarial-детект (`RT-02`), глобальный load-shed (`DOS-01`), валидация malformed (`RT-05`), ре-верификация целостности артефакта (`TOCTOU-01`/`SUP-05`), decommission-сценарий (`MON-03`), эксфильтрация (`EXF-01`), дрейф данных (`MON-01`), output-reduction (`RT-03/04`), сетевая сегментация рантайма (`RT-06`), качество данных (`DATA-03/05`, `FB-01`). Пока `spec`: `DOW-01` (стоимостные квоты — нужна биллинг-инфра).
 - **срез:** сервинг трио за gateway; rate-limit + extraction-detect; decommission-флоу; `TOCTOU-01`.
 - **глубина:** adversarial/FGSM, DDoS (`DOS-01`), drift; **петля рантайм→реестр** (инцидент → ре-ревью / авто-rollback).
-- **green:** `RT-01/02/05`, `DOS-01`, `MON-03`, `TOCTOU-01`/`SUP-05`, `EXF-01`.
+- **green:** `RT-01/02/03/04/05/06`, `DOS-01`, `MON-01/03`, `DATA-03/05`, `FB-01`, `TOCTOU-01`/`SUP-05`, `EXF-01`.
 - **риск/fallback:** torch вес/ARM/время → pre-trained CPU-only чекпойнт, без обучения в демо; adversarial на лёгкой модели.
 - **демо money-shot #4:** «100 параллельных запросов на extraction → детект + таймлайн».
 
 ### И5 — Карта покрытия + KPI + видимость
 - 🎯 статус защищённости виден; CEO-вью на реальных данных.
-- **статус:** ✅ сделано (money-shot #5) — карта покрытия + CEO-вью (`VIS-01`) на live-данных: 20 контролей угроза→контроль→статус по реальным `Finding`/аудиту + KPI (`/api/coverage`, HTML `/coverage`). Веб-UI: дашборд `/` с live-обновлением сработок и аудит-таймлайна (Tailwind + HTMX) и матрица прав RBAC `/roles` (роль→действие из единого источника). Observability подключена: control-plane `/metrics` (Prometheus), логи в Loki через promtail, провижининг Grafana-дашборда (профиль `full`).
+- **статус:** ✅ сделано (money-shot #5) — карта покрытия + CEO-вью (`VIS-01`) на live-данных: 28 контролей угроза→контроль→статус по реальным `Finding`/аудиту + KPI (`/api/coverage`, HTML `/coverage`). Веб-UI: дашборд `/` с live-обновлением сработок и аудит-таймлайна (Tailwind + HTMX) и матрица прав RBAC `/roles` (роль→действие из единого источника). Observability подключена: control-plane `/metrics` (Prometheus), логи в Loki через promtail, провижининг Grafana-дашборда (профиль `full`).
 - **срез:** `ThreatCoverage` + страница «Карта покрытия».
 - **глубина:** [security-KPIs](threat-model/security-kpis.md) (MTTD/MTTR, coverage); CEO-дашборд.
 - **green:** `VIS-01`.
@@ -77,7 +77,7 @@
 
 ### И6 — Конвейер + демо одной командой + харденинг
 - 🎯 весь поток одной командой у проверяющего.
-- **статус:** ✅ сделано (money-shot #6) — `make pipeline` (scripts/pipeline.py) гонит весь ЖЦ одной модели одной командой (датасет→скан→версия→gate→HITL→деплой→рантайм-атака→decommission); E2E-тест ассертит все гейты. `SUP-06` — честный остаток (ShadowLogic не ловится сканером → HITL + residual в risk-register).
+- **статус:** ✅ сделано (money-shot #6) — `make pipeline` (scripts/pipeline.py) гонит весь ЖЦ одной модели одной командой (датасет→скан→версия→gate→HITL→деплой→рантайм-атака→decommission); E2E-тест ассертит все гейты. `SUP-06` (ShadowLogic) и `DOW-01` (стоимостные квоты) — честный остаток, 2 из 50: предел статики / нужна биллинг-инфра (HITL + компенсации, см. risk-register).
 - **срез:** оркестрация сценариев в конвейер (датасет→проверки→обучение→проверки→HITL→gated-деплой→рантайм-атака→decommission); README-runbook; финальная проверка портируемости.
 - **глубина:** `SUP-06` (ShadowLogic→ручная валидация) как честный остаток.
 - **риск/fallback:** время → конвейер не обязателен сразу; куратор допускает отдельные команды по стадиям.

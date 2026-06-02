@@ -512,6 +512,14 @@ COVERAGE = [
     {"id": "TOCTOU-01", "threat": "подмена артефакта после скана", "control": "ре-верификация hash при загрузке", "match": ("verdict", "artifact-tampered")},
     {"id": "SUP-05", "threat": "перезапись/подмена артефакта", "control": "integrity-проверка hash", "match": ("verdict", "artifact-tampered")},
     {"id": "ACC-03", "threat": "неотозванный доступ (offboarding)", "control": "немедленный отзыв субъекта", "match": ("prefix", "offboard")},
+    {"id": "MON-01", "threat": "дрейф данных/концепта", "control": "drift-монитор сервинга (окно vs обучающая база)", "match": ("verdict", "drift")},
+    {"id": "SUP-02", "threat": "тайпсквоттинг-зависимость", "control": "allow-list + имя-эвристика", "match": ("verdict", "typosquat-dependency")},
+    {"id": "SUP-08", "threat": "dependency confusion", "control": "пины + внутренний индекс", "match": ("verdict", "dependency-confusion")},
+    {"id": "ACC-07", "threat": "захардкоженная бизнес-логика", "control": "AST-детект порогов + review-гейт", "match": ("verdict", "hardcoded-logic")},
+    {"id": "DATA-02", "threat": "подмена меток поставщиком (label-flip)", "control": "статистика распределения меток", "match": ("verdict", "label-flip")},
+    {"id": "DATA-03", "threat": "UGC-бэкдор-триггер", "control": "детект скрытых символов + карантин", "match": ("verdict", "backdoor-trigger")},
+    {"id": "DATA-05", "threat": "train-serving skew", "control": "consistency train↔serve", "match": ("verdict", "train-serve-skew")},
+    {"id": "FB-01", "threat": "отравление петли дообучения", "control": "провенанс фидбека дообучения", "match": ("verdict", "feedback-poisoning")},
 ]
 
 
