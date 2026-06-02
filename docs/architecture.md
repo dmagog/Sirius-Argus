@@ -419,13 +419,13 @@ flowchart LR
 
 | Слой | Технология |
 |---|---|
-| Control Plane / UI | Python, FastAPI; UI — серверный HTML (Jinja/HTMX/Tailwind — целевое) |
+| Control Plane / UI | Python, FastAPI; UI — серверный HTML на **Tailwind + HTMX** по CDN (дашборд с live-сработками/аудитом, карта покрытия, RBAC-матрица — реализовано) |
 | Трекинг/реестр-backend | MLflow (во внутренней сети) |
 | Объектное хранилище | MinIO (S3) |
 | Git + CI-вход | Gitea (branch protection, webhooks) |
 | Метаданные | PostgreSQL |
 | AuthN / идентичность | Keycloak (OIDC, realm-as-code) |
-| Гейты безопасности | реализовано: **picklescan** (модели) + **Semgrep** + **detect-secrets** (код/секреты) + крипто-подпись **Ed25519** ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST — `control-plane/app/scanners.py`); целевое: modelscan, fickling, pip-audit, Trivy, Syft, gitleaks, cosign |
+| Гейты безопасности | реализовано: **picklescan** (модели) + **Semgrep** + **detect-secrets** (код/секреты) + **pip-audit** (CVE зависимостей, best-effort/онлайн-гейт) + крипто-подпись **Ed25519** ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST — `control-plane/app/scanners.py`); целевое: modelscan, fickling, Trivy, Syft, gitleaks, cosign |
 | ML / валидация | scikit-learn (3 модели: boosting / linear / anomaly, CPU-only); целевое: XGBoost, ART; deep — pre-trained CPU-only |
 | Брокер / шина событий | Redis Streams (события + бэкенд rate-limit) — в профиле `core` |
 | Observability / лог-стор | Loki, Grafana, Prometheus (профиль `full`) — подключено: control-plane `/metrics`, promtail→Loki, провижининг Grafana-дашборда |
