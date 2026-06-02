@@ -19,10 +19,10 @@ import requests
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 from pydantic import BaseModel
 
-from . import audit, bus, domain, logging_setup, registry, scanners, signing
+from . import audit, bus, domain, logging_setup, registry, scanners, signing, ui
 from .auth import Principal, get_principal, revoke
 from .db import AuditEvent, SessionLocal, init_db
-from .rbac import can_read_sensitivity, require
+from .rbac import PERMISSIONS, can_read_sensitivity, require
 
 logger = logging.getLogger("sirius")
 
@@ -70,19 +70,31 @@ def metrics():
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    rows = "".join(
-        f"<tr><td>{e.ts}</td><td>{e.actor}</td><td>{e.action}</td>"
-        f"<td>{e.obj}</td><td>{'ok' if e.was_authorized else 'DENIED'}</td></tr>"
-        for e in audit.recent()
-    )
-    return (
-        "<html><head><title>Sirius Argus</title></head><body>"
-        "<h1>Sirius Argus — Control Plane</h1>"
-        "<p>Реестр + zero-trust RBAC + аудит (append-only, hash-chain).</p>"
-        "<table border='1' cellpadding='4'><tr>"
-        "<th>ts</th><th>actor</th><th>action</th><th>object</th><th>authz</th></tr>"
-        f"{rows}</table></body></html>"
-    )
+    """Read-only ops-консоль: KPI + live-сработки/аудит (HTMX). API /api/* — под authN/RBAC."""
+    return ui.dashboard(_coverage_data()["kpi"])
+
+
+@app.get("/ui/findings", response_class=HTMLResponse)
+def ui_findings():
+    """HTMX-фрагмент: последние сработки (детали-метки, без значений секретов — LOG-01)."""
+    with SessionLocal() as s:
+        rows = s.query(domain.Finding).order_by(domain.Finding.id.desc()).limit(25).all()
+        items = [{"ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
+                  "asset": f.asset_ref, "status": f.status} for f in rows]
+    return ui.findings_fragment(items)
+
+
+@app.get("/ui/audit", response_class=HTMLResponse)
+def ui_audit():
+    """HTMX-фрагмент: хвост аудит-таймлайна (append-only, hash-chain)."""
+    return ui.audit_fragment(audit.recent(25))
+
+
+@app.get("/roles", response_class=HTMLResponse)
+def roles_view():
+    """Матрица прав (zero-trust RBAC): кто какое действие может выполнить."""
+    roles = set().union(*PERMISSIONS.values()) if PERMISSIONS else set()
+    return ui.roles_page(PERMISSIONS, roles)
 
 
 @app.get("/api/whoami")
@@ -490,27 +502,7 @@ def coverage(p: Principal = Depends(require("visibility.read"))):
 @app.get("/coverage", response_class=HTMLResponse)
 def coverage_view():
     """CEO-вью: карта покрытия угроз + KPI (read-only экран, money-shot #5)."""
-    d = _coverage_data()
-    k = d["kpi"]
-    rows = "".join(
-        f"<tr><td>{c['id']}</td><td>{c['threat']}</td><td>{c['control']}</td>"
-        f"<td style='text-align:center'>{'🟢 live' if c['status'] == 'live' else '⚪ ready'} ({c['evidence']})</td></tr>"
-        for c in d["controls"]
-    )
-    return (
-        "<html><head><meta charset='utf-8'><title>Sirius Argus — Карта покрытия</title></head>"
-        "<body style='font-family:sans-serif;max-width:920px;margin:2em auto'>"
-        "<h1>Карта покрытия угроз — CEO-вью</h1>"
-        f"<p>Покрытие контролей: <b>{k['coverage']}</b> live · сработок: <b>{k['findings_total']}</b> · "
-        f"блокировок: <b>{k['blocked_attempts']}</b> · отказов доступа: <b>{k['access_denied']}</b> · "
-        f"моделей: <b>{k['models']}</b> · прод-деплоев: <b>{k['prod_deployments']}</b> · "
-        f"аудит цел: <b>{'да' if k['audit_chain_ok'] else 'НЕТ'}</b></p>"
-        "<table border='1' cellpadding='6' style='border-collapse:collapse;width:100%'>"
-        "<tr><th>Сценарий</th><th>Угроза</th><th>Контроль</th><th>Статус (evidence)</th></tr>"
-        f"{rows}</table>"
-        "<p style='color:#888'>Статус «live» означает реальные сработки/блокировки в аудите по этому контролю.</p>"
-        "</body></html>"
-    )
+    return ui.coverage_page(_coverage_data())
 
 
 # ---------- единая точка входа в прод: control-plane как CI (Gitea) ----------

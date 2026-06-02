@@ -42,4 +42,4 @@ def check_status(code):
 
 @then("в аудит-таймлайне есть access.denied")
 def audit_has_denied():
-    assert "access.denied" in httpx.get(f"{BASE}/", timeout=10).text
+    assert "access.denied" in httpx.get(f"{BASE}/ui/audit", timeout=10).text

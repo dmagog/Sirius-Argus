@@ -1,6 +1,7 @@
 """pytest-bdd: сквозной ЖЦ одной модели (И6) — приём→gate→HITL→деплой→атака→decommission."""
 import os
 import pickle
+import time
 
 import httpx
 from pytest_bdd import given, scenarios, then, when
@@ -45,9 +46,14 @@ def lifecycle():
     httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/approve",
                headers={"Authorization": "Bearer dev:reviewer:MLSecOps"}, json={"reason": "валидация ок"}, timeout=10)
     S["promote_hitl"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=10).status_code
-    # 5) инференс (уникальный client-id — изоляция от бёрстов по host-IP)
-    S["predict"] = httpx.post(f"{SERVING}/predict/iris-linear", headers={"X-Client-Id": "pipeline-test"},
-                              json={"features": [5.1, 3.5, 1.4, 0.2]}, timeout=10).status_code
+    # 5) инференс (уникальный client-id — изоляция от бёрстов по host-IP).
+    #    На 503 (глобальный load-shed после флуд-тестов DOS-01) клиент отступает и повторяет.
+    for _ in range(15):
+        S["predict"] = httpx.post(f"{SERVING}/predict/iris-linear", headers={"X-Client-Id": "pipeline-test"},
+                                  json={"features": [5.1, 3.5, 1.4, 0.2]}, timeout=10).status_code
+        if S["predict"] != 503:
+            break
+        time.sleep(1)
     # 6) decommission + запрет отката
     S["retire"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/retire", headers=tok("MLSecOps"), timeout=10).status_code
     S["promote_retired"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=10).status_code

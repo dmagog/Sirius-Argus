@@ -33,4 +33,4 @@ def grew():
 
 @then("действие есть в аудит-таймлайне")
 def in_audit():
-    assert "api.whoami" in httpx.get(f"{BASE}/", timeout=10).text
+    assert "api.whoami" in httpx.get(f"{BASE}/ui/audit", timeout=10).text
