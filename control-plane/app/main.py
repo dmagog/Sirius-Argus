@@ -344,11 +344,13 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
                 audit.append_event(actor=p.sub, action="promote.blocked.unsigned", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="unsigned or invalid signature (SUP-04)")
             # VIS-03 (HITL) + ACC-02 (separation of duties): нужен аппрув от ДРУГОГО MLSecOps
-            others = s.query(domain.Approval).filter(domain.Approval.model_version_id == mv.id,
-                                                     domain.Approval.approver != p.sub).count()
+            others = s.query(domain.Approval).filter(
+                domain.Approval.model_version_id == mv.id,
+                domain.Approval.approver != p.sub,
+                domain.Approval.artifact_hash == (mv.artifact_hash or "")).count()  # аппрув привязан к hash (anti-TOCTOU)
             if not others:
                 audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
-                raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps required (VIS-03/ACC-02)")
+                raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps, bound to current artifact hash, required (VIS-03/ACC-02)")
         mv.stage = "prod"
         s.add(domain.Deployment(model_version_id=mv.id, status="active"))
         s.commit()
@@ -377,11 +379,39 @@ def approve_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Dep
         mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
         if not mv:
             raise HTTPException(status_code=404, detail="version not found")
-        s.add(domain.Approval(model_version_id=mv.id, approver=p.sub,
+        s.add(domain.Approval(model_version_id=mv.id, approver=p.sub, artifact_hash=mv.artifact_hash or "",
                               ts=datetime.now(timezone.utc).isoformat(timespec="seconds"), reason=body.reason))
         s.commit()
         audit.append_event(actor=p.sub, action="model.approve", obj=f"model/{model_id}/v{ver}")
-        return {"approved": True, "version": ver, "approver": p.sub}
+        return {"approved": True, "version": ver, "approver": p.sub, "artifact_hash": mv.artifact_hash}
+
+
+@app.get("/api/models/{model_id}/versions/{ver}/review")
+def review_bundle(model_id: int, ver: int, p: Principal = Depends(require("finding.read"))):
+    """Evidence-based HITL: всё для информированного решения аппрувера — сработки, модель-карта,
+    lineage/воспроизводимость, статус подписи, аппрувы. Не «слепой аппрув», а решение по доказательствам."""
+    with SessionLocal() as s:
+        mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
+        if not mv:
+            raise HTTPException(status_code=404, detail="version not found")
+        m = s.get(domain.Model, model_id)
+        findings = s.query(domain.Finding).filter(domain.Finding.asset_ref.like(f"model/{model_id}%")).all()
+        approvals = s.query(domain.Approval).filter_by(model_version_id=mv.id).all()
+        reproducible = all(getattr(mv, f) for f in ("dataset_version_id", "code_commit", "env_lock"))
+        open_critical = sum(1 for f in findings if f.status == "open" and f.severity == "critical")
+        audit.append_event(actor=p.sub, action="model.review.read", obj=f"model/{model_id}/v{ver}")
+        return {
+            "model": m.name, "version": ver, "stage": mv.stage, "criticality": m.criticality,
+            "artifact_hash": mv.artifact_hash, "persisted": bool(mv.artifact_object_key),
+            "model_card": {"intended_use": mv.intended_use, "limitations": mv.limitations,
+                           "complete": bool(mv.intended_use and mv.limitations)},
+            "lineage": {"dataset_version_id": mv.dataset_version_id, "code_commit": mv.code_commit,
+                        "env_lock": mv.env_lock, "reproducible": reproducible},
+            "signature": {"signed": bool(mv.signature_bundle), "tool": mv.signature or None},
+            "open_critical": open_critical,
+            "findings": [{"tool": f.tool, "verdict": f.verdict, "severity": f.severity, "status": f.status} for f in findings],
+            "approvals": [{"approver": a.approver, "ts": a.ts, "reason": a.reason, "artifact_hash": a.artifact_hash} for a in approvals],
+        }
 
 
 @app.post("/api/models/{model_id}/versions/{ver}/retire")
