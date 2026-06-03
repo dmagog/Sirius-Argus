@@ -266,6 +266,23 @@ def _ov_node(n, w, h, gate, endpoint):
     )
 
 
+# Легенда графа: явно разводим «здоровье узла» (его открытые сработки) и «поток ЖЦ».
+# Снимает путаницу «почему нижестоящий узел зелёный, если на гейте было плохо»: цвет узла —
+# про его собственные findings, а не про прохождение потока. Прогон по потоку — в инспекторе.
+_OV_LEGEND = (
+    "<div style='display:flex;align-items:center;gap:8px 18px;flex-wrap:wrap;margin:12px 2px 0;font-size:10.5px;color:var(--sa-muted)'>"
+    "<span style='display:inline-flex;align-items:center;gap:6px'>"
+    "<span class='sa-led' style='width:8px;height:8px;--c:var(--sa-alert)'></span>"
+    "цвет узла — <b style='color:var(--sa-text2);font-weight:600'>здоровье узла</b> (его открытые сработки)</span>"
+    "<span style='display:inline-flex;align-items:center;gap:6px'>"
+    "<span style='width:18px;height:2px;background:#3a4d70;border-radius:2px;flex:none'></span>"
+    "линия и частицы — <b style='color:var(--sa-text2);font-weight:600'>поток ЖЦ</b></span>"
+    "<span style='flex:1;min-width:240px'>здоровье узла независимо от потока: зелёный узел ниже по конвейеру "
+    "не значит, что прогон прошёл гейты чисто — прохождение конкретного прогона смотрите в инспекторе узла.</span>"
+    "</div>"
+)
+
+
 def map_page(pipeline, infra, endpoints=None, feed=None, sev_counts=None):
     endpoints = endpoints or []
     feed = feed or []
@@ -348,7 +365,7 @@ def map_page(pipeline, infra, endpoints=None, feed=None, sev_counts=None):
     feed_json = json.dumps(feed, ensure_ascii=False).replace("</", "<\\/")
     content = (
         "<div style='padding:16px 20px 20px'>"
-        f"{graph}<div class='sa-bottom'>{summary}{term}</div></div>"
+        f"{graph}{_OV_LEGEND}<div class='sa-bottom'>{summary}{term}</div></div>"
         f"<script>const OV_FEED={feed_json};</script><script>{_OV_JS}</script>"
     )
     breadcrumb = "<div><div class='h'>Обзор контура</div><div class='s'>граф жизненного цикла модели · поток событий в реальном времени</div></div>"
@@ -616,19 +633,27 @@ def map_inspector_page(node, pipeline, infra, runs, sel_run, detail):
     prev_tag = "<span class='sa-chip'>preventive</span>" if nid in PREVENTIVE else ""
     chips = "".join(f"<span class='sa-chip'>{_e(c)}</span>" for c in controls) or "<span style='font-size:11.5px;color:var(--sa-muted)'>инфраструктурный узел контура</span>"
     qtitle = "Прогоны на узле" if nid in {"package", "validate", "serving", "decommission", "gate-artifact"} else "Очередь прогонов контура"
+    ncolor = _SC.get(st, "var(--sa-muted)")
+    nopen = node.get("open") or 0
+    nhealth = (f"<span class='sa-mono' style='color:{ncolor};font-weight:700'>● {nopen} откр.</span>"
+               if nopen else "<span class='sa-mono' style='color:var(--sa-ok)'>чисто</span>")
     content = (
         "<div style='display:flex;flex-direction:column;height:100%'>"
-        # шапка узла
+        # шапка узла — индикатор = ЗДОРОВЬЕ УЗЛА (его открытые сработки), не движение прогона
         "<div style='flex:none;padding:14px 22px 13px;border-bottom:1px solid var(--sa-line);background:var(--sa-panel2)'>"
         "<div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap'>"
-        f"<span class='sa-led' style='width:12px;height:12px;--c:{_SC.get(st,'var(--sa-muted)')}'></span>"
+        f"<span class='sa-led' style='width:12px;height:12px;--c:{ncolor}' title='здоровье узла'></span>"
         f"<h2 style='margin:0;font-size:18px;font-weight:700;color:var(--sa-head)'>{_e(node['label'])}</h2>{gate_tag}{prev_tag}"
-        f"<span style='flex:1'></span><span style='font-size:12px;color:var(--sa-text2)'>{len(runs)} прогон(ов) · {len(controls)} контролей</span></div>"
-        f"<div style='display:flex;flex-wrap:wrap;gap:6px;margin-top:10px'>{chips}</div></div>"
+        f"<span style='flex:1'></span><span style='font-size:11.5px;color:var(--sa-text2)'>здоровье узла: {nhealth} "
+        f"<span style='color:var(--sa-line2)'>·</span> {len(runs)} прогон(ов) · {len(controls)} контролей</span></div>"
+        f"<div style='display:flex;flex-wrap:wrap;gap:6px;margin-top:10px'>{chips}</div>"
+        "<div style='font-size:10px;color:var(--sa-muted);margin-top:8px;line-height:1.4'>Индикатор узла — его собственные открытые сработки "
+        "(здоровье узла), независимо от потока. Движение прогонов по конвейеру ЖЦ — в очереди и треке ниже.</div></div>"
         # тело: очередь + инспектор
         "<div style='flex:1;min-height:0;display:flex;overflow:hidden'>"
         "<div style='flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden'>"
-        f"<div style='padding:12px 18px 6px;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-text2);font-weight:600'>{qtitle}</div>"
+        f"<div style='padding:12px 18px 1px;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-text2);font-weight:600'>{qtitle}</div>"
+        "<div style='padding:0 18px 6px;font-size:10px;color:var(--sa-muted)'>трек — прохождение прогона по потоку ЖЦ; бейдж слева — состояние прогона</div>"
         f"<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:4px 16px 16px'>{cards}</div></div>"
         "<div style='width:384px;flex:none;border-left:1px solid var(--sa-line);background:var(--sa-panel2);display:flex;flex-direction:column;overflow:hidden'>"
         f"<div id='sa-inspector' style='display:flex;flex-direction:column;height:100%;min-height:0'>{inspector}</div></div></div></div>"
