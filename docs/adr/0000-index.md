@@ -16,3 +16,4 @@
 | [0008](0008-message-broker.md) | Межсервис: лёгкий брокер (Redis) — шина событий + очередь сканов | Accepted |
 | [0009](0009-observability-logstore.md) | Логи/observability: отдельный лог-стор (Loki/Grafana/Prometheus); аудит ≠ observability | Accepted |
 | [0010](0010-secrets-vault.md) | Секреты в HashiCorp Vault: выдача по AppRole-политике + аудит + revoke/rotate | Accepted (scoped) |
+| [0011](0011-interactive-pipeline-map.md) | Интерактивная карта пайплайна `/map`: live-схема (bespoke SVG/HTML) + drill в инциденты | Accepted |
