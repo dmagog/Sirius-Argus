@@ -54,6 +54,33 @@ _SORT_JS = """<script>
 </script>"""
 
 
+# Счётчики «требует внимания» в сайдбаре: открытые сработки и узлы под тревогой/вниманием.
+# Источник — тот же /api/map/status (open/severity по узлам), без нового эндпоинта; обновление 10с.
+_NAV_JS = """<script>
+(function(){
+  function setB(key,val,danger){
+    var el=document.querySelector('.sb-badge[data-badge="'+key+'"]'); if(!el)return;
+    if(val>0){el.textContent=val>99?'99+':val; el.style.display='inline-flex';
+      el.classList.toggle('sb-badge-alert',!!danger); el.classList.toggle('sb-badge-warn',!danger);}
+    else{el.textContent=''; el.style.display='none';}
+  }
+  async function navBadges(){
+    try{
+      var s=await fetch('/api/map/status').then(function(r){return r.json();});
+      var N=s.nodes||{},open=0,attn=0,anyAlert=false,sOpen=0,sAlert=false;
+      for(var k in N){var n=N[k];open+=(n.open||0);
+        if(n.status==='alert'){attn++;anyAlert=true;}else if(n.status==='warn'){attn++;}
+        if(k==='serving'){sOpen=(n.open||0);sAlert=(n.status==='alert');}}
+      setB('findings',open,anyAlert);
+      setB('map',attn,anyAlert);
+      setB('serving',sOpen,sAlert);
+    }catch(e){}
+  }
+  navBadges(); setInterval(navBadges,10000);
+})();
+</script>"""
+
+
 # Тёмная SOC-консоль: палитра-токены + сайдбар + re-skin Tailwind-утилит через CSS-слой
 # (тёмные карточки/таблицы/бейджи без правки каждой страницы). Акцент — золото под лого.
 _THEME = """<style>
@@ -70,9 +97,12 @@ h1,h2,h3{color:var(--head);}
 .sb-title{display:flex;flex-direction:column;line-height:1.05;font-weight:700;letter-spacing:.3px;font-size:15px;}
 .sb-title small{font-weight:500;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:var(--text2);margin-top:2px;}
 .sb-nav{display:flex;flex-direction:column;gap:2px;padding:12px 10px;overflow-y:auto;}
-.sb-link{display:flex;align-items:center;padding:9px 12px;border-radius:8px;color:var(--text2);font-size:.9rem;font-weight:500;text-decoration:none;transition:background .15s,color .15s;}
+.sb-link{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-radius:8px;color:var(--text2);font-size:.9rem;font-weight:500;text-decoration:none;transition:background .15s,color .15s;}
 .sb-link:hover{background:#16203a;color:var(--head);}
 .sb-active{background:#172339;color:#fff;box-shadow:inset 3px 0 0 var(--accent);}
+.sb-badge{min-width:20px;height:18px;padding:0 6px;border-radius:999px;font-size:10.5px;font-weight:700;align-items:center;justify-content:center;display:none;font-variant-numeric:tabular-nums;line-height:1;}
+.sb-badge-warn{background:rgba(245,158,11,.18);color:#fcd34d;box-shadow:inset 0 0 0 1px rgba(245,158,11,.35);}
+.sb-badge-alert{background:rgba(239,68,68,.20);color:#fca5a5;box-shadow:inset 0 0 0 1px rgba(239,68,68,.42);}
 .sb-foot{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line);}
 .env-chip{font-size:11px;color:var(--text2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;}
 /* re-skin Tailwind-утилит под тёмное */
@@ -145,7 +175,8 @@ _NAV = (
 def _page(title, body, nav="dashboard"):
     def link(href, label, key):
         active = " sb-active" if key == nav else ""
-        return f'<a class="sb-link{active}" href="{href}">{_e(label)}</a>'
+        return (f'<a class="sb-link{active}" data-nav="{key}" href="{href}">'
+                f'<span>{_e(label)}</span><span class="sb-badge" data-badge="{key}"></span></a>')
     nav_html = "".join(link(h, l, k) for h, l, k in _NAV)
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
@@ -167,7 +198,7 @@ def _page(title, body, nav="dashboard"):
         "</aside>"
         f"<main class='app-main'>{body}</main>"
         "</div>"
-        f"{_SORT_JS}</body></html>"
+        f"{_SORT_JS}{_NAV_JS}</body></html>"
     )
 
 
