@@ -1,20 +1,36 @@
-"""ui.roles — рендер (вынесено из ui.py)."""
-from .layout import _CDN, _STYLE, _SEV, _STATUS, _CRIT, _STAGE, _e, _NAV, _page, _card
+"""ui.roles — матрица прав RBAC (дизайн-язык SA в рамках общего sidebar)."""
+from .layout import _e, _page
 
 
 def roles_page(permissions, roles):
+    """Матрица прав zero-trust RBAC: строки — действия, столбцы — роли, ✓ — доступ."""
     roles = sorted(roles)
-    head = "".join(f"<th class='px-3 py-2 text-center'>{_e(r)}</th>" for r in roles)
+    head = "".join(
+        f"<th class='sa-mono' style='text-align:center;color:var(--sa-accent-ink)'>{_e(r)}</th>"
+        for r in roles)
     rows = ""
     for action in sorted(permissions):
         allowed = permissions[action]
-        cells = "".join(
-            f"<td class='px-3 py-1.5 text-center'>{'✅' if r in allowed else '·'}</td>" for r in roles)
-        rows += f"<tr class='border-t border-slate-100'><td class='px-3 py-1.5 font-mono text-xs'>{_e(action)}</td>{cells}</tr>"
-    table = ("<table class='w-full text-sm bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden'>"
-             "<thead class='bg-slate-50 text-slate-500 text-xs uppercase'>"
-             f"<tr><th class='px-3 py-2 text-left'>действие</th>{head}</tr></thead><tbody>{rows}</tbody></table>")
-    body = ("<h1 class='text-xl font-semibold'>Матрица прав (zero-trust RBAC)</h1>"
-            "<p class='text-sm text-slate-500'>Кто что может. Object-level (по чувствительности) и separation of duties — поверх этой матрицы.</p>"
-            f"{table}")
+        cells = ""
+        for r in roles:
+            if r in allowed:
+                cell = "<i class='bi bi-check2' style='color:var(--sa-ok);font-size:15px'></i>"
+            else:
+                cell = "<span style='color:var(--sa-muted)'>—</span>"
+            cells += f"<td style='text-align:center'>{cell}</td>"
+        rows += (
+            "<tr>"
+            f"<td class='sa-mono' style='color:var(--sa-text);white-space:nowrap'>{_e(action)}</td>"
+            f"{cells}</tr>")
+    table = (
+        "<div class='sa-panel'><table class='sa-table'><thead><tr>"
+        f"<th>действие</th>{head}"
+        f"</tr></thead><tbody>{rows}</tbody></table></div>")
+    body = (
+        "<div class='sa-eye'>Sirius Argus · zero-trust RBAC</div>"
+        "<h1 class='sa-h1'>Матрица прав</h1>"
+        "<p class='sa-sub'>Кто какое действие может выполнить. Единый источник правды по доступам. "
+        "Object-level (по чувствительности артефакта) и separation of duties — поверх этой матрицы.</p>"
+        f"<div style='margin-top:16px'>{table}</div>"
+    )
     return _page("Sirius Argus — роли", body, "roles")

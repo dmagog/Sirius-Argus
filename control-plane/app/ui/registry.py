@@ -1,39 +1,78 @@
-"""ui.registry — рендер (вынесено из ui.py)."""
-from .layout import _CDN, _STYLE, _SEV, _STATUS, _CRIT, _STAGE, _e, _NAV, _page, _card
+"""ui.registry — реестр моделей (дизайн-язык SA в рамках общего sidebar)."""
+from .layout import _e, _page
+
+
+# Стадии жизненного цикла версии: цвет через токены SA.
+_STAGE_COL = {
+    "prod": "var(--sa-ok)",
+    "staging": "var(--sa-warn)",
+    "dev": "var(--sa-blue)",
+    "retired": "var(--sa-muted)",
+}
+# Критичность модели: regulatory — alert, financial — оранж, internal — приглушённый.
+_CRIT_COL = {
+    "regulatory": "var(--sa-alert)",
+    "financial": "#fb923c",
+    "internal": "var(--sa-muted)",
+}
+
+
+def _stage_badge(stage):
+    col = _STAGE_COL.get(stage, "var(--sa-text2)")
+    return (f"<span class='sa-badge sa-mono' "
+            f"style='color:{col};background:color-mix(in srgb,{col} 15%,transparent)'>"
+            f"{_e(stage)}</span>")
 
 
 def registry_page(models, kpi):
     """Read-only витрина реестра: модели, критичность, версии и стадии."""
-    cards = (_card("Модели", kpi.get("models", 0))
-             + _card("Версии", kpi.get("versions", 0))
-             + _card("В проде", kpi.get("prod", 0), "text-emerald-600")
-             + _card("Критичные", kpi.get("critical", 0), "text-red-600"))
+    kpis = (
+        f"<div class='sa-kpi'><div class='l'>Моделей</div><div class='v'>{kpi.get('models', 0)}</div></div>"
+        f"<div class='sa-kpi'><div class='l'>Версий</div><div class='v'>{kpi.get('versions', 0)}</div>"
+        "<div class='s'>по всем стадиям</div></div>"
+        f"<div class='sa-kpi' style='border-color:var(--sa-ok)'><div class='l'>В проде</div>"
+        f"<div class='v' style='color:var(--sa-ok)'>{kpi.get('prod', 0)}</div></div>"
+        f"<div class='sa-kpi' style='border-color:var(--sa-alert)'><div class='l'>Критичные</div>"
+        f"<div class='v' style='color:var(--sa-alert)'>{kpi.get('critical', 0)}</div>"
+        "<div class='s'>regulatory / financial</div></div>"
+    )
+
     if not models:
-        table = ("<div class='p-4 text-slate-400 bg-white rounded-xl border border-slate-200'>"
+        table = ("<div class='sa-panel' style='padding:18px;color:var(--sa-muted)'>"
                  "в реестре пока нет моделей</div>")
     else:
         rows = ""
         for m in models:
-            crit = _CRIT.get(m["criticality"], "bg-slate-100 text-slate-600")
+            crit = m["criticality"]
+            crit_col = _CRIT_COL.get(crit, "var(--sa-text2)")
+            crit_badge = (f"<span class='sa-badge' "
+                          f"style='color:{crit_col};background:color-mix(in srgb,{crit_col} 15%,transparent)'>"
+                          f"{_e(crit)}</span>")
             if m["versions"]:
                 vers = " ".join(
-                    f"<span class='px-1.5 py-0.5 rounded text-xs {_STAGE.get(v['stage'], 'bg-slate-100')}'>"
-                    f"v{_e(v['version'])}·{_e(v['stage'])}</span>" for v in m["versions"])
+                    f"<span class='sa-mono' style='font-size:11.5px'>v{_e(v['version'])}</span>"
+                    f"&nbsp;{_stage_badge(v['stage'])}" for v in m["versions"])
+                vers = f"<div style='display:flex;flex-wrap:wrap;gap:8px;align-items:center'>{vers}</div>"
             else:
-                vers = "<span class='text-slate-400 text-xs'>нет версий</span>"
+                vers = "<span style='color:var(--sa-muted);font-size:12px'>нет версий</span>"
             rows += (
-                "<tr class='border-t border-slate-100 align-top'>"
-                f"<td class='px-3 py-1.5 text-slate-400'>{_e(m['id'])}</td>"
-                f"<td class='px-3 py-1.5 font-medium'>{_e(m['name'])}</td>"
-                f"<td class='px-3 py-1.5'><span class='px-2 py-0.5 rounded text-xs {crit}'>{_e(m['criticality'])}</span></td>"
-                f"<td class='px-3 py-1.5 space-x-1'>{vers}</td></tr>")
-        table = ("<table class='w-full text-sm bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden'>"
-                 "<thead class='bg-slate-50 text-slate-500 text-xs uppercase'>"
-                 "<tr><th class='px-3 py-2 text-left'>id</th><th class='px-3 py-2 text-left'>модель</th>"
-                 "<th class='px-3 py-2 text-left'>критичность</th><th class='px-3 py-2 text-left'>версии · стадии</th>"
-                 f"</tr></thead><tbody>{rows}</tbody></table>")
-    body = ("<h1 class='text-xl font-semibold'>Реестр моделей</h1>"
-            "<p class='text-sm text-slate-500'>Защищённый реестр (zero-trust) поверх обёрнутого MLflow. "
-            "Чувствительные операции, lineage и blast-radius — через <span class='font-mono text-xs'>/api/*</span> под RBAC.</p>"
-            f"<div class='grid grid-cols-2 md:grid-cols-4 gap-3'>{cards}</div>{table}")
+                "<tr>"
+                f"<td class='sa-mono' style='color:var(--sa-accent-ink);font-size:11.5px;white-space:nowrap'>{_e(m['id'])}</td>"
+                f"<td style='color:var(--sa-head);font-weight:600'>{_e(m['name'])}</td>"
+                f"<td>{crit_badge}</td>"
+                f"<td>{vers}</td></tr>")
+        table = ("<div class='sa-panel'><table class='sa-table'><thead><tr>"
+                 "<th>id</th><th>модель</th><th>критичность</th><th>версии · стадии</th>"
+                 f"</tr></thead><tbody>{rows}</tbody></table></div>")
+
+    body = (
+        "<div class='sa-eye'>Sirius Argus · реестр моделей</div>"
+        "<h1 class='sa-h1'>Реестр моделей</h1>"
+        "<p class='sa-sub'>Защищённый реестр (zero-trust) поверх обёрнутого MLflow. "
+        "Чувствительные операции, lineage и blast-radius — через "
+        "<span class='sa-mono' style='color:var(--sa-accent-ink)'>/api/*</span> под RBAC. "
+        "Клик по шапке столбца — сортировка.</p>"
+        "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0'>"
+        f"{kpis}</div>{table}"
+    )
     return _page("Sirius Argus — реестр", body, "registry")
