@@ -51,7 +51,7 @@
 | SECR-1 | Секреты | Секреты в .env / коммитах | 3 | 4 | 12 | Mitigate · D9 | gitleaks, .gitignore, secret store (ACC-06) |
 | ID-1 | Identity | Кража / replay токена | 3 | 4 | 12 | Mitigate · D9 | short-lived scoped токены, ротация (CRED-01) |
 | DATA-3 | Данные | Утечка PII (логи/датасеты) | 3 | 4 | 12 | Mitigate · D3 | маскирование (DATA-04) |
-| ML-3 | MLflow | Перезапись артефакта → pickle RCE | 2 | 5 | 10 | Mitigate · D9 | integrity/подпись + admission (SUP-05, TOCTOU-01) |
+| ML-3 | MLflow | Перезапись артефакта → pickle RCE | 2 | 5 | 10 | Mitigate · D9 | integrity/подпись + admission (SUP-05, TOCTOU-01) + непрерывная ре-верификация прода по сохранённым байтам (MON-05) |
 | MO-2 | MinIO | TOCTOU-подмена артефакта после скана | 2 | 5 | 10 | Mitigate · D1 | подпись/хеш при загрузке (TOCTOU-01) |
 | GT-1 | Gitea/CI | Обход branch protection / force-push в main | 2 | 5 | 10 | Mitigate · D9 | protection + required checks (SUP-03) |
 | PG-4 | Postgres | Утечка DB-кред | 2 | 5 | 10 | Mitigate · D9 | secrets, netpolicy (CRED-01) |
@@ -84,7 +84,7 @@
 | GT-4 | Gitea/CI | Вредоносный Gitea-плагин/action | 1 | 4 | 4 | Mitigate · D9 | allow-list плагинов |
 | BUS-1 | Брокер | Инъекция/подмена событий → ложные Finding или обход | 2 | 4 | 8 | Mitigate · D9 | ACL топиков, аутентификация клиентов, дубль критичных событий в tamper-evident аудит (ADR-0008) |
 | OBS-1 | Observability | Утечка секретов/PII в операционные логи | 2 | 4 | 8 | Mitigate · D9/D3 | маскирование в логах, доступ к лог-стору по ролям (ADR-0009) |
-| EXF-1 | Данные/артефакты | Инсайдерская массовая эксфильтрация моделей/датасетов | 2 | 4 | 8 | Mitigate · D1 | детект по объёму скачиваний + output reduction + аудит (EXF-01) |
+| EXF-1 | Данные/артефакты | Инсайдерская массовая эксфильтрация моделей/датасетов | 2 | 4 | 8 | Mitigate · D1 | детект по объёму скачиваний (счётчик окна в общем Redis — нельзя обойти, размазав по соединениям/воркерам) + output reduction + аудит (EXF-01); рантайм-лимиты сервинга (RT-01/DOS-01/DOW-01) — тот же паттерн, Redis-бэкенд для scale-out в roadmap |
 
 > Низкий уровень (≤3) пуст осознанно: для платформы безопасности «тривиальных» рисков почти нет.
 

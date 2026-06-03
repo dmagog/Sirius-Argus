@@ -1,8 +1,14 @@
 """Шина событий (Redis Streams). Best-effort: аудит — источник правды, шина — для
 наблюдаемости и корреляции (ADR-0008/0009). Доступ к Redis под паролем (AUTH) —
 анонимная инъекция событий невозможна (EVT-01).
+
+Здесь же — общие счётчики для rate-limit/детекта в Redis (sliding window + дедуп):
+состояние общее для всех воркеров, поэтому лимит нельзя обойти, размазав запросы по
+соединениям/процессам (в отличие от in-memory per-worker). Fail-soft: если Redis недоступен,
+хелперы возвращают None и вызывающий падает на in-memory-фолбэк.
 """
 import os
+import secrets
 
 try:
     import redis
@@ -45,5 +51,43 @@ def stream_len() -> int:
     c = _conn()
     try:
         return int(c.xlen(STREAM)) if c else 0
+    except Exception:
+        return 0
+
+
+def rate_hit(key: str, window_s: float, now_ts: float):
+    """Скользящее окно в Redis (sorted set): дописывает хит, выкидывает старше окна,
+    возвращает число хитов в окне. Общий счётчик для всех воркеров. None — Redis недоступен."""
+    c = _conn()
+    if not c:
+        return None
+    try:
+        member = f"{now_ts:.6f}:{secrets.token_hex(4)}"  # уникальный член на каждый хит
+        pipe = c.pipeline()
+        pipe.zremrangebyscore(key, 0, now_ts - window_s)
+        pipe.zadd(key, {member: now_ts})
+        pipe.zcard(key)
+        pipe.expire(key, int(window_s) + 1)
+        return int(pipe.execute()[2])
+    except Exception:
+        return None
+
+
+def once(key: str, ttl_s: float):
+    """Дедуп в Redis (SET NX EX): True — впервые за TTL, False — уже было, None — Redis недоступен."""
+    c = _conn()
+    if not c:
+        return None
+    try:
+        return bool(c.set(key, "1", nx=True, ex=int(ttl_s)))
+    except Exception:
+        return None
+
+
+def key_count(key: str) -> int:
+    """Сколько хитов сейчас в окне ключа (для проверки/диагностики). 0, если нет/Redis недоступен."""
+    c = _conn()
+    try:
+        return int(c.zcard(key)) if c else 0
     except Exception:
         return 0

@@ -380,6 +380,42 @@ async def verify_artifact_endpoint(model_id: int, ver: int, request: Request, p:
     return {"verified": True, "version": ver}
 
 
+@router.post("/api/prod/verify-signatures")
+def verify_prod_signatures(p: Principal = Depends(require("prod.verify"))):
+    """MON-05 — непрерывная проверка прода (verify-on-prod): подпись и целостность
+    перепроверяются не только на промоушене (admission, SUP-04), но и для версий, УЖЕ
+    стоящих в проде. Подмена байтов/реестра после деплоя → Finding(prod-artifact-tampered,
+    critical) + audit. Сервер-сайд по сохранённым байтам (storage), без участия клиента.
+    Запускается периодически (роль Service) или вручную (MLSecOps)."""
+    with SessionLocal() as s:
+        items = []
+        for d in s.query(domain.Deployment).filter_by(status="active").all():
+            mv = s.get(domain.ModelVersion, d.model_version_id)
+            if mv and mv.stage == "prod":
+                items.append((mv.model_id, mv.version, mv.artifact_hash or "",
+                              mv.artifact_object_key, mv.signature_bundle or ""))
+    checked, tampered = 0, []
+    for model_id, ver, reg_hash, obj_key, sig in items:
+        checked += 1
+        art_bytes = storage.get(obj_key) if obj_key else None
+        reason = ""
+        if reg_hash and art_bytes is not None and hashlib.sha256(art_bytes).hexdigest() != reg_hash:
+            reason = "sha сохранённого артефакта ≠ зарегистрированного"
+        elif sig and not signing.verify(model_id, ver, reg_hash, sig, art_bytes):
+            reason = "подпись прод-версии больше не сходится"
+        if reason:
+            tampered.append({"model_id": model_id, "version": ver, "reason": reason})
+            with SessionLocal() as s:
+                s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                     tool="sirius-prod-verify", verdict="prod-artifact-tampered", severity="critical",
+                                     status="open", asset_type="model", asset_ref=f"model/{model_id}/v{ver}",
+                                     detail=f"прод-ре-верификация: {reason} (MON-05)", actor=p.sub))
+                s.commit()
+            audit.append_event(actor=p.sub, action="prod.verify.tampered", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+    audit.append_event(actor=p.sub, action="prod.verify.run", obj=f"checked={checked} tampered={len(tampered)}")
+    return {"checked": checked, "tampered": tampered}
+
+
 class OffboardIn(BaseModel):
     actor: str
 
@@ -414,21 +450,31 @@ def export_model(model_id: int, p: Principal = Depends(require("registry.read"))
             raise HTTPException(status_code=404, detail="model not found")
         last = s.query(domain.ModelVersion).filter_by(model_id=model_id).order_by(domain.ModelVersion.version.desc()).first()
         digest = last.artifact_hash if last else ""
-    now = time.monotonic()
-    dq = [t for t in _exports[p.sub] if now - t <= _EXPORT_WINDOW_S]
-    dq.append(now)
-    _exports[p.sub] = dq
-    if len(dq) > _EXPORT_THRESHOLD:
-        if p.sub not in _exfil_reported:
-            _exfil_reported.add(p.sub)
+    # EXF-01: счётчик выгрузок в общем Redis (sliding window) — нельзя обойти, размазав
+    # запросы по соединениям/воркерам. Фолбэк на in-memory, если Redis недоступен (тогда
+    # корректно лишь при одном воркере). Wall-clock time.time() — общий для всех процессов.
+    now = time.time()
+    count = bus.rate_hit(f"exfil:hits:{p.sub}", _EXPORT_WINDOW_S, now)
+    if count is None:  # Redis недоступен → in-memory per-worker фолбэк
+        dq = [t for t in _exports[p.sub] if now - t <= _EXPORT_WINDOW_S]
+        dq.append(now)
+        _exports[p.sub] = dq
+        count = len(dq)
+    if count > _EXPORT_THRESHOLD:
+        first = bus.once(f"exfil:reported:{p.sub}", _EXPORT_WINDOW_S)
+        if first is None:  # Redis недоступен → in-memory дедуп сработки
+            first = p.sub not in _exfil_reported
+            if first:
+                _exfil_reported.add(p.sub)
+        if first:
             with SessionLocal() as s:
                 s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                      tool="sirius-exfil", verdict="bulk-exfiltration", severity="high",
                                      status="open", asset_type="actor", asset_ref=f"actor/{p.sub}",
-                                     detail=f"{len(dq)} выгрузок за {int(_EXPORT_WINDOW_S)}s", actor=p.sub))
+                                     detail=f"{count} выгрузок за {int(_EXPORT_WINDOW_S)}s", actor=p.sub))
                 s.commit()
         audit.append_event(actor=p.sub, action="exfil.blocked", obj=f"actor/{p.sub}", was_authorized=False)
-        raise HTTPException(status_code=429, detail=f"bulk export limit: {len(dq)} за {int(_EXPORT_WINDOW_S)}s — троттлинг (EXF-01)")
+        raise HTTPException(status_code=429, detail=f"bulk export limit: {count} за {int(_EXPORT_WINDOW_S)}s — троттлинг (EXF-01)")
     audit.append_event(actor=p.sub, action="model.export", obj=f"model/{model_id}")
     return {"model_id": model_id, "artifact_hash": digest, "exported_by": p.sub}
 

@@ -16,6 +16,7 @@ PERMISSIONS = {
     "model.approve": {"MLSecOps"},
     "model.sign": {"MLSecOps"},
     "runtime.event": {"MLSecOps", "Service"},  # Service — сервис-аккаунт сервинга (рантайм-петля)
+    "prod.verify": {"MLSecOps", "Service"},  # непрерывная ре-верификация прода (#7); Service — для периодического прогона
     "risk.accept": {"CEO"},  # принятие остаточного риска — старшая роль, отдельно от промоутера (separation)
     "decommission": {"MLSecOps"},
     "offboard": {"MLSecOps"},
