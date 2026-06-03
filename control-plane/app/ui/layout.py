@@ -81,17 +81,29 @@ _NAV_JS = """<script>
 </script>"""
 
 
+# Переключатель тёмной/светлой темы (сквозной: тот же localStorage-ключ 'sa-theme', что и в /map).
+_THEME_JS = """<script>
+function saTheme(){var c=document.documentElement.getAttribute('data-sa-theme')||'dark';var n=c==='light'?'dark':'light';
+ document.documentElement.setAttribute('data-sa-theme',n);try{localStorage.setItem('sa-theme',n);}catch(e){}saThemeIcon();}
+function saThemeIcon(){var t=document.documentElement.getAttribute('data-sa-theme')||'dark';var i=document.getElementById('sa-theme-ic');
+ if(i)i.className='bi '+(t==='light'?'bi-sun':'bi-moon-stars');}
+saThemeIcon();
+</script>"""
+
+
 # Тёмная SOC-консоль: палитра-токены + сайдбар + re-skin Tailwind-утилит через CSS-слой
 # (тёмные карточки/таблицы/бейджи без правки каждой страницы). Акцент — золото под лого.
 _THEME = """<style>
 :root{--bg:#0b1220;--panel:#111a2e;--panel2:#0e1626;--line:#1f2a44;--text:#cbd5e1;--text2:#94a3b8;--muted:#64748b;--head:#f1f5f9;--accent:#facc15;
---sa-bg:#0b1220;--sa-panel:#111a2e;--sa-panel2:#0e1626;--sa-panel3:#15203a;--sa-line:#1f2a44;--sa-line2:#28344f;--sa-text:#cbd5e1;--sa-text2:#94a3b8;--sa-muted:#64748b;--sa-head:#f1f5f9;--sa-accent:#facc15;--sa-accent-ink:#facc15;--sa-ok:#10b981;--sa-warn:#f59e0b;--sa-alert:#ef4444;--sa-blue:#38bdf8;}
+--sa-bg:#0b1220;--sa-panel:#111a2e;--sa-panel2:#0e1626;--sa-panel3:#15203a;--sa-line:#1f2a44;--sa-line2:#28344f;--sa-text:#cbd5e1;--sa-text2:#94a3b8;--sa-muted:#64748b;--sa-head:#f1f5f9;--sa-accent:#facc15;--sa-accent-ink:#facc15;--sa-ok:#10b981;--sa-warn:#f59e0b;--sa-alert:#ef4444;--sa-blue:#38bdf8;--sa-card-grad:linear-gradient(180deg,#121d33,#0e1626);--sa-hover:#16203a;--sa-rail:#0a111f;}
+[data-sa-theme='light']{--bg:#eef1f5;--panel:#ffffff;--panel2:#f6f8fb;--line:#e2e8f0;--text:#334155;--text2:#64748b;--muted:#94a3b8;--head:#0f172a;--accent:#eab308;
+--sa-bg:#eef1f5;--sa-panel:#ffffff;--sa-panel2:#f6f8fb;--sa-panel3:#ffffff;--sa-line:#e2e8f0;--sa-line2:#dbe3ec;--sa-text:#334155;--sa-text2:#64748b;--sa-muted:#94a3b8;--sa-head:#0f172a;--sa-accent:#eab308;--sa-accent-ink:#a16207;--sa-ok:#059669;--sa-warn:#d97706;--sa-alert:#dc2626;--sa-blue:#0284c7;--sa-card-grad:linear-gradient(180deg,#ffffff,#f7f9fc);--sa-hover:#eef2f7;--sa-rail:#f1f4f8;}
 body{background:var(--bg)!important;color:var(--text)!important;font-family:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
 table{font-variant-numeric:tabular-nums;}
 h1,h2,h3{color:var(--head);}
 .app-shell{display:flex;min-height:100vh;}
 .app-main{flex:1;min-width:0;max-width:1180px;margin:0 auto;padding:26px 32px;}
-.sb{width:236px;flex-shrink:0;background:#0a111f;border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.sb{width:250px;flex-shrink:0;background:var(--sa-rail);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
 .sb-brand{display:flex;align-items:center;gap:.6rem;padding:18px 16px 14px;border-bottom:1px solid var(--line);color:var(--head);text-decoration:none;}
 .sb-brand .sirius-badge{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;flex-shrink:0;}
 .sb-logo{width:32px;height:32px;}
@@ -99,12 +111,17 @@ h1,h2,h3{color:var(--head);}
 .sb-title small{font-weight:500;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:var(--text2);margin-top:2px;}
 .sb-nav{display:flex;flex-direction:column;gap:2px;padding:12px 10px;overflow-y:auto;}
 .sb-link{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-radius:8px;color:var(--text2);font-size:.9rem;font-weight:500;text-decoration:none;transition:background .15s,color .15s;}
-.sb-link:hover{background:#16203a;color:var(--head);}
-.sb-active{background:#172339;color:#fff;box-shadow:inset 3px 0 0 var(--accent);}
+.sb-link:hover{background:var(--sa-hover);color:var(--head);}
+.sb-active{background:var(--sa-panel3);color:var(--head);box-shadow:inset 3px 0 0 var(--accent);}
+.sb-link .lbl{display:flex;align-items:center;gap:10px;min-width:0;}
+.sb-link .lbl i{font-size:14px;width:18px;text-align:center;color:var(--muted);flex:none;}
+.sb-link:hover .lbl i,.sb-active .lbl i{color:var(--accent);}
+.sb-theme{width:30px;height:30px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;}
+.sb-theme:hover{border-color:var(--accent);color:var(--accent);}
 .sb-badge{min-width:20px;height:18px;padding:0 6px;border-radius:999px;font-size:10.5px;font-weight:700;align-items:center;justify-content:center;display:none;font-variant-numeric:tabular-nums;line-height:1;}
 .sb-badge-warn{background:rgba(245,158,11,.18);color:#fcd34d;box-shadow:inset 0 0 0 1px rgba(245,158,11,.35);}
 .sb-badge-alert{background:rgba(239,68,68,.20);color:#fca5a5;box-shadow:inset 0 0 0 1px rgba(239,68,68,.42);}
-.sb-foot{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line);}
+.sb-foot{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .env-chip{font-size:11px;color:var(--text2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;}
 /* re-skin Tailwind-утилит под тёмное */
 .bg-white{background:var(--panel)!important;}
@@ -121,7 +138,7 @@ h1,h2,h3{color:var(--head);}
 .text-red-600{color:#f87171!important;}.text-emerald-600{color:#34d399!important;}
 .text-amber-600{color:#fbbf24!important;}.text-orange-600{color:#fb923c!important;}
 .text-sky-600{color:var(--accent)!important;}
-.hover\\:bg-slate-50:hover,.hover\\:bg-slate-100:hover{background:#16203a!important;}
+.hover\\:bg-slate-50:hover,.hover\\:bg-slate-100:hover{background:var(--sa-hover)!important;}
 .bg-red-100{background:rgba(239,68,68,.16)!important;}.text-red-700{color:#fca5a5!important;}
 .bg-orange-100{background:rgba(249,115,22,.16)!important;}.text-orange-700{color:#fdba74!important;}
 .bg-amber-100{background:rgba(245,158,11,.16)!important;}.text-amber-700{color:#fcd34d!important;}
@@ -135,7 +152,7 @@ code{color:#e2e8f0;}
 .sa-eye{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;margin:0 0 12px;}
 .sa-eye::before{content:'';width:14px;height:2px;background:var(--sa-accent);border-radius:2px;flex:none;}
 .sa-panel{border:1px solid var(--sa-line);border-radius:14px;background:var(--sa-panel);overflow:hidden;}
-.sa-kpi{position:relative;border:1px solid var(--sa-line);border-radius:14px;padding:14px 16px;background:linear-gradient(180deg,#121d33,#0e1626);overflow:hidden;}
+.sa-kpi{position:relative;border:1px solid var(--sa-line);border-radius:14px;padding:14px 16px;background:var(--sa-card-grad);overflow:hidden;}
 .sa-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--sa-accent),transparent);}
 .sa-kpi .l{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;}
 .sa-kpi .v{font-size:26px;font-weight:700;color:var(--sa-head);margin-top:6px;line-height:1.05;font-variant-numeric:tabular-nums;}
@@ -147,7 +164,7 @@ code{color:#e2e8f0;}
 .sa-table{width:100%;border-collapse:collapse;font-size:13px;}
 .sa-table thead th{text-align:left;padding:9px 12px;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--sa-text2);background:var(--sa-panel2);font-weight:600;white-space:nowrap;}
 .sa-table tbody td{padding:8px 12px;border-top:1px solid var(--sa-line);color:var(--sa-text);vertical-align:top;}
-.sa-table tbody tr:hover{background:#16203a;}
+.sa-table tbody tr:hover{background:var(--sa-hover);}
 .sa-h1{font-size:21px;font-weight:700;color:var(--sa-head);margin:0;}
 .sa-sub{font-size:12.5px;color:var(--sa-text2);margin-top:5px;line-height:1.5;}
 </style>"""
@@ -193,15 +210,23 @@ _NAV = (
     ("/roles", "Роли (RBAC)", "roles"),
 )
 
+# Bootstrap-иконки разделов (тот же набор, что в SA-рейле /map) — для сквозного меню.
+_NAV_ICON = {"map": "bi-diagram-3", "dashboard": "bi-speedometer2", "registry": "bi-box-seam",
+             "findings": "bi-exclamation-triangle", "coverage": "bi-shield-check",
+             "serving": "bi-hdd-network", "services": "bi-hdd-stack", "roles": "bi-people"}
+
 
 def _page(title, body, nav="dashboard"):
     def link(href, label, key):
         active = " sb-active" if key == nav else ""
+        icon = _NAV_ICON.get(key, "bi-dot")
         return (f'<a class="sb-link{active}" data-nav="{key}" href="{href}">'
-                f'<span>{_e(label)}</span><span class="sb-badge" data-badge="{key}"></span></a>')
+                f'<span class="lbl"><i class="bi {icon}"></i>{_e(label)}</span>'
+                f'<span class="sb-badge" data-badge="{key}"></span></a>')
     nav_html = "".join(link(h, l, k) for h, l, k in _NAV)
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
+        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);}catch(e){}</script>"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         f"<title>{_e(title)}</title>"
         "<link rel=icon type=image/png href='/static/avatar.png'>"
@@ -217,11 +242,12 @@ def _page(title, body, nav="dashboard"):
         "<span class='sirius-badge'><img src='/static/avatar.png' alt='Sirius Argus' class='sb-logo'></span>"
         "<span class='sb-title'>Sirius Argus<small>MLSecOps Platform</small></span></a>"
         f"<nav class='sb-nav'>{nav_html}</nav>"
-        "<div class='sb-foot'><span class='env-chip'>local · dev</span></div>"
+        "<div class='sb-foot'><span class='env-chip'>local · dev</span>"
+        "<button class='sb-theme' onclick='saTheme()' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button></div>"
         "</aside>"
         f"<main class='app-main'>{body}</main>"
         "</div>"
-        f"{_SORT_JS}{_NAV_JS}</body></html>"
+        f"{_SORT_JS}{_NAV_JS}{_THEME_JS}</body></html>"
     )
 
 
