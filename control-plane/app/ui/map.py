@@ -376,8 +376,11 @@ _OV_JS = r"""
 (function(){
   var SC={clean:'var(--sa-ok)',warn:'var(--sa-warn)',alert:'var(--sa-alert)'};
   var LVL={info:'var(--sa-text2)',ok:'var(--sa-ok)',warn:'var(--sa-warn)',err:'var(--sa-alert)',sec:'var(--sa-accent-ink)'};
-  function fit(){var w=document.querySelector('.sa-scaled-wrap'),s=document.getElementById('ov-scaled');
-    if(!w||!s||!w.clientWidth)return; s.style.transform='scale('+(w.clientWidth/1432)+')';}
+  // масштаб слоя по ширине + высота бокса следует за масштабом (иначе на не-1432 ширинах
+  // контент короче фикс-бокса → пустота снизу; на широких — обрезался). Идемпотентно.
+  function fit(){var wrap=document.querySelector('.sa-scaled-wrap'),s=document.getElementById('ov-scaled'),g=document.querySelector('.sa-graph');
+    if(!wrap||!s||!wrap.clientWidth)return; var sc=wrap.clientWidth/1432; s.style.transform='scale('+sc+')';
+    if(g){var hpx=Math.round(392*sc)+'px'; if(g.style.height!==hpx)g.style.height=hpx;}}
   if(window.ResizeObserver){var wr=document.querySelector('.sa-scaled-wrap');if(wr)new ResizeObserver(fit).observe(wr);}
   window.addEventListener('resize',fit); setTimeout(fit,0); fit();
   var hov=null, cursor=Math.min(16,OV_FEED.length);
