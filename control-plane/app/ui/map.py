@@ -141,7 +141,20 @@ def _sa_css():
         ".sa-runcard:hover{border-color:var(--sa-accent);}"
         ".sa-lin{display:flex;justify-content:space-between;gap:10px;padding:7px 11px;}.sa-lin+.sa-lin{border-top:1px solid var(--sa-line);}"
         ".sa-badge{font-size:10px;font-weight:700;border-radius:5px;padding:2px 6px;}"
-        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content{animation:none!important}}"
+        # ── hero-сплэш при входе (один раз за сессию; фон = --sa-bg, тема применена до отрисовки) ──
+        ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--sa-bg);transition:opacity .4s ease;}"
+        ".sa-splash.out{opacity:0;pointer-events:none;}"
+        ".sa-splash .logo{width:96px;height:96px;border-radius:999px;display:flex;align-items:center;justify-content:center;"
+        "background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.34) 0%,rgba(250,204,21,.10) 60%,rgba(250,204,21,0) 100%);box-shadow:0 0 46px rgba(250,204,21,.28);animation:saSplashIn .5s ease;}"
+        ".sa-splash .logo img{width:72px;height:72px;border-radius:999px;}"
+        ".sa-splash .t1{font-size:21px;font-weight:700;color:var(--sa-head);letter-spacing:.4px;}"
+        ".sa-splash .t2{font-size:9.5px;letter-spacing:2.4px;text-transform:uppercase;color:var(--sa-text2);font-weight:500;margin-top:5px;}"
+        ".sa-splash .bar{width:182px;height:3px;border-radius:3px;background:var(--sa-line2);overflow:hidden;margin-top:8px;}"
+        ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
+        ".sa-splash.go .bar i{animation:saSplashBar .82s ease forwards;}"
+        "@keyframes saSplashIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}"
+        "@keyframes saSplashBar{from{width:0}to{width:100%}}"
+        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash.go .bar i{animation:none!important}.sa-splash .bar i{width:100%}}"
         "</style>"
     )
 
@@ -203,6 +216,14 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         f"<div class='sa-railfoot'><span class='sa-mono'>argus · prod</span><span class='sa-mono'>{nnodes} узлов</span></div></nav>"
     )
 
+    # hero-сплэш — только на стартовом экране (обзор); JS гасит его один раз за сессию
+    splash = (
+        "<div class='sa-splash' id='sa-splash'>"
+        "<span class='logo'><img src='/static/avatar.png' alt='Sirius Argus'></span>"
+        "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
+        "<div class='bar'><i></i></div></div>"
+    ) if active == "overview" else ""
+
     gates_col = "var(--sa-alert)" if gates_ok < len(gates) else "var(--sa-ok)"
     topbar = (
         "<header class='sa-top'>"
@@ -223,7 +244,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap' rel=stylesheet>"
         "<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css' rel=stylesheet>"
         '<script src="https://unpkg.com/htmx.org@2.0.3"></script>'
-        f"{_sa_css()}</head><body>"
+        f"{_sa_css()}</head><body>{splash}"
         f"<div class='sa-app'>{rail}<div class='sa-main'>{topbar}"
         f"<div class='sa-content sa-scroll'>{content}</div></div></div>"
         f"<script>{_SHELL_JS}{body_js}</script></body></html>"
@@ -240,6 +261,16 @@ function saThemeIcon(){var t=document.documentElement.getAttribute('data-sa-them
   if(i)i.className='bi '+(t==='light'?'bi-sun':'bi-moon-stars');}
 (function(){saThemeIcon();function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
  setInterval(tick,4000);tick();})();
+// hero-сплэш: показываем один раз за сессию, гасим по таймеру (декоративный прогресс),
+// уважаем prefers-reduced-motion; не блокирует контент (оверлей поверх готовой страницы).
+(function(){var el=document.getElementById('sa-splash');if(!el)return;
+ var seen;try{seen=sessionStorage.getItem('sa-splash-seen');}catch(e){}
+ if(seen){if(el.parentNode)el.parentNode.removeChild(el);return;}
+ try{sessionStorage.setItem('sa-splash-seen','1');}catch(e){}
+ function done(){el.classList.add('out');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},420);}
+ var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+ if(reduce){setTimeout(done,260);return;}
+ el.classList.add('go');setTimeout(done,1050);})();
 """
 
 
