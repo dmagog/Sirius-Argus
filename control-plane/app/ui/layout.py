@@ -84,7 +84,8 @@ _NAV_JS = """<script>
 # Тёмная SOC-консоль: палитра-токены + сайдбар + re-skin Tailwind-утилит через CSS-слой
 # (тёмные карточки/таблицы/бейджи без правки каждой страницы). Акцент — золото под лого.
 _THEME = """<style>
-:root{--bg:#0b1220;--panel:#111a2e;--panel2:#0e1626;--line:#1f2a44;--text:#cbd5e1;--text2:#94a3b8;--muted:#64748b;--head:#f1f5f9;--accent:#facc15;}
+:root{--bg:#0b1220;--panel:#111a2e;--panel2:#0e1626;--line:#1f2a44;--text:#cbd5e1;--text2:#94a3b8;--muted:#64748b;--head:#f1f5f9;--accent:#facc15;
+--sa-bg:#0b1220;--sa-panel:#111a2e;--sa-panel2:#0e1626;--sa-panel3:#15203a;--sa-line:#1f2a44;--sa-line2:#28344f;--sa-text:#cbd5e1;--sa-text2:#94a3b8;--sa-muted:#64748b;--sa-head:#f1f5f9;--sa-accent:#facc15;--sa-accent-ink:#facc15;--sa-ok:#10b981;--sa-warn:#f59e0b;--sa-alert:#ef4444;--sa-blue:#38bdf8;}
 body{background:var(--bg)!important;color:var(--text)!important;font-family:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
 table{font-variant-numeric:tabular-nums;}
 h1,h2,h3{color:var(--head);}
@@ -128,6 +129,27 @@ h1,h2,h3{color:var(--head);}
 .bg-emerald-100{background:rgba(16,185,129,.16)!important;}.text-emerald-700{color:#6ee7b7!important;}
 .bg-violet-100{background:rgba(139,92,246,.16)!important;}.text-violet-700{color:#c4b5fd!important;}
 code{color:#e2e8f0;}
+/* ── SA-контент-кит: компоненты дизайн-языка для разделов (в рамках общего sidebar) ── */
+.sa-mono{font-family:'JetBrains Mono','SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;}
+.bi{line-height:1;vertical-align:-.05em;}
+.sa-eye{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;margin:0 0 12px;}
+.sa-eye::before{content:'';width:14px;height:2px;background:var(--sa-accent);border-radius:2px;flex:none;}
+.sa-panel{border:1px solid var(--sa-line);border-radius:14px;background:var(--sa-panel);overflow:hidden;}
+.sa-kpi{position:relative;border:1px solid var(--sa-line);border-radius:14px;padding:14px 16px;background:linear-gradient(180deg,#121d33,#0e1626);overflow:hidden;}
+.sa-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--sa-accent),transparent);}
+.sa-kpi .l{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;}
+.sa-kpi .v{font-size:26px;font-weight:700;color:var(--sa-head);margin-top:6px;line-height:1.05;font-variant-numeric:tabular-nums;}
+.sa-kpi .s{font-size:10.5px;color:var(--sa-muted);margin-top:3px;}
+.sa-chip2{font-size:11px;color:var(--sa-text2);border:1px solid var(--sa-line);border-radius:999px;padding:5px 12px;text-decoration:none;display:inline-block;transition:border-color .15s,color .15s;}
+.sa-chip2:hover{border-color:var(--sa-accent);color:var(--sa-head);}
+.sa-chip2.on{background:var(--sa-accent);color:#0b1220;border-color:var(--sa-accent);font-weight:600;}
+.sa-badge{font-size:10px;font-weight:700;border-radius:5px;padding:2px 6px;display:inline-block;}
+.sa-table{width:100%;border-collapse:collapse;font-size:13px;}
+.sa-table thead th{text-align:left;padding:9px 12px;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--sa-text2);background:var(--sa-panel2);font-weight:600;white-space:nowrap;}
+.sa-table tbody td{padding:8px 12px;border-top:1px solid var(--sa-line);color:var(--sa-text);vertical-align:top;}
+.sa-table tbody tr:hover{background:#16203a;}
+.sa-h1{font-size:21px;font-weight:700;color:var(--sa-head);margin:0;}
+.sa-sub{font-size:12.5px;color:var(--sa-text2);margin-top:5px;line-height:1.5;}
 </style>"""
 
 
@@ -185,7 +207,8 @@ def _page(title, body, nav="dashboard"):
         "<link rel=icon type=image/png href='/static/avatar.png'>"
         "<link rel=preconnect href='https://fonts.googleapis.com'>"
         "<link rel=preconnect href='https://fonts.gstatic.com' crossorigin>"
-        "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap' rel=stylesheet>"
+        "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap' rel=stylesheet>"
+        "<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css' rel=stylesheet>"
         f"{_CDN}{_STYLE}{_THEME}</head>"
         "<body>"
         "<div class='app-shell'>"

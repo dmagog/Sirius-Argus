@@ -38,22 +38,34 @@ def audit_fragment(events):
             f"<th class='px-3 py-2 text-left'>authz</th></tr></thead><tbody>{rows}</tbody></table>")
 
 
+_F_SEVC = {"critical": "var(--sa-alert)", "high": "#fb923c", "medium": "var(--sa-warn)",
+           "low": "var(--sa-muted)", "info": "var(--sa-muted)"}
+_F_STC = {"open": ("var(--sa-warn)", "rgba(245,158,11,.16)"), "triaged": ("var(--sa-blue)", "rgba(56,189,248,.16)"),
+          "TP": ("var(--sa-alert)", "rgba(239,68,68,.16)"), "FP": ("var(--sa-muted)", "rgba(100,116,139,.16)")}
+
+
 def findings_table(findings):
-    """Полный список сработок с деталями и статусом (фрагмент для /findings)."""
+    """Полный список сработок (SA-стиль): тяжесть/вердикт, актив, причастный (учётка+роль), статус."""
     if not findings:
-        return "<div class='p-4 text-slate-400'>сработок по фильтру нет</div>"
-    rows = "".join(
-        "<tr class='border-t border-slate-100 align-top'>"
-        f"<td class='px-3 py-1.5 text-slate-400 whitespace-nowrap'>{_e(f['ts'])}</td>"
-        f"<td class='px-3 py-1.5'>{_e(f['tool'])}</td>"
-        f"<td class='px-3 py-1.5'><span class='px-2 py-0.5 rounded text-xs {_SEV.get(f['severity'], 'bg-slate-100')}'>{_e(f['verdict'])}</span></td>"
-        f"<td class='px-3 py-1.5'>{_e(f['asset'])}</td>"
-        f"<td class='px-3 py-1.5 text-slate-500'>{_e(f['detail'])}</td>"
-        f"<td class='px-3 py-1.5'><span class='px-2 py-0.5 rounded text-xs {_STATUS.get(f['status'], 'bg-slate-100')}'>{_e(f['status'])}</span></td></tr>"
-        for f in findings
-    )
-    return ("<table class='w-full text-sm'><thead class='bg-slate-50 text-slate-500 text-xs uppercase'>"
-            "<tr><th class='px-3 py-2 text-left'>время</th><th class='px-3 py-2 text-left'>инструмент</th>"
-            "<th class='px-3 py-2 text-left'>вердикт</th><th class='px-3 py-2 text-left'>актив</th>"
-            "<th class='px-3 py-2 text-left'>детали</th><th class='px-3 py-2 text-left'>статус</th>"
+        return "<div style='padding:18px;color:var(--sa-muted)'>сработок по фильтру нет</div>"
+    from ..runs import actor_role
+    rows = ""
+    for f in findings:
+        sc = _F_SEVC.get(f["severity"], "var(--sa-muted)")
+        col, bg = _F_STC.get(f["status"], ("var(--sa-muted)", "rgba(100,116,139,.16)"))
+        acct, role = actor_role(f.get("actor"))
+        rows += (
+            "<tr>"
+            f"<td class='sa-mono' style='color:var(--sa-muted);white-space:nowrap'>{_e((f['ts'] or '').split('T')[-1][:8])}</td>"
+            f"<td class='sa-mono' style='color:var(--sa-text2)'>{_e(f['tool'])}</td>"
+            f"<td><span class='sa-badge sa-mono' style='color:{sc};background:rgba(148,163,184,.12)'>{_e(f['severity'])}</span> "
+            f"<span class='sa-mono' style='color:{sc};font-weight:600'>{_e(f['verdict'])}</span></td>"
+            f"<td class='sa-mono' style='color:var(--sa-text2);font-size:11.5px'>{_e(f['asset'])}</td>"
+            f"<td style='color:var(--sa-text2);max-width:420px'>{_e(f['detail'])}</td>"
+            f"<td class='sa-mono' style='font-size:11px;white-space:nowrap'>{_e(acct)} "
+            f"<span style='color:var(--sa-accent-ink);font-weight:600'>{_e(role)}</span></td>"
+            f"<td><span class='sa-badge sa-mono' style='color:{col};background:{bg}'>{_e(f['status'])}</span></td></tr>")
+    return ("<table class='sa-table'><thead><tr>"
+            "<th>время</th><th>инструмент</th><th>вердикт</th><th>актив</th><th>детали</th>"
+            "<th>причастен</th><th>статус</th>"
             f"</tr></thead><tbody>{rows}</tbody></table>")

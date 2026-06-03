@@ -54,7 +54,7 @@ def _findings_query(status="", severity=""):
             q = q.filter(domain.Finding.severity == severity)
         rows = q.order_by(domain.Finding.id.desc()).limit(200).all()
         return [{"ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
-                 "asset": f.asset_ref, "detail": f.detail, "status": f.status} for f in rows]
+                 "asset": f.asset_ref, "detail": f.detail, "status": f.status, "actor": f.actor} for f in rows]
 
 
 @router.get("/ui/findings/list", response_class=HTMLResponse)
