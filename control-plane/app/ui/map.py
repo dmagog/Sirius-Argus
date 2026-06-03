@@ -7,6 +7,13 @@ from ..mapnodes import CONTROLS, PREVENTIVE
 _STATE_TXT = {"clean": "OPERATIONAL", "warn": "ВНИМАНИЕ", "alert": "ТРЕВОГА"}
 _SCLS = {"clean": "map-clean", "warn": "map-warn", "alert": "map-alert"}
 
+# Фазовые группы конвейера (узлы внутри — в порядке PIPELINE).
+_PHASES = (
+    ("Сборка", ("intake", "gate-data", "train", "package", "gate-artifact")),
+    ("Промоушен", ("validate", "gate-ci")),
+    ("Эксплуатация", ("serving", "monitor", "decommission")),
+)
+
 
 def _node_tile(n, idx=None, gate=False, infra=False):
     """Узел-плитка карты. Контракт live-поллера: id=n-<id>, класс map-node + map-<status>,
@@ -79,7 +86,14 @@ def _map_css():
         # панель-трек конвейера
         ".track-panel{position:relative;border:1px solid var(--line);border-radius:18px;padding:18px 18px 16px;"
         "background:radial-gradient(120% 150% at 0% 0%,#13213c 0%,#0d1526 58%);box-shadow:0 1px 2px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.02)}"
-        ".track{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:4px 2px 14px}"
+        ".track{display:flex;align-items:stretch;gap:22px;overflow-x:auto;padding:4px 2px 14px}"
+        # фазовые группы конвейера
+        ".phase{display:flex;flex-direction:column;gap:9px;flex:none}"
+        ".phase-label{font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text2);"
+        "font-weight:700;padding:0 2px 6px;border-bottom:1px dashed var(--line)}"
+        ".phase-row{display:flex;align-items:stretch}"
+        ".phase+.phase{position:relative}"
+        ".phase+.phase::before{content:'›';position:absolute;left:-16px;top:50%;color:var(--accent);font-size:18px;line-height:0}"
         ".track::-webkit-scrollbar{height:8px}.track::-webkit-scrollbar-thumb{background:#1f2a44;border-radius:8px}.track::-webkit-scrollbar-track{background:transparent}"
         # узел-плитка
         ".map-node{flex:none;min-width:130px;max-width:152px;border:1px solid var(--line);border-radius:13px;padding:11px 12px 10px;"
@@ -156,10 +170,16 @@ def map_page(pipeline, infra):
     )
 
     conn = "<span class='conn'></span>"
-    track = "".join(
-        _node_tile(n, idx=i + 1, gate=n.get("gate")) + (conn if i < len(pipeline) - 1 else "")
-        for i, n in enumerate(pipeline)
-    )
+    idx_of = {n["id"]: i + 1 for i, n in enumerate(pipeline)}
+    by_id = {n["id"]: n for n in pipeline}
+    phase_blocks = []
+    for ph_name, ids in _PHASES:
+        ph_nodes = [by_id[i] for i in ids if i in by_id]
+        inner = conn.join(_node_tile(n, idx=idx_of[n["id"]], gate=n.get("gate")) for n in ph_nodes)
+        phase_blocks.append(
+            f"<div class='phase'><div class='phase-label'>{_e(ph_name)}</div>"
+            f"<div class='phase-row'>{inner}</div></div>")
+    track = "".join(phase_blocks)  # фазы разделяются gap'ом трека, узлы внутри — коннекторами
     infra_html = "".join(_node_tile(n, infra=True) for n in infra)
 
     legend = (
