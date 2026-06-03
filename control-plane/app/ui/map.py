@@ -7,6 +7,7 @@ live-поллера сохранён: узлы id=n-<id>, статус чере�
 """
 import json
 from .fragments import audit_fragment  # noqa: F401  (используется в map_node_fragment)
+from .layout import _NAV
 from ..mapnodes import CONTROLS, PREVENTIVE, SHORT
 import html as _html
 
@@ -47,8 +48,8 @@ def _sa_css():
         ".sa-brand{display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid var(--sa-line);text-decoration:none;}"
         ".sa-brand .star{width:34px;height:34px;border-radius:999px;flex:none;display:flex;align-items:center;justify-content:center;"
         "background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.10) 60%,rgba(250,204,21,0) 100%);box-shadow:0 0 14px rgba(250,204,21,.25);}"
-        ".sa-brand .t1{font-weight:700;font-size:15px;color:var(--sa-head);letter-spacing:.3px;}"
-        ".sa-brand .t2{font-size:8.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--sa-text2);font-weight:500;margin-top:2px;}"
+        ".sa-brand .t1{display:block;font-weight:700;font-size:15px;color:var(--sa-head);letter-spacing:.3px;line-height:1.1;}"
+        ".sa-brand .t2{display:block;font-size:8.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--sa-text2);font-weight:500;margin-top:3px;}"
         ".sa-railitem{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;cursor:pointer;text-decoration:none;}"
         ".sa-railitem .ic{width:30px;height:30px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--sa-panel);border:1px solid var(--sa-line);color:var(--sa-text2);font-size:14px;}"
         ".sa-railitem .l1{display:block;font-size:13px;font-weight:600;color:var(--sa-text);}"
@@ -170,6 +171,10 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         + "".join(stage_row(n, i) for i, n in enumerate(pipeline))
         + "<div class='sa-raillbl'>Инфраструктура</div>"
         + "".join(infra_row(n) for n in infra)
+        + "<div class='sa-raillbl'>Разделы</div>"
+        + "".join(f"<a class='sa-infra' href='{h}'><span class='nm'>{_e(l)}</span>"
+                  f"<span style='color:var(--sa-line2);font-size:11px;flex:none'>↗</span></a>"
+                  for h, l, k in _NAV if k != "map")
         + "</div>"
         f"<div class='sa-railfoot'><span class='sa-mono'>argus · prod</span><span class='sa-mono'>{nnodes} узлов</span></div></nav>"
     )
@@ -256,22 +261,26 @@ def map_page(pipeline, infra, endpoints=None, feed=None, sev_counts=None):
         mx = (ax + bx) / 2
         return f"M {ax:.0f} {ay:.0f} C {mx:.0f} {ay:.0f}, {mx:.0f} {by:.0f}, {bx:.0f} {by:.0f}"
 
+    # SVG-цвета — ХЕКСОМ (var(--sa-*) в атрибутах stroke/fill не резолвится).
+    # Всё хорошо → сплошная непрерывная линия; warn/alert → тусклая база + бегущий пунктир.
     edge_svg = ""
     for ax, ay, bx, by, st in edges:
-        hot = st in ("alert", "warn")
-        col = "var(--sa-alert)" if st == "alert" else "var(--sa-warn)" if st == "warn" else "var(--sa-blue)"
         d = epath(ax, ay, bx, by)
-        edge_svg += (f"<path d='{d}' fill=none stroke='var(--sa-line2)' stroke-width=2.4 marker-end='url(#ovarr)' opacity=.85/>"
-                     f"<path d='{d}' fill=none stroke='{col}' stroke-width='{2.6 if hot else 1.8}' stroke-dasharray='5 7' "
-                     f"style='animation:saFlow 1s linear infinite;opacity:{.95 if hot else .55}'/>")
+        if st in ("alert", "warn"):
+            col = "#ef4444" if st == "alert" else "#f59e0b"
+            edge_svg += (f"<path d='{d}' fill=none stroke='#28344f' stroke-width='2' marker-end='url(#ovarr)' opacity='.7'/>"
+                         f"<path d='{d}' fill=none stroke='{col}' stroke-width='2.6' stroke-dasharray='5 7' opacity='.95'>"
+                         "<animate attributeName='stroke-dashoffset' from='0' to='-24' dur='1s' repeatCount='indefinite'/></path>")
+        else:
+            edge_svg += f"<path d='{d}' fill=none stroke='#3a4d70' stroke-width='2' marker-end='url(#ovarr)' opacity='.9'/>"
     main_path = "M " + " L ".join(f"{m['x']:.0f} {m['y']}" for m in main)
     svg = (
         f"<svg width={W} height={H} viewBox='0 0 {W} {H}' style='position:absolute;top:0;left:0;overflow:visible'>"
         "<defs><marker id=ovarr markerWidth=7 markerHeight=7 refX=5.5 refY=3 orient=auto>"
-        "<path d='M0 0 L6 3 L0 6 Z' fill='var(--sa-line2)'/></marker></defs>"
+        "<path d='M0 0 L6 3 L0 6 Z' fill='#46557a'/></marker></defs>"
         f"{edge_svg}"
-        f"<circle r=4.5 fill='var(--sa-blue)' opacity=.9><animateMotion dur=7s repeatCount=indefinite path='{main_path}'/></circle>"
-        f"<circle r=3.5 fill='var(--sa-accent)' opacity=.85><animateMotion dur=7s begin=3.5s repeatCount=indefinite path='{main_path}'/></circle>"
+        f"<circle r=4.5 fill='#38bdf8' opacity=.9><animateMotion dur=7s repeatCount=indefinite path='{main_path}'/></circle>"
+        f"<circle r=3.5 fill='#facc15' opacity=.85><animateMotion dur=7s begin=3.5s repeatCount=indefinite path='{main_path}'/></circle>"
         "</svg>"
     )
     nodes_html = "".join(_ov_node(m, 122, 54, m.get("gate"), False) for m in main)
