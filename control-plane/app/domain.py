@@ -100,6 +100,7 @@ class Approval(Base):
     id = Column(Integer, primary_key=True)
     model_version_id = Column(Integer, ForeignKey("model_versions.id"), nullable=False)
     approver = Column(String(255), default="")
+    role = Column(String(32), default="")             # роль аппрувера на момент решения (надёжно и в проде)
     decision = Column(String(16), default="approve")  # approve | reject — решение HITL
     ts = Column(String(32), default="")
     reason = Column(Text, default="")

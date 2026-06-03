@@ -304,7 +304,7 @@ def _decision_block(s, mv, m, f_rows):
         {"key": "hitl", "label": "Аппрув другим MLSecOps (VIS-03/ACC-02)", "ok": has_approval,
          "detail": hitl_detail},
     ]
-    dlist = [{"approver": a.approver, "role": actor_role(a.approver)[1], "ts": _short_t(a.ts),
+    dlist = [{"approver": a.approver, "role": (a.role or actor_role(a.approver)[1]), "ts": _short_t(a.ts),
               "reason": a.reason or "", "decision": (a.decision or "approve")} for a in appr_rows]
     return {"model_id": mv.model_id, "version": mv.version, "state": state,
             "requires_validation": bool(mv.requires_validation),

@@ -219,7 +219,8 @@ def ui_map_run_decision(run: str, decision: str, approver: str = Form(""), reaso
         if not mv:
             raise HTTPException(status_code=404, detail="run not found")
         model_id, ver = mv.model_id, mv.version
-    decisions.record_decision(model_id, ver, approver, decision, reason)
+    # UI-аппруверы валидированы как MLSecOps-учётки (decisions.UI_APPROVERS) → роль известна
+    decisions.record_decision(model_id, ver, approver, decision, reason, "MLSecOps")
     sel = runs.run_summary(run)
     detail = runs.run_detail(run) if sel else {}
     return ui.map_inspector_fragment(sel, detail)

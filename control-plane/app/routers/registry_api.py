@@ -270,7 +270,7 @@ class ApproveIn(BaseModel):
 @router.post("/api/models/{model_id}/versions/{ver}/approve")
 def approve_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depends(require("model.approve"))):
     """VIS-03 HITL: критичную версию вручную одобряет MLSecOps перед промоушеном."""
-    artifact_hash = decisions.record_decision(model_id, ver, p.sub, "approve", body.reason)
+    artifact_hash = decisions.record_decision(model_id, ver, p.sub, "approve", body.reason, p.primary_role())
     return {"approved": True, "version": ver, "approver": p.sub, "artifact_hash": artifact_hash}
 
 
@@ -279,7 +279,7 @@ def reject_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depe
     """VIS-03 HITL: MLSecOps отклоняет критичную версию (с обязательным обоснованием).
     Решение фиксируется в аудит и блокирует промоушен, пока его не сменит новый аппрув по
     тому же артефакту (promote.blocked.rejected)."""
-    artifact_hash = decisions.record_decision(model_id, ver, p.sub, "reject", body.reason)
+    artifact_hash = decisions.record_decision(model_id, ver, p.sub, "reject", body.reason, p.primary_role())
     return {"rejected": True, "version": ver, "approver": p.sub, "artifact_hash": artifact_hash}
 
 
@@ -307,7 +307,7 @@ def review_bundle(model_id: int, ver: int, p: Principal = Depends(require("findi
             "signature": {"signed": bool(mv.signature_bundle), "tool": mv.signature or None},
             "open_critical": open_critical,
             "findings": [{"tool": f.tool, "verdict": f.verdict, "severity": f.severity, "status": f.status} for f in findings],
-            "approvals": [{"approver": a.approver, "decision": (a.decision or "approve"), "ts": a.ts,
+            "approvals": [{"approver": a.approver, "role": a.role, "decision": (a.decision or "approve"), "ts": a.ts,
                            "reason": a.reason, "artifact_hash": a.artifact_hash} for a in approvals],
         }
 

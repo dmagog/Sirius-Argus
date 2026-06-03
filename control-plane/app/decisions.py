@@ -19,9 +19,10 @@ DECISIONS = ("approve", "reject")
 UI_APPROVERS = ("mlsecops", "reviewer")
 
 
-def record_decision(model_id: int, ver: int, approver: str, decision: str, reason: str = "") -> str:
+def record_decision(model_id: int, ver: int, approver: str, decision: str, reason: str = "", role: str = "") -> str:
     """Зафиксировать HITL-решение MLSecOps по версии. Возвращает artifact_hash, к которому
-    привязано решение. 404 — версии нет; 422 — неизвестное решение или reject без обоснования."""
+    привязано решение. 404 — версии нет; 422 — неизвестное решение или reject без обоснования.
+    role — роль аппрувера (из Principal.roles): надёжный резолв «кто решал» и в проде."""
     if decision not in DECISIONS:
         raise HTTPException(status_code=422, detail="decision must be approve|reject")
     if decision == "reject" and not (reason or "").strip():
@@ -32,7 +33,7 @@ def record_decision(model_id: int, ver: int, approver: str, decision: str, reaso
             raise HTTPException(status_code=404, detail="version not found")
         artifact_hash = mv.artifact_hash or ""
         s.add(domain.Approval(
-            model_version_id=mv.id, approver=approver, decision=decision,
+            model_version_id=mv.id, approver=approver, decision=decision, role=role,
             artifact_hash=artifact_hash, reason=reason,
             ts=datetime.now(timezone.utc).isoformat(timespec="seconds")))
         s.commit()
