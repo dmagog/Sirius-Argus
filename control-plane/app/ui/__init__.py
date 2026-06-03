@@ -8,4 +8,4 @@ from .registry import registry_page
 from .findings import findings_page
 from .serving import serving_page, serving_runtime_fragment
 from .services import services_page
-from .map import map_page, map_node_fragment, map_incident_fragment
+from .map import map_page, map_inspector_page, map_node_fragment, map_incident_fragment

@@ -178,6 +178,17 @@ def map_status():
     return JSONResponse({"nodes": _map_status_dict()})
 
 
+@router.get("/map/node/{node_id}", response_class=HTMLResponse)
+def map_node_view(node_id: str):
+    """Инспектор узла (full-bleed оболочка): рейл + шапка узла + сработки + аудит."""
+    st = _map_status_dict()
+    pipeline = [{"id": nid, "label": lbl, "gate": gate, **st[nid]} for nid, lbl, gate in mapnodes.PIPELINE]
+    infra = [{"id": nid, "label": lbl, **st[nid]} for nid, lbl in mapnodes.INFRA]
+    alln = {n["id"]: n for n in pipeline + infra}
+    node = alln.get(node_id) or pipeline[0]
+    return ui.map_inspector_page(node, pipeline, infra, _node_findings(node_id), audit.recent(20))
+
+
 @router.get("/ui/map/node/{node_id}", response_class=HTMLResponse)
 def ui_map_node(node_id: str):
     """HTMX-фрагмент drill: контроли узла + его сработки + хвост аудита."""
