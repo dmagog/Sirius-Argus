@@ -1,4 +1,6 @@
 """pytest-bdd: CI-01 — control-plane как CI (security-гейт на коммит + HMAC-вебхук)."""
+import hashlib
+import hmac
 import os
 
 import httpx
@@ -11,6 +13,17 @@ S = {}
 
 def tok(role):
     return {"Authorization": f"Bearer dev:{role.lower()}:{role}"}
+
+
+def _ci_secret():
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        for line in open(os.path.join(repo, ".env")):
+            if line.startswith("CI_WEBHOOK_SECRET="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return "change-me-ci-webhook"
 
 
 @given("поднятый control-plane")
@@ -52,3 +65,19 @@ def gate_passed():
 @then(parsers.parse("вебхук отклонён со статусом {code:d}"))
 def webhook_rejected(code):
     assert S["resp"].status_code == code, S["resp"].text
+
+
+@when("один и тот же подписанный вебхук приходит дважды")
+def replayed_webhook():
+    # уникальное тело на каждый прогон, чтобы nonce не пересекался между запусками сьюта
+    body = b'{"after": "replaytest-' + os.urandom(4).hex().encode() + b'", "repository": {"full_name": "x/y"}}'
+    sig = hmac.new(_ci_secret().encode(), body, hashlib.sha256).hexdigest()
+    hdr = {"X-Gitea-Signature": sig, "X-Gitea-Delivery": "deliv-" + os.urandom(4).hex()}
+    S["first"] = httpx.post(f"{BASE}/api/ci/webhook", headers=hdr, content=body, timeout=60)
+    S["second"] = httpx.post(f"{BASE}/api/ci/webhook", headers=hdr, content=body, timeout=60)
+
+
+@then(parsers.parse("первый принят, а повтор отклонён со статусом {code:d}"))
+def replay_rejected(code):
+    assert S["first"].status_code != 401, f"первый (валидный) вебхук не должен быть 401: {S['first'].text}"
+    assert S["second"].status_code == code, f"повтор должен быть {code}: {S['second'].status_code} {S['second'].text}"

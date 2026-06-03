@@ -1,4 +1,4 @@
-.PHONY: up up-full dev down config test demo pipeline logs ps
+.PHONY: up up-full dev down config test demo pipeline selfscan logs ps
 
 up:        ## core: поднять MVP-стек
 	docker compose up -d --build
@@ -23,6 +23,10 @@ demo:      ## живой прогон money-shot'ов по поднятому с
 
 pipeline:  ## сквозной конвейер ЖЦ одной модели (приём→gate→HITL→деплой→атака→decommission)
 	python3 scripts/pipeline.py
+
+selfscan:  ## догфудинг SAST: bandit по НАШЕМУ коду (control-plane + serving), порог medium+
+	docker run --rm -v "$(PWD)":/src python:3.12-slim \
+	  sh -c "pip install -q bandit && bandit -r -ll /src/control-plane/app /src/serving/app"
 
 logs:      ## логи control-plane
 	docker compose logs -f control-plane

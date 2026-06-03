@@ -116,6 +116,12 @@ async def ci_webhook(request: Request):
         if not hmac.compare_digest(request.headers.get("X-Gitea-Signature", ""), expected):
             audit.append_event(actor="gitea-webhook", action="ci.webhook.rejected", obj="ci", was_authorized=False)
             raise HTTPException(status_code=401, detail="invalid webhook signature")
+        # anti-replay: вебхук одноразовый. Nonce — X-Gitea-Delivery (или сама подпись) — кладётся в
+        # Redis с TTL; повтор того же подписанного запроса отбивается (HMAC сам по себе от replay не спасает).
+        nonce = request.headers.get("X-Gitea-Delivery") or expected
+        if bus.once(f"ci:webhook:nonce:{nonce}", 600) is False:  # False=уже видели; None=Redis недоступен (не блокируем)
+            audit.append_event(actor="gitea-webhook", action="ci.webhook.replay", obj="ci", was_authorized=False)
+            raise HTTPException(status_code=401, detail="webhook replay rejected (nonce already seen)")
     try:
         payload = json.loads(body or b"{}")
     except Exception:

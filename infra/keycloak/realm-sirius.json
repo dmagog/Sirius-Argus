@@ -3,6 +3,14 @@
   "enabled": true,
   "displayName": "Sirius Argus",
   "sslRequired": "none",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
   "roles": {
     "realm": [
       { "name": "DS", "description": "Data Scientist" },
@@ -33,6 +41,8 @@
     { "username": "product", "enabled": true, "email": "po@sirius.local", "firstName": "Demo", "lastName": "Product",
       "credentials": [{ "type": "password", "value": "product", "temporary": false }], "realmRoles": ["Product"] },
     { "username": "ceo", "enabled": true, "email": "ceo@sirius.local", "firstName": "Demo", "lastName": "CEO",
-      "credentials": [{ "type": "password", "value": "ceo", "temporary": false }], "realmRoles": ["CEO"] }
+      "credentials": [{ "type": "password", "value": "ceo", "temporary": false }], "realmRoles": ["CEO"] },
+    { "username": "bruteme", "enabled": true, "email": "bruteme@sirius.local", "firstName": "Brute", "lastName": "Test",
+      "credentials": [{ "type": "password", "value": "brutepass", "temporary": false }], "realmRoles": ["DS"] }
   ]
 }

@@ -15,6 +15,9 @@ _ENDPOINT = os.environ.get("MINIO_ENDPOINT", "")          # http://minio:9000
 _KEY = os.environ.get("AWS_ACCESS_KEY_ID", "")
 _SECRET = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 _BUCKET = os.environ.get("ARTIFACT_BUCKET", "sirius-quarantine")
+# Лимит на чтение артефакта в память (resource-exhaustion guard): не тянем гигабайты
+# на verify/sign. Размер берём из метаданных объекта (ContentLength) ДО чтения тела.
+_MAX_GET_BYTES = int(os.environ.get("ARTIFACT_MAX_BYTES", str(64 * 1024 * 1024)))
 _client = None
 
 
@@ -53,13 +56,20 @@ def put(key: str, data: bytes) -> str:
         return ""
 
 
-def get(key: str):
-    """Прочитать байты по ключу или None."""
+def get(key: str, max_bytes: int = None):
+    """Прочитать байты по ключу или None. Объект больше лимита не читаем в память
+    (resource-exhaustion guard): размер берём из ContentLength до чтения тела."""
     c = _s3()
     if c is None or not key:
         return None
+    limit = max_bytes or _MAX_GET_BYTES
     try:
-        return c.get_object(Bucket=_BUCKET, Key=key)["Body"].read()
+        obj = c.get_object(Bucket=_BUCKET, Key=key)
+        size = int(obj.get("ContentLength", 0))
+        if size > limit:
+            logger.warning("MinIO get %s: %s Б > лимита %s Б — отказ (resource-exhaustion guard)", key, size, limit)
+            return None
+        return obj["Body"].read()
     except Exception as e:
         logger.warning("MinIO get %s: %s", key, e)
         return None
