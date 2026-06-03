@@ -105,6 +105,24 @@ services:
         condition: service_healthy
     networks: [internal]
 
+  # один-shot: заводит OIDC-клиентов ops-консолей (Grafana/Gitea/MinIO) в realm sirius
+  # через Admin API — идемпотентно, без правки realm-sirius.json.
+  keycloak-init:
+    image: quay.io/keycloak/keycloak:26.0
+    environment:
+      HOME: /tmp   # kcadm пишет конфиг-токен в $HOME/.keycloak — /tmp гарантированно writable
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      GRAFANA_OIDC_SECRET: ${GRAFANA_OIDC_SECRET:-grafana-oidc-dev}
+      GITEA_OIDC_SECRET: ${GITEA_OIDC_SECRET:-gitea-oidc-dev}
+      MINIO_OIDC_SECRET: ${MINIO_OIDC_SECRET:-minio-oidc-dev}
+    entrypoint: ["/bin/sh", "/clients-init.sh"]
+    volumes:
+      - ./infra/keycloak/clients-init.sh:/clients-init.sh:ro
+    depends_on: [keycloak]
+    networks: [internal]
+    restart: "no"
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-sirius-redis}"]
@@ -238,6 +256,20 @@ services:
     image: grafana/grafana:11.4.0
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # единый вход через Keycloak (split-horizon: auth — через Caddy для браузера, token/userinfo — внутр.)
+      GF_SERVER_ROOT_URL: http://localhost:3000/
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: Keycloak
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: grafana
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: ${GRAFANA_OIDC_SECRET:-grafana-oidc-dev}
+      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid email profile roles"
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: http://localhost:8080/auth/realms/sirius/protocol/openid-connect/auth
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/token
+      GF_AUTH_GENERIC_OAUTH_API_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/userinfo
+      GF_AUTH_GENERIC_OAUTH_USE_PKCE: "true"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'MLSecOps') && 'Admin' || contains(roles[*], 'CEO') && 'Viewer' || 'Editor'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "false"
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
