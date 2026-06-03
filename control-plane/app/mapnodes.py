@@ -33,6 +33,15 @@ LABELS = {nid: lbl for nid, lbl, *_ in PIPELINE}
 LABELS.update({nid: lbl for nid, lbl in INFRA})
 ALL_NODES = [nid for nid, *_ in PIPELINE] + [nid for nid, _ in INFRA]
 
+# Короткие подписи для узлов графа обзора (узкие плитки).
+SHORT = {
+    "intake": "Приём", "gate-data": "Гейт данных", "train": "Обучение", "package": "Упаковка",
+    "gate-artifact": "Гейт артеф.", "validate": "Валидация", "gate-ci": "CI-гейт",
+    "serving": "Сервинг", "monitor": "Монитор", "decommission": "Вывод",
+    "control-plane": "Control-plane", "mlflow": "MLflow", "minio": "MinIO", "gitea": "Gitea",
+    "postgres": "Postgres", "keycloak": "Keycloak", "vault": "Vault", "bus": "Шина",
+}
+
 # Превентивные узлы: зелёные без сработок = «armed» (контроль работает молча, не порождает Finding).
 PREVENTIVE = {"validate", "keycloak", "vault", "intake", "train", "package", "decommission"}
 

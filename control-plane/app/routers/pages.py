@@ -140,11 +140,36 @@ def _node_findings(node_id, limit=60):
 
 @router.get("/map", response_class=HTMLResponse)
 def map_view():
-    """Интерактивная карта пайплайна: узлы по live-статусу + drill в инциденты (ADR-0011)."""
+    """Обзор контура: граф ЖЦ (ветвление сервинг→эндпоинты) + сводка за смену + живой поток.
+    Данные реальные: узлы из map-status, эндпоинты из активных деплоев, фид — findings + аудит."""
     st = _map_status_dict()
     pipeline = [{"id": nid, "label": lbl, "gate": gate, **st[nid]} for nid, lbl, gate in mapnodes.PIPELINE]
     infra = [{"id": nid, "label": lbl, **st[nid]} for nid, lbl in mapnodes.INFRA]
-    return ui.map_page(pipeline, infra)
+    with SessionLocal() as s:
+        endpoints = []
+        for d in s.query(domain.Deployment).filter_by(status="active").all():
+            mv = s.query(domain.ModelVersion).filter_by(id=d.model_version_id).first()
+            m = s.query(domain.Model).filter_by(id=mv.model_id).first() if mv else None
+            endpoints.append({"id": f"ep-{d.id}", "label": (m.name if m else f"mv{d.model_version_id}"), "state": "clean"})
+        sev_counts = {sv: 0 for sv in ("critical", "high", "medium", "low")}
+        for (sv,) in s.query(domain.Finding.severity).filter(domain.Finding.status.in_(("open", "TP"))).all():
+            if sv in sev_counts:
+                sev_counts[sv] += 1
+        ep_open = s.query(domain.Finding).filter(domain.Finding.asset_type == "endpoint",
+                                                 domain.Finding.status == "open").count()
+        recent_f = s.query(domain.Finding).order_by(domain.Finding.id.desc()).limit(18).all()
+        feed_f = [{"t": ((f.ts or "").split("T")[-1][:8]), "lvl": ("err" if f.severity in ("critical", "high") else "warn" if f.severity == "medium" else "info"),
+                   "src": f.tool or "finding", "msg": f"{f.verdict} · {f.asset_ref}",
+                   "node": mapnodes.node_of(f.verdict, f.tool, f.asset_type, f.asset_ref)} for f in recent_f]
+    if ep_open and endpoints:
+        endpoints[0]["state"] = "alert"
+    feed_a = []
+    for a in audit.recent(18):
+        act = (getattr(a, "action", "") or "")
+        lvl = "err" if ("denied" in act or "blocked" in act) else "sec" if ("secret" in act or "auth" in act or "loaded" in act) else "ok"
+        feed_a.append({"t": ((getattr(a, "ts", "") or "").split("T")[-1][:8]), "lvl": lvl, "src": (getattr(a, "actor", "-") or "-"), "msg": act, "node": None})
+    feed = sorted(feed_f + feed_a, key=lambda x: x["t"])[-44:]
+    return ui.map_page(pipeline, infra, endpoints, feed, sev_counts)
 
 
 @router.get("/api/map/status")
