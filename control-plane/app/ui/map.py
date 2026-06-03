@@ -18,10 +18,10 @@ def map_page(pipeline, infra):
     """Гибрид: пайплайн ЖЦ с гейтами + полоса инфра-узлов. Цвет — live-статус (поллер
     /api/map/status, перекраска по id без пересборки DOM). Клик → drill в инциденты."""
     style = ("<style>"
-             ".map-node{transition:all .3s;cursor:pointer;border-color:#e2e8f0;background:#fff}"
-             ".map-clean{border-color:#10b981;background:#ecfdf5}"
-             ".map-warn{border-color:#f59e0b;background:#fffbeb}"
-             ".map-alert{border-color:#ef4444;background:#fef2f2;animation:mapPulse 1.6s ease-in-out infinite}"
+             ".map-node{transition:all .3s;cursor:pointer;border-color:#1f2a44;background:#111a2e;color:#cbd5e1}"
+             ".map-clean{border-color:#10b981;background:rgba(16,185,129,.12)}"
+             ".map-warn{border-color:#f59e0b;background:rgba(245,158,11,.12)}"
+             ".map-alert{border-color:#ef4444;background:rgba(239,68,68,.14);animation:mapPulse 1.6s ease-in-out infinite}"
              "@keyframes mapPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}50%{box-shadow:0 0 0 7px rgba(239,68,68,0)}}"
              "@media(prefers-reduced-motion:reduce){.map-alert{animation:none}}"
              "</style>")
