@@ -18,3 +18,4 @@
 | [0010](0010-secrets-vault.md) | Секреты в HashiCorp Vault: выдача по AppRole-политике + аудит + revoke/rotate | Accepted (scoped) |
 | [0011](0011-interactive-pipeline-map.md) | Интерактивная карта пайплайна `/map`: live-схема (bespoke SVG/HTML) + drill в инциденты | Accepted |
 | [0012](0012-sso-ops-consoles.md) | Единый вход (SSO) в ops-консоли через Keycloak OIDC; MLflow/Vault — zero-trust | Accepted |
+| [0013](0013-training-service-integration.md) | Интеграция с сервисами обучения: control-plane — точка контроля, тренинг — снаружи | Accepted |
