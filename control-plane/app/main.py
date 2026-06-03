@@ -161,6 +161,12 @@ def registry_view():
     return ui.registry_page(models, kpi)
 
 
+@app.get("/services", response_class=HTMLResponse)
+def services_view():
+    """Карта сервисов системы: что наружу (кликабельно) и что внутри (zero-trust)."""
+    return ui.services_page()
+
+
 @app.get("/findings", response_class=HTMLResponse)
 def findings_view(status: str = Query(""), severity: str = Query("")):
     """Read-only журнал сработок с фильтрами и live-обновлением.
@@ -172,6 +178,39 @@ def findings_view(status: str = Query(""), severity: str = Query("")):
            "TP": sum(1 for x in statuses if x == "TP"),
            "FP": sum(1 for x in statuses if x == "FP")}
     return ui.findings_page(kpi, status, severity)
+
+
+@app.get("/serving", response_class=HTMLResponse)
+def serving_view():
+    """Read-only окно прод-сервинга: активные деплойменты, рантайм-защиты периметра и
+    live-сработки эндпоинтов. Инференс отдаёт отдельный serving-API (:8001) — здесь единая
+    точка видимости (control-plane), а не сырой JSON."""
+    with SessionLocal() as s:
+        deps = []
+        for d in s.query(domain.Deployment).filter_by(status="active").all():
+            mv = s.query(domain.ModelVersion).filter_by(id=d.model_version_id).first()
+            if not mv:
+                continue
+            m = s.query(domain.Model).filter_by(id=mv.model_id).first()
+            deps.append({"model": m.name if m else f"model#{mv.model_id}",
+                         "type": m.type if m else "", "criticality": m.criticality if m else "internal",
+                         "version": mv.version, "stage": mv.stage})
+        rt_total = s.query(domain.Finding).filter(domain.Finding.asset_type == "endpoint").count()
+        last = (s.query(domain.Finding).filter(domain.Finding.asset_type == "endpoint")
+                .order_by(domain.Finding.id.desc()).first())
+    kpi = {"deployments": len(deps), "runtime_findings": rt_total, "last": last.verdict if last else "—"}
+    return ui.serving_page(deps, kpi)
+
+
+@app.get("/ui/serving/runtime", response_class=HTMLResponse)
+def ui_serving_runtime():
+    """HTMX-фрагмент: последние рантайм-сработки сервинга (endpoint-findings, live)."""
+    with SessionLocal() as s:
+        rows = (s.query(domain.Finding).filter(domain.Finding.asset_type == "endpoint")
+                .order_by(domain.Finding.id.desc()).limit(25).all())
+        items = [{"ts": f.ts, "verdict": f.verdict, "severity": f.severity,
+                  "asset": f.asset_ref, "detail": f.detail, "status": f.status} for f in rows]
+    return ui.serving_runtime_fragment(items)
 
 
 @app.get("/api/whoami")
