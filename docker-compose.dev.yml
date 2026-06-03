@@ -1,0 +1,16 @@
+# Dev-оверлей: ГОРЯЧАЯ перезагрузка control-plane. Правки в control-plane/app/
+# подхватываются uvicorn'ом без пересборки образа — для быстрой итерации по UI
+# (рендер — серверный Python, отдельной фронт-сборки нет: правишь .py → рефреш браузера).
+#
+# НЕ для прод/демо: `make up` поднимает ЗАПЕЧЁННЫЙ образ (воспроизводимо, как у куратора).
+# Запуск dev-режима:   make dev      Возврат в обычный:  make up
+services:
+  control-plane:
+    # --reload + watchfiles следит за /app/app; команда замещает CMD из Dockerfile
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
+    volumes:
+      # исходники с хоста поверх запечённых → live-правки (список volumes мёржится с базой, vault-creds остаётся)
+      - ./control-plane/app:/app/app
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"   # надёжный reload через bind-mount на Docker Desktop (mac/win)
+      PYTHONDONTWRITEBYTECODE: "1"        # не плодить __pycache__ в примонтированном дереве

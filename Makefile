@@ -1,10 +1,13 @@
-.PHONY: up up-full down config test demo pipeline logs ps
+.PHONY: up up-full dev down config test demo pipeline logs ps
 
 up:        ## core: поднять MVP-стек
 	docker compose up -d --build
 
 up-full:   ## core + observability (Loki/Grafana/Prometheus) + Gitea
 	docker compose --profile full up -d --build
+
+dev:       ## hot-reload control-plane (правки .py без пересборки; НЕ для прод/демо)
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 down:      ## остановить и убрать контейнеры
 	docker compose down
