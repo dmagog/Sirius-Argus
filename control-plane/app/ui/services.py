@@ -7,14 +7,14 @@ def services_page():
     (наружу не торчат — zero-trust, доступ только через control-plane, ADR-0005)."""
     external = [
         ("Control-plane", "Хаб видимости и единая точка входа для людей", "http://localhost:8080/", "core", "вы здесь"),
-        ("Keycloak", "Identity · OIDC-логин · роли (DS/DE/MLSecOps/Product/CEO)", "http://localhost:8080/auth/admin/", "core", ""),
+        ("Keycloak", "Identity · OIDC-логин · роли (DS/DE/MLSecOps/Product/CEO)", "http://localhost:8080/auth/admin/", "core", "IdP"),
         ("Serving API", "Инференс 3 моделей за рантайм-защитами — это API, не страница", "http://localhost:8001/models", "core", "API"),
-        ("Grafana", "Observability: логи (Loki) + метрики (Prometheus)", "http://localhost:3000/", "full", ""),
-        ("Gitea", "Локальный git + CI — единая точка входа в прод", "http://localhost:3001/", "full", ""),
+        ("Grafana", "Observability: логи (Loki) + метрики (Prometheus) · вход через Keycloak", "http://localhost:3000/", "full", "SSO"),
+        ("Gitea", "Локальный git + CI — единая точка входа в прод · вход через Keycloak", "http://localhost:3001/", "full", "SSO"),
+        ("MinIO", "Объектный стор: артефакты/датасеты · консоль root (OIDC — на S3-STS)", "http://localhost:9001/", "core", "ops"),
     ]
     internal = [
         ("MLflow", "Бэкенд реестра/трекинга: версии, гиперпараметры, артефакты", ":5000"),
-        ("MinIO", "Объектный стор: артефакты моделей и датасеты", ":9001"),
         ("Vault", "Секрет-менеджмент: выдача по AppRole + аудит", ":8200"),
         ("Postgres · Redis", "Метаданные/аудит (hash-chain) · шина событий", "—"),
     ]
