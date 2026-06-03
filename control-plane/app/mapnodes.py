@@ -54,7 +54,8 @@ CONTROLS = {
     "minio": ["scoped keys", "private-by-default"],
     "gitea": ["единая точка входа в прод", "webhook HMAC (GT-3)"],
     "postgres": ["append-only + hash-chain аудита (MON-04 / LOG-02)"],
-    "keycloak": ["OIDC fail-closed (AUTH-01)", "short-lived токены (CRED-01)"],
+    "keycloak": ["OIDC fail-closed (AUTH-01)", "short-lived токены (CRED-01)",
+                 "единый вход в ops-консоли: Grafana/Gitea (SSO, ADR-0012)"],
     "vault": ["AppRole-выдача секретов + аудит"],
     "bus": ["auth клиентов + ACL топиков (EVT-01)"],
 }
