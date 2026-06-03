@@ -8,12 +8,14 @@ KCADM=/opt/keycloak/bin/kcadm.sh
 SERVER=http://keycloak:8080/auth
 REALM=sirius
 
-# ждём, пока Keycloak поднимется и админ-логин пройдёт (без healthcheck — просто ретраим)
+# ждём, пока Keycloak поднимется и админ-логин пройдёт (без healthcheck — просто ретраим).
+# Бюджет щедрый: на холодном/нагруженном старте Keycloak с импортом realm поднимается
+# несколько минут (наблюдали ~270с), а не десятки секунд — иначе SSO не встанет с первого up.
 i=0
 until $KCADM config credentials --server "$SERVER" --realm master \
         --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null 2>&1; do
   i=$((i + 1))
-  [ "$i" -ge 40 ] && { echo "keycloak-init: admin-логин не прошёл за ~80с"; exit 1; }
+  [ "$i" -ge 150 ] && { echo "keycloak-init: admin-логин не прошёл (Keycloak не поднялся за разумное время)"; exit 1; }
   sleep 2
 done
 echo "keycloak-init: подключились к Keycloak"
