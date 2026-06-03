@@ -1,8 +1,12 @@
-<p align="center">
-  <img src="assets/sirius-argus-logo.png" alt="Sirius Argus — MLSecOps Platform" width="300">
-</p>
+<img align="right" width="220" src="assets/sirius-argus-logo.png" alt="Sirius Argus — MLSecOps Platform">
 
 # Sirius Argus — безопасная MLOps-платформа
+
+[![last commit](https://img.shields.io/github/last-commit/dmagog/Sirius-Argus?style=flat-square)](https://github.com/dmagog/Sirius-Argus/commits/main)
+![BDD](https://img.shields.io/badge/BDD-53%2F54_green-2ea44f?style=flat-square)
+![run](https://img.shields.io/badge/run-make_up-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+![SSO](https://img.shields.io/badge/SSO-Keycloak_OIDC-FF6C37?style=flat-square&logo=keycloak&logoColor=white)
 
 *Sirius Argus* встраивает безопасность прямо в ML-пайплайн: проверки запускаются автоматически на переходах от приёма данных до вывода модели из эксплуатации. Для каждого актива видно, какие угрозы закрыты и каким контролем.
 
