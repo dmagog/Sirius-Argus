@@ -36,9 +36,13 @@ def intact_audit():
 
 @when("кто-то подменяет запись в журнале аудита")
 def tamper():
+    # append-only (LOG-02) отбивает обычный UPDATE — чтобы вообще тронуть запись, атакующий
+    # сначала должен отключить триггер (привилегированный DDL). И даже тогда подмену ловит hash-chain.
+    _psql("ALTER TABLE audit_events DISABLE TRIGGER sirius_audit_append_only")
     _psql(f"UPDATE audit_events SET was_authorized = NOT was_authorized WHERE id = {S['rid']}")
     S["after_tamper"] = _chain_ok()
-    _psql(f"UPDATE audit_events SET was_authorized = NOT was_authorized WHERE id = {S['rid']}")  # откат
+    _psql(f"UPDATE audit_events SET was_authorized = NOT was_authorized WHERE id = {S['rid']}")  # откат значения
+    _psql("ALTER TABLE audit_events ENABLE TRIGGER sirius_audit_append_only")
     S["after_restore"] = _chain_ok()
 
 

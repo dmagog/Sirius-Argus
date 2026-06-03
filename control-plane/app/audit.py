@@ -4,11 +4,14 @@
 """
 import hashlib
 import json
+import logging
 import threading
 from datetime import datetime, timezone
 
 from . import bus
 from .db import SessionLocal, AuditEvent
+
+logger = logging.getLogger("sirius.audit")
 
 # hash-chain должен строиться строго последовательно: сериализуем read-prev + insert,
 # иначе конкурентные запросы (напр. флуд рантайм-событий) читают один prev_hash и рвут цепочку.
@@ -34,7 +37,13 @@ def append_event(actor: str, action: str, obj: str = "", was_authorized: bool = 
             s.add(ev)
             s.commit()
             eid = ev.id
-    bus.publish("audit", {"actor": actor, "action": action, "obj": obj, "authorized": was_authorized})
+            head = ev.hash
+    # внешнее якорение головы цепочки: голову гоним в шину (Redis) и в лог (Loki) — вне Postgres.
+    # Даже если кто-то отключит append-only-триггер и перепишет строки с пересчётом хешей, новая
+    # голова разойдётся с уже отгруженной наружу историей голов → подмена остаётся обнаружимой.
+    bus.publish("audit", {"actor": actor, "action": action, "obj": obj,
+                          "authorized": was_authorized, "id": eid, "head": head})
+    logger.info("audit id=%s action=%s actor=%s head=%s", eid, action, actor, head[:12])
     return eid
 
 

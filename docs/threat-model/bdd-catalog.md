@@ -46,6 +46,7 @@
 | MON-03 | Decommission отзывает доступы + снимает endpoint | A9 | @governance | retire-флоу | P1 | И4 |
 | GOV-01 | Неполная модель-карта блокирует промоушен | A8 | @governance | гейт полноты профиля безопасности | P1 | И3 |
 | MON-04 | Попытка подмены аудита детектится | A6,A7 | @integrity | hash-chain | P1 | И1/И2 |
+| LOG-02 | Перепись аудита обычным DML отбивается (append-only) | A6,A7 | @integrity | append-only триггер БД (prevent) + якорь головы цепи | P1 | энфорсер |
 | VIS-01 | Карта покрытия + CEO-вью отражают live-статус | D1,D4,D5 | @visibility | coverage map | **P0** | И5 |
 | VIS-02 | Расхождение вердиктов + триаж фолза | D1 | @visibility | findings triage | P1 | И2 |
 | VIS-03 | HITL-гейт блокирует критичную модель до аппрува | D1 | @governance | HITL approval | **P0** | И3 |
@@ -309,9 +310,21 @@ Feature: Вывод из эксплуатации
 Feature: Целостность аудита (tamper-evidence)
   Scenario: MON-04 — Подмена записи аудита детектируется
     Given аудит — append-only журнал с hash-chain
-    When кто-то подменяет существующую запись в БД
+    When кто-то отключает append-only-триггер и подменяет запись в БД
     Then цепочка хешей перестаёт сходиться (audit_chain_ok=false)
     And после отката подмены целостность восстанавливается
+```
+
+```gherkin
+@integrity @audit @P1
+Feature: Append-only журнал аудита (prevent)
+  # LOG-02 дополняет MON-04: detect → prevent. Перепись цепочки скомпрометированным
+  # control-plane по обычному DML-пути отбивается на уровне БД, а не логики приложения.
+  Scenario: LOG-02 — запись аудита нельзя изменить или удалить
+    Given аудит — append-only журнал с hash-chain
+    When кто-то пытается изменить или удалить запись аудита обычным DML
+    Then БД отклоняет UPDATE и DELETE (триггер append-only)
+    And журнал аудита остаётся целым
 ```
 
 ```gherkin

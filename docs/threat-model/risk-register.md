@@ -72,7 +72,7 @@
 | CP-5 | Control Plane | DDoS на единую точку входа → недоступность управления | 2 | 4 | 8 | Mitigate + Accept(volumetric) · D9 | reverse-proxy, rate-limit, load-shedding (DOS-01) |
 | MO-3 | MinIO | Мисконфиг бакета (анонимный доступ) | 2 | 4 | 8 | Mitigate · D9 | private by default |
 | GT-3 | Gitea/CI | Подделка вебхука (fake → PR passed) | 2 | 4 | 8 | Mitigate · D9 | HMAC-секрет вебхука (CI-01) |
-| PG-1 | Postgres | Подмена/удаление аудита | 2 | 4 | 8 | Mitigate · D1 | hash-chain (MON-04) |
+| PG-1 | Postgres | Подмена/удаление аудита | 2 | 4 | 8 | Mitigate · D1 | append-only триггер БД (prevent, LOG-02) + hash-chain (detect, MON-04) + якорь головы в шину/Loki; остаток — app ходит под владельцем (может отключить триггер DDL), прод-доводка = non-owner роль из Vault |
 | PG-2 | Postgres | Манипуляция статусом finding (TP→FP) | 2 | 4 | 8 | Mitigate · D1 | authz + audit (VIS-04) |
 | PG-3 | Postgres | SQLi через CP | 2 | 4 | 8 | Mitigate · D9 | параметризация/ORM |
 | SV-2 | Serving | Боковое движение из serving к MLflow/MinIO | 2 | 4 | 8 | Mitigate · D9 | per-service creds, netpolicy (RT-06) |

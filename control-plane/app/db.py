@@ -2,9 +2,12 @@
 
 SQLite-фоллбэк позволяет гонять каркас и тесты без Postgres; в compose — Postgres.
 """
+import logging
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Boolean
+from sqlalchemy import create_engine, text, Column, Integer, String, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+logger = logging.getLogger("sirius.db")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./sirius.db")
 
@@ -27,6 +30,51 @@ class AuditEvent(Base):
     hash = Column(String(64), nullable=False)
 
 
+# LOG-02: append-only на уровне БД. Аудит можно только дописывать — UPDATE/DELETE
+# отбивается триггером (а не логикой приложения). Скомпрометированный control-plane
+# не перепишет hash-chain обычным DML. Чтобы тронуть запись, нужен привилегированный
+# DDL (отключить триггер) — отдельное заметное действие; в проде app должен ходить
+# под non-owner ролью (выдаётся Vault), которой DDL на audit_events недоступен.
+_PG_GUARD = (
+    """
+    CREATE OR REPLACE FUNCTION sirius_audit_no_mutate() RETURNS trigger AS $$
+    BEGIN
+        RAISE EXCEPTION 'audit_events is append-only (LOG-02): % rejected', TG_OP;
+    END;
+    $$ LANGUAGE plpgsql
+    """,
+    "DROP TRIGGER IF EXISTS sirius_audit_append_only ON audit_events",
+    """
+    CREATE TRIGGER sirius_audit_append_only
+        BEFORE UPDATE OR DELETE ON audit_events
+        FOR EACH ROW EXECUTE FUNCTION sirius_audit_no_mutate()
+    """,
+)
+_SQLITE_GUARD = (
+    "CREATE TRIGGER IF NOT EXISTS sirius_audit_no_update BEFORE UPDATE ON audit_events "
+    "BEGIN SELECT RAISE(ABORT, 'audit_events is append-only (LOG-02)'); END",
+    "CREATE TRIGGER IF NOT EXISTS sirius_audit_no_delete BEFORE DELETE ON audit_events "
+    "BEGIN SELECT RAISE(ABORT, 'audit_events is append-only (LOG-02)'); END",
+)
+
+
+def _install_append_only_guard():
+    """Ставит append-only-триггер на audit_events. Fail-soft: если не вышло — пишем warning,
+    hash-chain (MON-04) всё равно ловит подмену; контроль prevent деградирует до detect."""
+    dialect = engine.dialect.name
+    stmts = _PG_GUARD if dialect == "postgresql" else _SQLITE_GUARD if dialect == "sqlite" else ()
+    if not stmts:
+        return
+    try:
+        with engine.begin() as conn:
+            for st in stmts:
+                conn.execute(text(st))
+        logger.info("append-only guard на audit_events установлен (%s)", dialect)
+    except Exception as e:  # noqa: BLE001 — не валим старт из-за усиления, остаётся detect
+        logger.warning("append-only guard не установлен (%s): %s", dialect, e)
+
+
 def init_db():
     from . import domain  # noqa: F401 — регистрирует доменные модели на Base
     Base.metadata.create_all(engine)
+    _install_append_only_guard()
