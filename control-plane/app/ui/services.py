@@ -7,7 +7,7 @@ def services_page():
     (наружу не торчат — zero-trust, доступ только через control-plane, ADR-0005)."""
     external = [
         ("Control-plane", "Хаб видимости и единая точка входа для людей", "http://localhost:8080/", "core", "вы здесь"),
-        ("Keycloak", "Identity · OIDC-логин · роли (DS/DE/MLSecOps/Product/CEO)", "http://localhost:8080/auth/", "core", ""),
+        ("Keycloak", "Identity · OIDC-логин · роли (DS/DE/MLSecOps/Product/CEO)", "http://localhost:8080/auth/admin/", "core", ""),
         ("Serving API", "Инференс 3 моделей за рантайм-защитами — это API, не страница", "http://localhost:8001/models", "core", "API"),
         ("Grafana", "Observability: логи (Loki) + метрики (Prometheus)", "http://localhost:3000/", "full", ""),
         ("Gitea", "Локальный git + CI — единая точка входа в прод", "http://localhost:3001/", "full", ""),

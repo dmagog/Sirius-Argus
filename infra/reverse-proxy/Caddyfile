@@ -1,12 +1,14 @@
 # Единственная точка входа для людей (ADR-0005).
-# /auth/* -> Keycloak (OIDC-логин), всё остальное -> control-plane.
+# /auth/* -> Keycloak (OIDC-логин + admin-консоль), всё остальное -> control-plane.
+# Префикс /auth НЕ срезаем (handle, не handle_path): Keycloak сам под KC_HTTP_RELATIVE_PATH=/auth,
+# поэтому его собственные редиректы (/auth/admin, /auth/realms/...) остаются валидными за прокси.
 :80 {
 	# периметр: жёсткий потолок тела — экстремальный оверсайз режется на входе (413),
 	# до control-plane (defense-in-depth; app-уровень имеет более строгий policy-лимит + аудит).
 	request_body {
 		max_size 50MB
 	}
-	handle_path /auth/* {
+	handle /auth/* {
 		reverse_proxy keycloak:8080
 	}
 	reverse_proxy control-plane:8000
