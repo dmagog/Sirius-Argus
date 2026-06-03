@@ -36,6 +36,16 @@ def _sa_css():
         "--sa-alert:#ef4444;--sa-blue:#38bdf8;--sa-term-bg:#080c15;"
         "--sa-card-grad:linear-gradient(180deg,#15203a,#101a30);"
         "--sa-track-grad:radial-gradient(120% 150% at 0% 0%,#13213c 0%,#0d1526 58%);}"
+        # светлая тема — переключается data-sa-theme='light' на <html> (терминал остаётся тёмным)
+        "[data-sa-theme='light']{--sa-bg:#eef1f5;--sa-panel:#ffffff;--sa-panel2:#f6f8fb;--sa-panel3:#ffffff;"
+        "--sa-line:#e2e8f0;--sa-line2:#dbe3ec;--sa-text:#334155;--sa-text2:#64748b;--sa-muted:#94a3b8;"
+        "--sa-head:#0f172a;--sa-accent:#eab308;--sa-accent-ink:#a16207;--sa-ok:#059669;--sa-warn:#d97706;"
+        "--sa-alert:#dc2626;--sa-blue:#0284c7;--sa-term-bg:#0f172a;"
+        "--sa-card-grad:linear-gradient(180deg,#ffffff,#f7f9fc);"
+        "--sa-track-grad:radial-gradient(120% 150% at 0% 0%,#ffffff 0%,#eef2f7 70%);}"
+        ".sa-themebtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;"
+        "border:1px solid var(--sa-line);border-radius:999px;background:var(--sa-panel);color:var(--sa-text2);cursor:pointer;font-size:14px;}"
+        ".sa-themebtn:hover{border-color:var(--sa-accent);color:var(--sa-accent-ink);}"
         "*{box-sizing:border-box;}html,body{margin:0;height:100%;}"
         "body{background:var(--sa-bg);color:var(--sa-text);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;}"
         ".sa-mono{font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;}"
@@ -201,10 +211,12 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:var(--sa-head)'>{nnodes}</span><span class='k'>узлов</span></div>"
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:var(--sa-warn)'>{open_total}</span><span class='k'>сработок</span></div>"
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:{gates_col}'>{gates_ok}/{len(gates)}</span><span class='k'>гейтов</span></div>"
+        "<button class='sa-themebtn' onclick='saTheme()' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button>"
         "<span class='sa-live'><span class='d'></span>LIVE · <span id='sa-upd'>—</span></span></div></header>"
     )
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
+        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);}catch(e){}</script>"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         f"<title>{_e(title)}</title><link rel=icon type=image/png href='/static/avatar.png'>"
         "<link rel=preconnect href='https://fonts.googleapis.com'><link rel=preconnect href='https://fonts.gstatic.com' crossorigin>"
@@ -222,7 +234,11 @@ _SHELL_JS = r"""
 function saFilter(q){q=(q||'').toLowerCase();
   document.querySelectorAll('.sa-stage,.sa-infra').forEach(function(el){
     el.style.display=(!q||(el.getAttribute('data-f')||'').indexOf(q)>=0)?'':'none';});}
-(function(){function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
+function saTheme(){var c=document.documentElement.getAttribute('data-sa-theme')||'dark';var n=c==='light'?'dark':'light';
+  document.documentElement.setAttribute('data-sa-theme',n);try{localStorage.setItem('sa-theme',n);}catch(e){}saThemeIcon();}
+function saThemeIcon(){var t=document.documentElement.getAttribute('data-sa-theme')||'dark';var i=document.getElementById('sa-theme-ic');
+  if(i)i.className='bi '+(t==='light'?'bi-sun':'bi-moon-stars');}
+(function(){saThemeIcon();function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
  setInterval(tick,4000);tick();})();
 """
 
