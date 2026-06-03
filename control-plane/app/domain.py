@@ -62,6 +62,10 @@ class ModelVersion(Base):
     intended_use = Column(Text, default="")
     limitations = Column(Text, default="")
     requires_validation = Column(Boolean, default=False)
+    # тайминг прогона по контуру (ISO-8601 UTC): когда версия заведена / промоутнута / выведена
+    created_at = Column(String(32), default="")
+    promoted_at = Column(String(32), default="")
+    retired_at = Column(String(32), default="")
 
 
 class Deployment(Base):

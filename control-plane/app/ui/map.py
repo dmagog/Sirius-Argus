@@ -553,6 +553,18 @@ def _inspector_inner(sel_run, detail):
         f"<span class='src' style='color:{_LVL.get(l['lvl'],'var(--sa-text2)')}'>{_e(l['src'])}</span>"
         f"<span style='color:{_LVL[l['lvl']] if l['lvl'] in ('err','sec') else '#cbd5e1'}'>{_e(l['msg'])}</span></div>"
         for l in log) or "<div style='color:var(--sa-muted);font-size:12px'>// лог пуст</div>"
+    tm = detail.get("timing") or {}
+    _tp = []
+    if tm.get("created"):
+        _tp.append(f"заведён {tm['created'].split('T')[-1][:8]}")
+    if tm.get("promoted"):
+        _tp.append(f"в проде {tm['promoted'].split('T')[-1][:8]}")
+    if tm.get("retired"):
+        _tp.append(f"выведен {tm['retired'].split('T')[-1][:8]}")
+    if tm.get("dur"):
+        _tp.append(f"в контуре {tm['dur']}")
+    timing_line = (f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:7px'>{_e(' · '.join(_tp))}</div>"
+                   if _tp else "")
     return (
         "<div style='padding:14px 16px;border-bottom:1px solid var(--sa-line);flex:none'>"
         "<div style='display:flex;align-items:center;justify-content:space-between'>"
@@ -562,7 +574,7 @@ def _inspector_inner(sel_run, detail):
         f"<span class='sa-mono' style='font-size:16px;font-weight:700;color:var(--sa-head)'>{_e(sel_run['id'])}</span>"
         f"<span style='font-size:13px;color:var(--sa-text)'>{_e(sel_run['model'])} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(sel_run['ver'])}</span></span></div>"
         f"<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>{_crit_badge(sel_run['crit'])}"
-        f"<span class='sa-chip'>причастен: {_e(acct)} · {_e(role)}</span></div></div>"
+        f"<span class='sa-chip'>причастен: {_e(acct)} · {_e(role)}</span></div>{timing_line}</div>"
         "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:12px 16px;min-height:0'>"
         f"{_hitl_panel(sel_run, detail)}"
         "<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Lineage · воспроизводимость (MON-02)</div>"

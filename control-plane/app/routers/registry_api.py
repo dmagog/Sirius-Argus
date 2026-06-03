@@ -145,6 +145,7 @@ def create_version(model_id: int, body: VersionIn, p: Principal = Depends(requir
             env_lock=body.env_lock, artifact_hash=body.artifact_hash, signature=body.signature,
             intended_use=body.intended_use, limitations=body.limitations,
             requires_validation=(m.criticality in ("regulatory", "financial")),
+            created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
         s.add(mv)
         s.commit()
@@ -241,6 +242,7 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
                 audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps, bound to current artifact hash, required (VIS-03/ACC-02)")
         mv.stage = "prod"
+        mv.promoted_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         # без дубль-деплоя: один активный Deployment на версию (belt-and-suspenders к FOR UPDATE)
         if not s.query(domain.Deployment).filter_by(model_version_id=mv.id, status="active").first():
             s.add(domain.Deployment(model_version_id=mv.id, status="active"))  # активен; «conditional» — в аудите/ответе
@@ -346,6 +348,7 @@ def retire_version(model_id: int, ver: int, p: Principal = Depends(require("deco
         if not mv:
             raise HTTPException(status_code=404, detail="version not found")
         mv.stage = "retired"
+        mv.retired_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         for d in s.query(domain.Deployment).filter_by(model_version_id=mv.id, status="active").all():
             d.status = "retired"
         s.commit()
@@ -575,7 +578,8 @@ async def ingest_model(model_id: int, request: Request, p: Principal = Depends(r
         obj_key = storage.put(f"models/{model_id}/v{n}/artifact.bin", body)  # карантин-стор проверенных байтов
         mv = domain.ModelVersion(model_id=model_id, version=n, stage="dev", artifact_hash=digest,
                                  artifact_object_key=obj_key,
-                                 requires_validation=(m.criticality in ("regulatory", "financial")))
+                                 requires_validation=(m.criticality in ("regulatory", "financial")),
+                                 created_at=now)
         s.add(mv)
         s.commit()
         name = registry.model_name(model_id, m.name)

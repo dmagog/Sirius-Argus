@@ -10,6 +10,7 @@
 версии модели (ингест-findings физически относятся к последней заингещенной версии).
 """
 from collections import defaultdict
+from datetime import datetime, timezone
 
 from . import domain
 from .db import AuditEvent, SessionLocal
@@ -63,9 +64,39 @@ def _crit(criticality):
 
 
 def _dur_stub(ts):
-    """Детерминированная псевдо-длительность 'MM:SS' (у ModelVersion нет start/end — честно псевдо)."""
+    """Детерминированная псевдо-длительность 'MM:SS' — fallback для легаси-версий без created_at."""
     h = abs(hash(ts or "")) if ts else 0
     return f"{(h // 60) % 60:02d}:{h % 60:02d}"
+
+
+def _parse_iso(s):
+    try:
+        return datetime.fromisoformat(s) if s else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _fmt_dur(secs):
+    secs = int(max(0, secs))
+    if secs < 3600:
+        return f"{secs // 60:02d}:{secs % 60:02d}"
+    if secs < 86400:
+        return f"{secs // 3600}ч {(secs % 3600) // 60:02d}м"
+    return f"{secs // 86400}д {(secs % 86400) // 3600}ч"
+
+
+def _duration(created, terminal, seed):
+    """Настоящая длительность по timestamps версии: created → (promoted|retired|сейчас).
+    Если created_at нет (легаси-версия) — честная детерминированная псевдо-длительность."""
+    start = _parse_iso(created)
+    if start is None:
+        return _dur_stub(seed)
+    end = _parse_iso(terminal) or datetime.now(timezone.utc)
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    return _fmt_dur((end - start).total_seconds())
 
 
 def _findings_index(s):
@@ -122,12 +153,13 @@ def _enrich(s, idx, last_actor, mv, model, latest_version):
     has_approval = bool(standing) and standing.decision == "approve"
     rejected = bool(standing) and standing.decision == "reject"
     actor = last_actor.get(f"model/{model.id}/v{mv.version}") or model.owner or "—"
-    started = min((f.ts for f in findings if f.ts), default="") or ""
+    started = mv.created_at or (min((f.ts for f in findings if f.ts), default="") or "")
     node = "gate-artifact" if open_critical else _STAGE_NODE.get(mv.stage, "package")
     return {
         "id": f"RUN-{mv.id}", "model": model.name, "ver": f"v{mv.version}",
         "crit": _crit(model.criticality), "started": started,
-        "dur": _dur_stub(started or f"{model.id}:{mv.version}"), "findings": len(findings),
+        "dur": _duration(mv.created_at, mv.retired_at or mv.promoted_at, f"{model.id}:{mv.version}"),
+        "findings": len(findings),
         "actor": actor, "node": node,
         "state": _state_of(mv.stage, open_critical, bool(mv.requires_validation), has_approval, rejected),
         "_stage": mv.stage,
@@ -242,9 +274,12 @@ def run_detail(run_id):
                         "msg": f"{f.verdict} · {f.detail}".strip(" ·")})
         log.sort(key=lambda x: x["t"])
         decision = _decision_block(s, mv, m, f_rows)
+        timing = {"created": mv.created_at or "", "promoted": mv.promoted_at or "",
+                  "retired": mv.retired_at or "",
+                  "dur": _duration(mv.created_at, mv.retired_at or mv.promoted_at, f"{mv.model_id}:{mv.version}")}
     return {"model": (m.name if m else ""), "ver": f"v{mv.version}", "stage": mv.stage,
             "crit": _crit(m.criticality if m else "internal"),
-            "lineage": lineage, "findings": findings, "log": log, "decision": decision}
+            "lineage": lineage, "findings": findings, "log": log, "decision": decision, "timing": timing}
 
 
 def _decision_block(s, mv, m, f_rows):

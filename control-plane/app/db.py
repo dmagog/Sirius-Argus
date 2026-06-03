@@ -80,6 +80,9 @@ def _install_append_only_guard():
 _ADD_COLUMNS = (
     ("approvals", "decision", "ALTER TABLE approvals ADD COLUMN decision VARCHAR(16) DEFAULT 'approve'"),
     ("findings", "role", "ALTER TABLE findings ADD COLUMN role VARCHAR(32) DEFAULT ''"),
+    ("model_versions", "created_at", "ALTER TABLE model_versions ADD COLUMN created_at VARCHAR(32) DEFAULT ''"),
+    ("model_versions", "promoted_at", "ALTER TABLE model_versions ADD COLUMN promoted_at VARCHAR(32) DEFAULT ''"),
+    ("model_versions", "retired_at", "ALTER TABLE model_versions ADD COLUMN retired_at VARCHAR(32) DEFAULT ''"),
 )
 
 
