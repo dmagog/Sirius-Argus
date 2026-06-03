@@ -565,16 +565,20 @@ async def ingest_model(model_id: int, request: Request, p: Principal = Depends(r
         digest = hashlib.sha256(body).hexdigest()
         assessment = scanners.assess_artifact(body, m.criticality)
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # admitted → версия создаётся, findings привязываем к ней (model/<id>/v<n>);
+        # blocked → версия НЕ создаётся (слот номера переиспользуется), findings остаются
+        # model-scoped (model/<id>) как «отклонённая попытка», не относятся ни к одной версии.
+        n = s.query(domain.ModelVersion).filter_by(model_id=model_id).count() + 1
+        aref = f"model/{model_id}/v{n}" if assessment["admit"] else f"model/{model_id}"
         for r in assessment["findings"]:
             s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
-                                 status="open", asset_type="model", asset_ref=f"model/{model_id}",
+                                 status="open", asset_type="model", asset_ref=aref,
                                  detail=r["detail"], actor=p.sub, role=p.primary_role()))
         if not assessment["admit"]:
             s.commit()
             audit.append_event(actor=p.sub, action="model.ingest.blocked", obj=f"model/{model_id}")
             raise HTTPException(status_code=422, detail={"blocked": True, "format": assessment["format"],
                                                          "tools": [r["tool"] for r in assessment["findings"]]})
-        n = s.query(domain.ModelVersion).filter_by(model_id=model_id).count() + 1
         obj_key = storage.put(f"models/{model_id}/v{n}/artifact.bin", body)  # карантин-стор проверенных байтов
         mv = domain.ModelVersion(model_id=model_id, version=n, stage="dev", artifact_hash=digest,
                                  artifact_object_key=obj_key,

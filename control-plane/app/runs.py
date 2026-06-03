@@ -4,10 +4,11 @@
 из stage + открытых критичных findings + requires_validation + Approval. Только реальные
 данные (SessionLocal как в routers/*), без мока.
 
-Привязка findings↔версия: scan-findings ингест-гейта пишутся с asset_ref='model/<id>'
-(без версии, registry_api), а версионные (verify-artifact/prod-verify) — 'model/<id>/v<n>'.
-Поэтому findings версии собираем по ОБЕИМ формам; model-scoped относим к самой свежей
-версии модели (ингест-findings физически относятся к последней заингещенной версии).
+Привязка findings↔версия: все версионные findings пишутся с asset_ref='model/<id>/v<n>'
+(ингест admitted, verify-artifact, prod-verify), поэтому findings версии собираем строго
+по 'model/<id>/v<n>' — без эвристик. Model-scoped 'model/<id>' остаётся только у findings
+заблокированного ингеста (вредоносный артефакт — версия не создаётся): это «отклонённая
+попытка», она видна в журнале/на гейте, но намеренно не относится ни к одному прогону.
 """
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -115,11 +116,8 @@ def _last_actor_by_version(s):
     return out
 
 
-def _version_findings(idx, model_id, version, latest_version):
-    items = list(idx.get(f"model/{model_id}/v{version}", []))
-    if version == latest_version:
-        items += idx.get(f"model/{model_id}", [])
-    return items
+def _version_findings(idx, model_id, version):
+    return list(idx.get(f"model/{model_id}/v{version}", []))
 
 
 def _state_of(stage, open_critical, requires_validation, has_approval, rejected=False):
@@ -146,8 +144,8 @@ def _standing_decision(s, mv, owner):
             .order_by(domain.Approval.id.desc()).first())
 
 
-def _enrich(s, idx, last_actor, mv, model, latest_version):
-    findings = _version_findings(idx, model.id, mv.version, latest_version)
+def _enrich(s, idx, last_actor, mv, model):
+    findings = _version_findings(idx, model.id, mv.version)
     open_critical = sum(1 for f in findings if f.status == "open" and f.severity == "critical")
     standing = _standing_decision(s, mv, model.owner)
     has_approval = bool(standing) and standing.decision == "approve"
@@ -181,9 +179,7 @@ def run_summary(run_id):
             return None
         idx = _findings_index(s)
         last_actor = _last_actor_by_version(s)
-        latest = (s.query(domain.ModelVersion.version).filter_by(model_id=mv.model_id)
-                  .order_by(domain.ModelVersion.version.desc()).first())
-        r = _enrich(s, idx, last_actor, mv, m, latest[0] if latest else mv.version)
+        r = _enrich(s, idx, last_actor, mv, m)
     r.pop("_stage", None)
     return r
 
@@ -194,15 +190,12 @@ def runs_for_node(node_id):
     with SessionLocal() as s:
         idx = _findings_index(s)
         last_actor = _last_actor_by_version(s)
-        latest = {}
-        for mv in s.query(domain.ModelVersion).all():
-            latest[mv.model_id] = max(latest.get(mv.model_id, 0), mv.version)
         models = {m.id: m for m in s.query(domain.Model).all()}
         runs = []
         for mv in s.query(domain.ModelVersion).order_by(domain.ModelVersion.id.desc()).all():
             m = models.get(mv.model_id)
             if m:
-                runs.append(_enrich(s, idx, last_actor, mv, m, latest.get(mv.model_id, mv.version)))
+                runs.append(_enrich(s, idx, last_actor, mv, m))
     stages = _NODE_STAGES.get(node_id)
     if stages is None:
         own = []
@@ -251,13 +244,8 @@ def run_detail(run_id):
             "artifact_hash": mv.artifact_hash or "—",
             "signature": mv.signature or ("model-signing" if mv.signature_bundle else "—"),
         }
-        latest = (s.query(domain.ModelVersion.version).filter_by(model_id=mv.model_id)
-                  .order_by(domain.ModelVersion.version.desc()).first())
-        latest_version = latest[0] if latest else mv.version
-        refs = [f"model/{mv.model_id}/v{mv.version}"]
-        if mv.version == latest_version:
-            refs.append(f"model/{mv.model_id}")
-        f_rows = (s.query(domain.Finding).filter(domain.Finding.asset_ref.in_(refs))
+        f_rows = (s.query(domain.Finding)
+                  .filter(domain.Finding.asset_ref == f"model/{mv.model_id}/v{mv.version}")
                   .order_by(domain.Finding.id.desc()).all())
         findings = [{"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict,
                      "severity": f.severity, "status": f.status, "asset": f.asset_ref,
