@@ -63,6 +63,7 @@
 | ESC-01 | IDOR / привилегированная эскалация отклоняется | A16,A17 | @access | object-level authz | **P0** | И1 |
 | FB-01 | Отравление петли дообучения детектится | A18 | @ML02 | provenance retrain-данных + дрейф | P2 | И4 |
 | RB-01 | Rollback на уязвимую версию блокируется | A19 | @governance | version policy / запрет downgrade | P1 | И3 |
+| GOV-03 | Промоушен атомарен — гонка не плодит дубль-деплой | A19 | @governance | FOR UPDATE + state-machine dev→prod | P1 | энфорсер |
 | TOCTOU-01 | Подмена артефакта после скана ловится при загрузке | A20 | @ML09 | ре-верификация подписи (admission) | P1 | И4 |
 | DOW-01 | Ресурсное истощение троттлится/квотируется | A21 | @availability | rate-limit + квоты | P2 | И4 |
 | DOS-01 | Распределённый DDoS не роняет платформу | A22 | @availability | reverse-proxy, global/per-IP rate-limit, load-shedding | P1 | И4 |
@@ -303,6 +304,17 @@ Feature: Вывод из эксплуатации
     When MLSecOps выводит её из эксплуатации
     Then активные деплои сняты, версия помечена retired
     And повторный промоушен изъятой версии запрещён (RB-01)
+```
+
+```gherkin
+@governance @P1
+Feature: Атомарность промоушена (TOCTOU-safe)
+  # GOV-03: переход dev→prod под блокировкой строки (FOR UPDATE) + state-machine.
+  Scenario: GOV-03 — одновременный промоушен создаёт ровно один деплой
+    Given воспроизводимая версия, готовая к промоушену
+    When несколько запросов одновременно промоутят одну версию
+    Then ровно один промоушен успешен, остальные отклонены
+    And активный Deployment у версии ровно один
 ```
 
 ```gherkin

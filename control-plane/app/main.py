@@ -384,12 +384,17 @@ def _valid_risk_acceptance(s, ref: str):
 @app.post("/api/models/{model_id}/versions/{ver}/promote")
 def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promote"))):
     with SessionLocal() as s:
-        mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
+        # FOR UPDATE: блокируем строку версии на время гейта — сериализует одновременные
+        # промоушены, закрывает TOCTOU-гонку (GOV-03). Postgres — row-lock; SQLite — no-op (БД-wide lock).
+        mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).with_for_update().first()
         if not mv:
             raise HTTPException(status_code=404, detail="version not found")
         if mv.stage == "retired":  # RB-01: откат на изъятую/уязвимую версию запрещён
             audit.append_event(actor=p.sub, action="promote.blocked.retired", obj=f"model/{model_id}/v{ver}", was_authorized=False)
             raise HTTPException(status_code=409, detail="version retired — rollback to a withdrawn/vulnerable version is blocked (RB-01)")
+        if mv.stage == "prod":  # state-machine: dev→prod однократно, без повторного активного деплоя (GOV-03)
+            audit.append_event(actor=p.sub, action="promote.blocked.already-prod", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+            raise HTTPException(status_code=409, detail="version already in prod — повторный промоушен не требуется (GOV-03)")
         # MON-02: невоспроизводимое не пускаем в прод (fail-closed)
         missing = [f for f in ("dataset_version_id", "code_commit", "env_lock") if not getattr(mv, f)]
         if missing:
@@ -424,18 +429,21 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
                 audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps, bound to current artifact hash, required (VIS-03/ACC-02)")
         mv.stage = "prod"
-        s.add(domain.Deployment(model_version_id=mv.id, status="active"))  # активен; «conditional» — в аудите/ответе
-        s.commit()
-        mvid = mv.id
+        # без дубль-деплоя: один активный Deployment на версию (belt-and-suspenders к FOR UPDATE)
+        if not s.query(domain.Deployment).filter_by(model_version_id=mv.id, status="active").first():
+            s.add(domain.Deployment(model_version_id=mv.id, status="active"))  # активен; «conditional» — в аудите/ответе
+        mvid = mv.id  # фиксируем id/имя ДО commit, не полагаемся на состояние объекта после коммита
         m = s.get(domain.Model, model_id)
         name = registry.model_name(model_id, m.name)
-        # отражаем стадию в MLflow по нашему cp_version (fail-soft)
+        s.commit()
+        # отражаем стадию в MLflow по нашему cp_version (fail-soft); рассинхрон фиксируем в аудит
         try:
             mlflow_ver = registry.find_version_by_cp(name, ver)
             if mlflow_ver is not None:
                 registry.set_version_tag(name, mlflow_ver, "stage", "prod")
         except registry.RegistryError as e:
             logger.warning("MLflow недоступен при промоуте model/%s v%s: %s", model_id, ver, e)
+            audit.append_event(actor="system", action="mlflow.sync.failed", obj=f"model/{model_id}/v{ver}")
         audit.append_event(actor=p.sub, action=("model.promote.risk-accepted" if risk_accepted else "model.promote"),
                             obj=f"model/{model_id}/v{ver}")
         return {"model_version_id": mvid, "stage": "prod", "conditional": risk_accepted}
