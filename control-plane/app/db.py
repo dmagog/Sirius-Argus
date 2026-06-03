@@ -79,6 +79,7 @@ def _install_append_only_guard():
 # чтобы не требовать пересоздания тома. Только ADD COLUMN с DEFAULT — безопасно и обратимо.
 _ADD_COLUMNS = (
     ("approvals", "decision", "ALTER TABLE approvals ADD COLUMN decision VARCHAR(16) DEFAULT 'approve'"),
+    ("findings", "role", "ALTER TABLE findings ADD COLUMN role VARCHAR(32) DEFAULT ''"),
 )
 
 

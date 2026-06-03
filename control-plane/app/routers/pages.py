@@ -54,7 +54,8 @@ def _findings_query(status="", severity=""):
             q = q.filter(domain.Finding.severity == severity)
         rows = q.order_by(domain.Finding.id.desc()).limit(200).all()
         return [{"ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
-                 "asset": f.asset_ref, "detail": f.detail, "status": f.status, "actor": f.actor} for f in rows]
+                 "asset": f.asset_ref, "detail": f.detail, "status": f.status,
+                 "actor": f.actor, "role": f.role} for f in rows]
 
 
 @router.get("/ui/findings/list", response_class=HTMLResponse)
@@ -238,7 +239,8 @@ def ui_map_incident(finding_id: int):
     with SessionLocal() as s:
         f = s.query(domain.Finding).filter_by(id=finding_id).first()
         fd = ({"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
-               "asset": f.asset_ref, "detail": f.detail, "status": f.status, "actor": f.actor} if f else None)
+               "asset": f.asset_ref, "detail": f.detail, "status": f.status,
+               "actor": f.actor, "role": f.role} if f else None)
     return ui.map_incident_fragment(fd, audit.recent(20))
 
 

@@ -48,12 +48,12 @@ def findings_table(findings):
     """Полный список сработок (SA-стиль): тяжесть/вердикт, актив, причастный (учётка+роль), статус."""
     if not findings:
         return "<div style='padding:18px;color:var(--sa-muted)'>сработок по фильтру нет</div>"
-    from ..runs import actor_role
+    from ..runs import role_of
     rows = ""
     for f in findings:
         sc = _F_SEVC.get(f["severity"], "var(--sa-muted)")
         col, bg = _F_STC.get(f["status"], ("var(--sa-muted)", "rgba(100,116,139,.16)"))
-        acct, role = actor_role(f.get("actor"))
+        acct, role = role_of(f)
         rows += (
             "<tr>"
             f"<td class='sa-mono' style='color:var(--sa-muted);white-space:nowrap'>{_e((f['ts'] or '').split('T')[-1][:8])}</td>"

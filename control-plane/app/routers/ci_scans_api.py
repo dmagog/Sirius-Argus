@@ -55,13 +55,14 @@ def _ci_gate(files):
     return findings
 
 
-def _record_ci(findings, ref, actor):
+def _record_ci(findings, ref, actor, role=""):
     if findings:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         with SessionLocal() as s:
             for r in findings:
                 s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
-                                     status="open", asset_type="ci", asset_ref=f"ci/{ref}", detail=r["detail"], actor=actor))
+                                     status="open", asset_type="ci", asset_ref=f"ci/{ref}", detail=r["detail"],
+                                     actor=actor, role=role))
             s.commit()
 
 
@@ -69,7 +70,7 @@ def _record_ci(findings, ref, actor):
 def ci_scan(body: CiScanIn, p: Principal = Depends(require("ci.scan"))):
     """CI-01: гейт «control-plane как CI» — отравленный коммит не проходит (fail-closed)."""
     findings = _ci_gate([f.model_dump() for f in body.files])
-    _record_ci(findings, body.ref, p.sub)
+    _record_ci(findings, body.ref, p.sub, p.primary_role())
     passed = not findings
     audit.append_event(actor=p.sub, action="ci.scan.passed" if passed else "ci.scan.blocked", obj=f"ci/{body.ref}")
     return {"passed": passed, "ref": body.ref, "findings": findings}
@@ -131,7 +132,7 @@ async def ci_webhook(request: Request):
     findings = _ci_gate(_fetch_changed_files(repo, sha, payload))
     passed = not findings
     _post_commit_status(repo, sha, passed, len(findings))
-    _record_ci(findings, f"{repo}@{sha[:8]}" if sha else (repo or "webhook"), "gitea-webhook")
+    _record_ci(findings, f"{repo}@{sha[:8]}" if sha else (repo or "webhook"), "gitea-webhook", "Service")
     audit.append_event(actor="gitea-webhook", action="ci.webhook.passed" if passed else "ci.webhook.blocked", obj=f"ci/{repo}")
     return {"accepted": True, "passed": passed, "findings": len(findings)}
 
@@ -148,7 +149,8 @@ async def scan_code_endpoint(request: Request, filename: str = Query("submitted.
         with SessionLocal() as s:
             for r in findings:
                 s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
-                                     status="open", asset_type="code", asset_ref=f"code/{filename}", detail=r["detail"], actor=p.sub))
+                                     status="open", asset_type="code", asset_ref=f"code/{filename}", detail=r["detail"],
+                                     actor=p.sub, role=p.primary_role()))
             s.commit()
         audit.append_event(actor=p.sub, action="code.scan.flagged", obj=f"code/{filename}")
         return {"filename": filename, "clean": False, "findings": findings}
@@ -168,7 +170,8 @@ async def scan_deps_endpoint(request: Request, filename: str = Query("requiremen
         with SessionLocal() as s:
             for r in findings:
                 s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
-                                     status="open", asset_type="deps", asset_ref=f"deps/{filename}", detail=r["detail"], actor=p.sub))
+                                     status="open", asset_type="deps", asset_ref=f"deps/{filename}", detail=r["detail"],
+                                     actor=p.sub, role=p.primary_role()))
             s.commit()
         audit.append_event(actor=p.sub, action="deps.scan.flagged", obj=f"deps/{filename}")
         return {"filename": filename, "clean": False, "findings": findings}
@@ -196,7 +199,8 @@ def scan_dataset_endpoint(body: DatasetScanIn, p: Principal = Depends(require("d
         with SessionLocal() as s:
             for r in findings:
                 s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
-                                     status="open", asset_type="dataset", asset_ref="dataset/scan", detail=r["detail"], actor=p.sub))
+                                     status="open", asset_type="dataset", asset_ref="dataset/scan", detail=r["detail"],
+                                     actor=p.sub, role=p.primary_role()))
             s.commit()
         audit.append_event(actor=p.sub, action="dataset.scan.flagged", obj="dataset/scan")
         return {"clean": False, "findings": findings}

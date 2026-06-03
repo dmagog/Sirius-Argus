@@ -63,7 +63,8 @@ async def observe_and_audit(request: Request, call_next):
                 s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                      tool="sirius-ingress", verdict="oversized-upload", severity="medium", status="open",
                                      asset_type="endpoint", asset_ref=f"endpoint{request.url.path}",
-                                     detail=f"тело {int(cl)} Б > лимита {MAX_UPLOAD_BYTES} Б — защита от resource-exhaustion (DoS)", actor="anonymous"))
+                                     detail=f"тело {int(cl)} Б > лимита {MAX_UPLOAD_BYTES} Б — защита от resource-exhaustion (DoS)",
+                                     actor="anonymous", role=""))
                 s.commit()
         except Exception:
             pass

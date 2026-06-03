@@ -49,3 +49,19 @@ def kpi_live():
 def ceo_html():
     r = httpx.get(f"{BASE}/coverage", timeout=10)
     assert r.status_code == 200 and "Карта покрытия" in r.text, r.text
+
+
+@when("DS подаёт код с опасным паттерном")
+def ds_bad_code():
+    # роль причастного должна сохраниться в сработке из Principal.roles (надёжно и в проде,
+    # где actor — UUID Keycloak, а не username)
+    S["scan"] = httpx.post(f"{BASE}/api/scan/code", headers=tok("DS"), params={"filename": "role-demo.py"},
+                           content=b"import os\ndef t(p):\n    os.system('x')\n    return eval(p)\n", timeout=15)
+
+
+@then("у этой сработки сохранена роль причастного DS")
+def role_stored():
+    assert S["scan"].status_code == 200 and S["scan"].json()["clean"] is False, S["scan"].text
+    rows = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=10).json()["findings"]
+    mine = [f for f in rows if (f.get("asset") or "").startswith("code/role-demo.py")]
+    assert mine and all(f.get("role") == "DS" for f in mine), mine

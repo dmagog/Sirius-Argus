@@ -78,7 +78,8 @@ def create_dataset(body: DatasetIn, p: Principal = Depends(require("dataset.crea
             s.add(domain.Finding(ts=now, tool="sirius-source-policy", verdict="untrusted-source",
                                  severity="medium", status="open", asset_type="dataset",
                                  asset_ref=f"dataset/{ds.id}",
-                                 detail=f"источник '{body.source or '—'}' не в доверенном списке → карантин", actor=p.sub))
+                                 detail=f"источник '{body.source or '—'}' не в доверенном списке → карантин",
+                                 actor=p.sub, role=p.primary_role()))
         s.commit()
         audit.append_event(actor=p.sub, action=f"dataset.create:{status}", obj=f"dataset/{ds.id}")
         return {"dataset_id": ds.id, "dataset_version_id": dv.id, "sensitivity": ds.sensitivity, "status": status}
@@ -385,7 +386,8 @@ async def verify_artifact_endpoint(model_id: int, ver: int, request: Request, p:
             s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                  tool="sirius-integrity", verdict="artifact-tampered", severity="critical",
                                  status="open", asset_type="model", asset_ref=f"model/{model_id}/v{ver}",
-                                 detail="hash при загрузке ≠ зарегистрированного (TOCTOU-01/SUP-05)", actor=p.sub))
+                                 detail="hash при загрузке ≠ зарегистрированного (TOCTOU-01/SUP-05)",
+                                 actor=p.sub, role=p.primary_role()))
             s.commit()
             audit.append_event(actor=p.sub, action="artifact.tamper.detected", obj=f"model/{model_id}/v{ver}", was_authorized=False)
             raise HTTPException(status_code=409, detail="artifact integrity violation (TOCTOU-01/SUP-05): hash mismatch")
@@ -422,7 +424,8 @@ def verify_prod_signatures(p: Principal = Depends(require("prod.verify"))):
                 s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                      tool="sirius-prod-verify", verdict="prod-artifact-tampered", severity="critical",
                                      status="open", asset_type="model", asset_ref=f"model/{model_id}/v{ver}",
-                                     detail=f"прод-ре-верификация: {reason} (MON-05)", actor=p.sub))
+                                     detail=f"прод-ре-верификация: {reason} (MON-05)",
+                                     actor=p.sub, role=p.primary_role()))
                 s.commit()
             audit.append_event(actor=p.sub, action="prod.verify.tampered", obj=f"model/{model_id}/v{ver}", was_authorized=False)
     audit.append_event(actor=p.sub, action="prod.verify.run", obj=f"checked={checked} tampered={len(tampered)}")
@@ -484,7 +487,8 @@ def export_model(model_id: int, p: Principal = Depends(require("registry.read"))
                 s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                      tool="sirius-exfil", verdict="bulk-exfiltration", severity="high",
                                      status="open", asset_type="actor", asset_ref=f"actor/{p.sub}",
-                                     detail=f"{count} выгрузок за {int(_EXPORT_WINDOW_S)}s", actor=p.sub))
+                                     detail=f"{count} выгрузок за {int(_EXPORT_WINDOW_S)}s",
+                                     actor=p.sub, role=p.primary_role()))
                 s.commit()
         audit.append_event(actor=p.sub, action="exfil.blocked", obj=f"actor/{p.sub}", was_authorized=False)
         raise HTTPException(status_code=429, detail=f"bulk export limit: {count} за {int(_EXPORT_WINDOW_S)}s — троттлинг (EXF-01)")
@@ -561,7 +565,7 @@ async def ingest_model(model_id: int, request: Request, p: Principal = Depends(r
         for r in assessment["findings"]:
             s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
                                  status="open", asset_type="model", asset_ref=f"model/{model_id}",
-                                 detail=r["detail"], actor=p.sub))
+                                 detail=r["detail"], actor=p.sub, role=p.primary_role()))
         if not assessment["admit"]:
             s.commit()
             audit.append_event(actor=p.sub, action="model.ingest.blocked", obj=f"model/{model_id}")

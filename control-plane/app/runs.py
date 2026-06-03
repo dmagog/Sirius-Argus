@@ -45,6 +45,19 @@ def actor_role(actor):
     return account, "—"
 
 
+def role_of(item):
+    """(account, role) для отображения «причастен». Предпочитает РОЛЬ, сохранённую в записи
+    (Finding.role) — она надёжна и в проде, где actor = UUID Keycloak; иначе fallback на
+    эвристику actor_role по actor (старые записи / не-Finding акторы)."""
+    if isinstance(item, dict):
+        actor = item.get("actor")
+        stored = (item.get("role") or "").strip()
+        if stored:
+            return ((actor or "").strip() or "—"), stored
+        return actor_role(actor)
+    return actor_role(item)
+
+
 def _crit(criticality):
     return criticality if criticality in ("regulatory", "financial") else "internal"
 
@@ -216,7 +229,7 @@ def run_detail(run_id):
                   .order_by(domain.Finding.id.desc()).all())
         findings = [{"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict,
                      "severity": f.severity, "status": f.status, "asset": f.asset_ref,
-                     "detail": f.detail, "actor": f.actor} for f in f_rows]
+                     "detail": f.detail, "actor": f.actor, "role": f.role} for f in f_rows]
         ver_obj = f"model/{mv.model_id}/v{mv.version}"
         log = []
         for ev in s.query(AuditEvent).filter(AuditEvent.obj == ver_obj).order_by(AuditEvent.id.asc()).all():

@@ -39,10 +39,29 @@ def _jwks():
     return _jwks_client
 
 
+# Приоритет ролей для выбора одной «основной» (субъект в проде может иметь несколько realm-ролей).
+# Порядок: сначала роли контроля/решений, затем разработки, затем системный актор.
+_ROLE_PRIORITY = ("MLSecOps", "CEO", "Product", "DE", "DS", "Service")
+
+
+def primary_role(roles) -> str:
+    """Одна «основная» роль из набора ролей субъекта — для записи в Finding.role.
+    Делает «кто причастен» точным и в проде (где sub — UUID Keycloak, а не username).
+    Пусто, если ни одной известной роли нет (anonymous/системные пути без роли)."""
+    rs = set(roles or ())
+    for r in _ROLE_PRIORITY:
+        if r in rs:
+            return r
+    return ""
+
+
 class Principal:
     def __init__(self, sub: str, roles):
         self.sub = sub
         self.roles = set(roles)
+
+    def primary_role(self) -> str:
+        return primary_role(self.roles)
 
 
 def get_principal(authorization: str = Header(default="")) -> "Principal":

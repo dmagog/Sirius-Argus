@@ -501,7 +501,7 @@ def _hitl_panel(sel_run, detail):
 def _inspector_inner(sel_run, detail):
     """Внутренность правой колонки инспектора (шапка прогона + HITL-панель + lineage +
     сработки + терминальный лог). Выделено, чтобы тем же кодом рендерить HTMX-рефреш."""
-    from ..runs import actor_role
+    from ..runs import actor_role, role_of
     detail = detail or {}
     if not sel_run:
         return "<div style='padding:18px;color:var(--sa-muted);font-size:13px'>выберите прогон слева</div>"
@@ -517,7 +517,7 @@ def _inspector_inner(sel_run, detail):
     if dfs:
         fcards = ""
         for f in dfs:
-            fa, fr = actor_role(f.get("actor"))
+            fa, fr = role_of(f)
             sc = _SEVC.get(f["severity"], "var(--sa-muted)")
             fcards += (
                 f"<div class='sa-fcard'><div style='display:flex;align-items:center;gap:7px;flex-wrap:wrap'>"
@@ -679,8 +679,8 @@ def map_incident_fragment(finding, audit_rows):
     f = finding
     head = (f"<div class='flex items-center gap-2 mb-2'><span class='px-2 py-0.5 rounded text-xs {_SEV.get(f['severity'], 'bg-slate-100')}'>{_e(f['severity'])}</span>"
             f"<b>{_e(f['verdict'])}</b><span class='text-slate-400 text-xs'>· {_e(f['tool'])} · {_e(f['ts'])}</span></div>")
-    from ..runs import actor_role
-    acct, role = actor_role(f.get("actor"))
+    from ..runs import role_of
+    acct, role = role_of(f)
     meta = (f"<div class='text-sm text-slate-600 mb-1'>Актив: <span class='font-mono text-xs'>{_e(f['asset'])}</span></div>"
             f"<div class='text-sm text-slate-600 mb-1'>Причастен: <b>{_e(acct)}</b> "
             f"<span class='font-mono text-xs text-amber-600'>{_e(role)}</span></div>"

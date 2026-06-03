@@ -43,7 +43,7 @@ def runtime_event(body: RuntimeEventIn, p: Principal = Depends(require("runtime.
     with SessionLocal() as s:
         s.add(domain.Finding(ts=now, tool="sirius-runtime", verdict=body.type, severity="high",
                              status="open", asset_type="endpoint", asset_ref=f"endpoint/{body.endpoint}",
-                             detail=f"client={body.client} count={body.count}", actor=p.sub))
+                             detail=f"client={body.client} count={body.count}", actor=p.sub, role=p.primary_role()))
         s.commit()
     audit.append_event(actor=p.sub, action=f"runtime.{body.type}", obj=f"endpoint/{body.endpoint}")
     return {"recorded": True, "type": body.type}
@@ -55,7 +55,7 @@ def list_findings(p: Principal = Depends(require("finding.read"))):
         rows = s.query(domain.Finding).order_by(domain.Finding.id.desc()).all()
         return {"findings": [{"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict,
                               "severity": f.severity, "status": f.status, "asset": f.asset_ref,
-                              "detail": f.detail} for f in rows]}
+                              "detail": f.detail, "actor": f.actor, "role": f.role} for f in rows]}
 
 
 class TriageIn(BaseModel):

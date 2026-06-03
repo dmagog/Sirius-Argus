@@ -85,7 +85,8 @@ class Finding(Base):
     asset_type = Column(String(32), default="")          # model | dataset | pr | endpoint
     asset_ref = Column(String(128), default="")
     detail = Column(Text, default="")
-    actor = Column(String(255), default="")
+    actor = Column(String(255), default="")               # субъект (sub): в demo — username, в проде — UUID Keycloak
+    role = Column(String(32), default="")                 # роль причастного на момент сработки (из Principal.roles) — надёжный резолв в проде
 
 
 class Approval(Base):
