@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from .. import audit, bus, domain, mapnodes, registry, scanners, signing, storage, ui
+from .. import audit, bus, domain, mapnodes, registry, runs, scanners, signing, storage, ui
 from ..auth import Principal, get_principal, revoke
 from ..db import AuditEvent, SessionLocal
 from ..rbac import PERMISSIONS, can_read_sensitivity, require
@@ -22,7 +22,13 @@ logger = logging.getLogger("sirius")
 router = APIRouter()
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/")
+def home():
+    """Стартовый экран = пайплайн (обзор контура): он отражает ценность платформы."""
+    return RedirectResponse(url="/map", status_code=307)
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
     """Read-only ops-консоль: KPI + live-сработки/аудит (HTMX). API /api/* — под authN/RBAC."""
     return ui.dashboard(_coverage_data()["kpi"])
@@ -179,14 +185,18 @@ def map_status():
 
 
 @router.get("/map/node/{node_id}", response_class=HTMLResponse)
-def map_node_view(node_id: str):
-    """Инспектор узла (full-bleed оболочка): рейл + шапка узла + сработки + аудит."""
+def map_node_view(node_id: str, run: str = ""):
+    """Инспектор узла: рейл + шапка + очередь прогонов (ModelVersion) + инспектор выбранного
+    прогона (lineage + сработки с причастным + лог). ?run=RUN-<id> — выбор прогона."""
     st = _map_status_dict()
     pipeline = [{"id": nid, "label": lbl, "gate": gate, **st[nid]} for nid, lbl, gate in mapnodes.PIPELINE]
     infra = [{"id": nid, "label": lbl, **st[nid]} for nid, lbl in mapnodes.INFRA]
     alln = {n["id"]: n for n in pipeline + infra}
     node = alln.get(node_id) or pipeline[0]
-    return ui.map_inspector_page(node, pipeline, infra, _node_findings(node_id), audit.recent(20))
+    rlist = runs.runs_for_node(node_id)
+    sel = next((r for r in rlist if r["id"] == run), (rlist[0] if rlist else None))
+    detail = runs.run_detail(sel["id"]) if sel else {}
+    return ui.map_inspector_page(node, pipeline, infra, rlist, sel, detail)
 
 
 @router.get("/ui/map/node/{node_id}", response_class=HTMLResponse)
@@ -203,7 +213,7 @@ def ui_map_incident(finding_id: int):
     with SessionLocal() as s:
         f = s.query(domain.Finding).filter_by(id=finding_id).first()
         fd = ({"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
-               "asset": f.asset_ref, "detail": f.detail, "status": f.status} if f else None)
+               "asset": f.asset_ref, "detail": f.detail, "status": f.status, "actor": f.actor} if f else None)
     return ui.map_incident_fragment(fd, audit.recent(20))
 
 

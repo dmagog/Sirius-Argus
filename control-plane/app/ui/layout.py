@@ -162,7 +162,7 @@ def _e(s):
 
 _NAV = (
     ("/map", "Пайплайн", "map"),
-    ("/", "Дашборд", "dashboard"),
+    ("/dashboard", "Дашборд", "dashboard"),
     ("/registry", "Реестр", "registry"),
     ("/findings", "Сработки", "findings"),
     ("/coverage", "Карта покрытия", "coverage"),

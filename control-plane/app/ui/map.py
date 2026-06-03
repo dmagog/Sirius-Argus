@@ -21,6 +21,10 @@ _LVL = {"info": "var(--sa-text2)", "ok": "var(--sa-ok)", "warn": "var(--sa-warn)
         "err": "var(--sa-alert)", "sec": "var(--sa-accent-ink)"}
 _SEVC = {"critical": "var(--sa-alert)", "high": "#fb923c", "medium": "var(--sa-warn)",
          "low": "var(--sa-muted)", "info": "var(--sa-muted)"}
+# Bootstrap-иконки разделов верхнего уровня (по ключу _NAV).
+_NAV_ICON = {"map": "bi-diagram-3", "dashboard": "bi-speedometer2", "registry": "bi-box-seam",
+             "findings": "bi-exclamation-triangle", "coverage": "bi-shield-check",
+             "serving": "bi-hdd-network", "services": "bi-hdd-stack", "roles": "bi-people"}
 
 
 def _sa_css():
@@ -61,6 +65,12 @@ def _sa_css():
         ".sa-filter input{width:100%;padding:7px 9px 7px 26px;font-size:11.5px;color:var(--sa-text);background:var(--sa-panel);border:1px solid var(--sa-line);border-radius:8px;outline:none;}"
         ".sa-filter input:focus{border-color:var(--sa-accent);}"
         ".sa-raillbl{font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;padding:14px 9px 8px;}"
+        ".bi{line-height:1;vertical-align:-.05em;}"
+        ".sa-sec{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;text-decoration:none;color:var(--sa-text2);font-size:12.5px;}"
+        ".sa-sec i{font-size:14px;width:18px;text-align:center;color:var(--sa-muted);flex:none;}"
+        ".sa-sec:hover{background:var(--sa-panel);color:var(--sa-text);}"
+        ".sa-sec.on{background:var(--sa-panel3);box-shadow:inset 3px 0 0 var(--sa-accent);color:var(--sa-head);font-weight:600;}"
+        ".sa-sec.on i{color:var(--sa-accent-ink);}"
         ".sa-stage{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;margin-bottom:2px;text-decoration:none;}"
         ".sa-stage:hover{background:var(--sa-panel);}.sa-stage.on{background:var(--sa-panel3);box-shadow:inset 3px 0 0 var(--sa-accent);}"
         ".sa-stage .ix{font-size:9.5px;width:15px;text-align:center;flex:none;}"
@@ -117,6 +127,9 @@ def _sa_css():
         # ── инспектор-lite ──
         ".sa-insp{padding:18px 22px;}.sa-chip{font-size:10.5px;color:var(--sa-text2);border:1px solid var(--sa-line);border-radius:6px;padding:3px 8px;}"
         ".sa-fcard{border:1px solid var(--sa-line);border-radius:10px;padding:11px 13px;background:var(--sa-panel);margin-bottom:8px;}"
+        ".sa-runcard{display:block;border:1px solid var(--sa-line);border-radius:11px;padding:11px 13px;margin-bottom:8px;text-decoration:none;transition:border-color .15s,box-shadow .15s;}"
+        ".sa-runcard:hover{border-color:var(--sa-accent);}"
+        ".sa-lin{display:flex;justify-content:space-between;gap:10px;padding:7px 11px;}.sa-lin+.sa-lin{border-top:1px solid var(--sa-line);}"
         ".sa-badge{font-size:10px;font-weight:700;border-radius:5px;padding:2px 6px;}"
         "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content{animation:none!important}}"
         "</style>"
@@ -133,7 +146,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         on = " on" if active == n["id"] else ""
         st = n.get("status", "clean")
         col = _SC.get(st, "var(--sa-muted)")
-        ix = "◇" if n.get("gate") else f"{idx+1:02d}"
+        ix = "<i class='bi bi-diamond-fill'></i>" if n.get("gate") else f"{idx+1:02d}"
         ixcol = "var(--sa-accent-ink)" if n.get("gate") else "var(--sa-muted)"
         open_n = n.get("open") or 0
         if open_n:
@@ -141,7 +154,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
             br = "rgba(239,68,68,.4)" if st == "alert" else "rgba(245,158,11,.4)" if st == "warn" else "transparent"
             cnt = f"<span class='cnt sa-mono' style='color:{col};background:{bg};border:1px solid {br}'>{open_n}</span>"
         else:
-            cnt = "<span class='ok sa-mono'>✓</span>"
+            cnt = "<span class='ok'><i class='bi bi-check2'></i></span>"
         return (f"<a class='sa-stage{on}' data-f='{_e((SHORT.get(n['id'],n['label'])+' '+n['label']).lower())}' href='/map/node/{_e(n['id'])}'>"
                 f"<span class='sa-led' style='width:8px;height:8px;--c:{col}'></span>"
                 f"<span class='ix sa-mono' style='color:{ixcol}'>{ix}</span>"
@@ -156,25 +169,26 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
                 f"<span class='sa-led' style='width:7px;height:7px;--c:{col}'></span>"
                 f"<span class='nm'>{_e(n['label'])}</span>{cnt}</a>")
 
+    sec_rows = "".join(
+        f"<a class='sa-sec{(' on' if k=='map' else '')}' href='{h}'>"
+        f"<i class='bi {_NAV_ICON.get(k, 'bi-dot')}'></i><span>{_e(l)}</span></a>"
+        for h, l, k in _NAV)
     rail = (
         "<nav class='sa-rail'>"
-        "<a class='sa-brand' href='/' title='к разделам'>"
+        "<a class='sa-brand' href='/map' title='Sirius Argus'>"
         "<span class='star'><img src='/static/avatar.png' alt='' style='width:26px;height:26px;border-radius:999px'></span>"
         "<span><span class='t1'>Sirius Argus</span><span class='t2'>MLSecOps Platform</span></span></a>"
-        "<div style='padding:12px 12px 6px'>"
+        f"<div style='padding:10px 12px 6px'><div class='sa-raillbl' style='padding:2px 9px 6px'>Разделы</div>{sec_rows}</div>"
+        "<div style='padding:6px 12px;border-top:1px solid var(--sa-line)'>"
         f"<a class='sa-railitem{(' on' if active=='overview' else '')}' href='/map'>"
-        "<span class='ic'>◎</span><span style='min-width:0'><span class='l1'>Обзор контура</span><span class='l2'>граф ЖЦ · живой поток</span></span></a></div>"
-        "<div style='padding:2px 14px 8px'><div class='sa-filter'><span>⌕</span>"
+        "<span class='ic'><i class='bi bi-bullseye'></i></span><span style='min-width:0'><span class='l1'>Обзор контура</span><span class='l2'>граф ЖЦ · живой поток</span></span></a></div>"
+        "<div style='padding:2px 14px 8px'><div class='sa-filter'><span><i class='bi bi-search'></i></span>"
         "<input class='sa-mono' id='sa-railfilter' placeholder='Фильтр узлов…' spellcheck=false oninput='saFilter(this.value)'></div></div>"
         "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:0 12px 10px;min-height:0'>"
         "<div class='sa-raillbl' style='padding-top:4px'>Конвейер ЖЦ</div>"
         + "".join(stage_row(n, i) for i, n in enumerate(pipeline))
         + "<div class='sa-raillbl'>Инфраструктура</div>"
         + "".join(infra_row(n) for n in infra)
-        + "<div class='sa-raillbl'>Разделы</div>"
-        + "".join(f"<a class='sa-infra' href='{h}'><span class='nm'>{_e(l)}</span>"
-                  f"<span style='color:var(--sa-line2);font-size:11px;flex:none'>↗</span></a>"
-                  for h, l, k in _NAV if k != "map")
         + "</div>"
         f"<div class='sa-railfoot'><span class='sa-mono'>argus · prod</span><span class='sa-mono'>{nnodes} узлов</span></div></nav>"
     )
@@ -195,6 +209,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         f"<title>{_e(title)}</title><link rel=icon type=image/png href='/static/avatar.png'>"
         "<link rel=preconnect href='https://fonts.googleapis.com'><link rel=preconnect href='https://fonts.gstatic.com' crossorigin>"
         "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap' rel=stylesheet>"
+        "<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css' rel=stylesheet>"
         '<script src="https://unpkg.com/htmx.org@2.0.3"></script>'
         f"{_sa_css()}</head><body>"
         f"<div class='sa-app'>{rail}<div class='sa-main'>{topbar}"
@@ -355,48 +370,150 @@ _OV_JS = r"""
 """
 
 
-def map_inspector_page(node, pipeline, infra, findings, audit_rows):
-    """Инспектор узла (stage A): шапка + контроли + сработки узла + хвост аудита (SA-стиль).
-    Очередь прогонов (ModelVersion) и инспектор прогона — stage B."""
+_RUNSTATE = {"blocked": ("var(--sa-alert)", "BLOCKED"), "failed": ("var(--sa-alert)", "FAILED"),
+             "running": ("var(--sa-blue)", "RUNNING"), "hitl": ("var(--sa-warn)", "HITL"),
+             "hold": ("var(--sa-warn)", "HOLD"), "passed": ("var(--sa-ok)", "PASSED"),
+             "retired": ("var(--sa-muted)", "RETIRED")}
+_CRITB = {"regulatory": "var(--sa-alert)", "financial": "#fb923c", "internal": "var(--sa-muted)"}
+
+
+def _rs_badge(state):
+    c, t = _RUNSTATE.get(state, _RUNSTATE["passed"])
+    return f"<span class='sa-mono' style='font-size:10.5px;font-weight:700;letter-spacing:.5px;color:{c};border:1px solid {c};border-radius:5px;padding:1px 6px'>{t}</span>"
+
+
+def _crit_badge(crit):
+    c = _CRITB.get(crit, "var(--sa-muted)")
+    return f"<span class='sa-mono' style='font-size:9.5px;font-weight:700;color:{c};border:1px solid {c};border-radius:5px;padding:1px 5px;opacity:.9'>{_e(crit)}</span>"
+
+
+def map_inspector_page(node, pipeline, infra, runs, sel_run, detail):
+    """Инспектор узла (stage B): шапка узла + очередь прогонов (ModelVersion) + инспектор
+    прогона (lineage MON-02 + сработки с причастным «учётка (роль)» + терминальный лог)."""
+    from ..runs import actor_role
     nid = node["id"]
     st = node.get("status", "clean")
     controls = CONTROLS.get(nid, [])
+    runs = runs or []
+    detail = detail or {}
+    pidx = {n["id"]: i for i, n in enumerate(pipeline)}
+    sel_id = sel_run["id"] if sel_run else (runs[0]["id"] if runs else None)
+
+    def short_t(ts):
+        return (ts or "").split("T")[-1][:8]
+
+    def track(run):
+        ri = pidx.get(run["node"], 0)
+        segs = ""
+        for i in range(len(pipeline)):
+            col = "var(--sa-ok)" if i < ri else (_RUNSTATE.get(run["state"], ("var(--sa-muted)",))[0] if i == ri else "var(--sa-line2)")
+            glow = f"box-shadow:0 0 6px 0 {col}" if i == ri else ""
+            segs += f"<span style='height:4px;flex:1;border-radius:2px;background:{col};{glow}'></span>"
+        return f"<div style='display:flex;gap:3px;margin-top:10px'>{segs}</div>"
+
+    # ── очередь прогонов ──
+    if runs:
+        cards = ""
+        for r in runs:
+            sel = r["id"] == sel_id
+            border = "var(--sa-accent)" if sel else "var(--sa-line)"
+            bg = "var(--sa-panel3)" if sel else "var(--sa-panel)"
+            shadow = "box-shadow:0 4px 18px -8px rgba(250,204,21,.4)" if sel else ""
+            fc = (f"<span class='sa-mono' style='font-size:11px;color:var(--sa-warn)'>● {r['findings']}</span>"
+                  if r["findings"] else "<span class='sa-mono' style='font-size:11px;color:var(--sa-ok)'>clean</span>")
+            cards += (
+                f"<a class='sa-runcard' href='/map/node/{_e(nid)}?run={_e(r['id'])}' style='border-color:{border};background:{bg};{shadow}'>"
+                f"<div style='display:flex;align-items:center;gap:9px;flex-wrap:wrap'>{_rs_badge(r['state'])}"
+                f"<span class='sa-mono' style='font-size:12.5px;font-weight:700;color:var(--sa-head)'>{_e(r['id'])}</span>"
+                f"<span style='font-size:12.5px;color:var(--sa-text)'>{_e(r['model'])} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(r['ver'])}</span></span>"
+                f"{_crit_badge(r['crit'])}<span style='flex:1'></span>{fc}</div>{track(r)}"
+                f"<div style='display:flex;justify-content:space-between;margin-top:7px'>"
+                f"<span class='sa-mono' style='font-size:10.5px;color:var(--sa-text2)'>@ {_e(SHORT.get(r['node'], r['node']))}</span>"
+                f"<span class='sa-mono' style='font-size:10.5px;color:var(--sa-muted)'>start {_e(short_t(r['started']))} · {_e(r['dur'])} · {_e(r['actor'])}</span></div></a>")
+    else:
+        cards = "<div style='font-size:12px;color:var(--sa-muted);padding:8px 2px'>прогонов в контуре нет</div>"
+
+    # ── инспектор прогона (правая колонка) ──
+    if sel_run:
+        c0, _t = _RUNSTATE.get(sel_run["state"], _RUNSTATE["passed"])
+        acct, role = actor_role(sel_run["actor"])
+        lin = detail.get("lineage", {})
+        lin_rows = "".join(
+            f"<div class='sa-lin'><span class='sa-mono' style='font-size:11px;color:var(--sa-text2)'>{k}</span>"
+            f"<span class='sa-mono' style='font-size:11px;color:{'var(--sa-alert)' if v=='—' else 'var(--sa-text)'};text-align:right;word-break:break-all'>{_e(v)}</span></div>"
+            for k, v in [("dataset", lin.get("dataset", "—")), ("code_commit", lin.get("code_commit", "—")),
+                         ("env_lock", lin.get("env_lock", "—")), ("artifact_hash", lin.get("artifact_hash", "—")),
+                         ("signature", lin.get("signature", "—"))])
+        dfs = detail.get("findings", [])
+        if dfs:
+            fcards = ""
+            for f in dfs:
+                fa, fr = actor_role(f.get("actor"))
+                sc = _SEVC.get(f["severity"], "var(--sa-muted)")
+                fcards += (
+                    f"<div class='sa-fcard'><div style='display:flex;align-items:center;gap:7px;flex-wrap:wrap'>"
+                    f"<span class='sa-badge sa-mono' style='color:{sc};background:rgba(148,163,184,.12)'>{_e(f['severity'])}</span>"
+                    f"<span class='sa-mono' style='font-size:11.5px;font-weight:600;color:{sc}'>{_e(f['verdict'])}</span>"
+                    f"<span style='flex:1'></span><span class='sa-badge sa-mono' style='color:var(--sa-text2);border:1px solid var(--sa-line)'>{_e(f['status'])}</span></div>"
+                    f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:5px'>{_e(f['tool'])} · {_e(f['asset'])}</div>"
+                    f"<div style='font-size:11.5px;color:var(--sa-text2);margin-top:5px;line-height:1.45'>{_e(f['detail'])}</div>"
+                    f"<div class='sa-mono' style='font-size:10px;color:var(--sa-text2);margin-top:6px'>причастен: {_e(fa)} "
+                    f"<span style='color:var(--sa-accent-ink);font-weight:600'>{_e(fr)}</span></div></div>")
+        else:
+            fcards = "<div style='font-size:12px;color:var(--sa-muted);padding:4px 0'>сработок нет — прогон чист</div>"
+        log = detail.get("log", [])
+        log_lines = "".join(
+            f"<div class='sa-tl'><span class='t'>{_e(l['t'])}</span>"
+            f"<span class='src' style='color:{_LVL.get(l['lvl'],'var(--sa-text2)')}'>{_e(l['src'])}</span>"
+            f"<span style='color:{_LVL[l['lvl']] if l['lvl'] in ('err','sec') else '#cbd5e1'}'>{_e(l['msg'])}</span></div>"
+            for l in log) or "<div style='color:var(--sa-muted);font-size:12px'>// лог пуст</div>"
+        inspector = (
+            "<div style='padding:14px 16px;border-bottom:1px solid var(--sa-line);flex:none'>"
+            "<div style='display:flex;align-items:center;justify-content:space-between'>"
+            "<span style='font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600'>Инспектор прогона</span>"
+            f"{_rs_badge(sel_run['state'])}</div>"
+            f"<div style='display:flex;align-items:baseline;gap:8px;margin-top:8px'>"
+            f"<span class='sa-mono' style='font-size:16px;font-weight:700;color:var(--sa-head)'>{_e(sel_run['id'])}</span>"
+            f"<span style='font-size:13px;color:var(--sa-text)'>{_e(sel_run['model'])} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(sel_run['ver'])}</span></span></div>"
+            f"<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>{_crit_badge(sel_run['crit'])}"
+            f"<span class='sa-chip'>причастен: {_e(acct)} · {_e(role)}</span></div></div>"
+            "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:12px 16px;min-height:0'>"
+            "<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Lineage · воспроизводимость (MON-02)</div>"
+            f"<div style='border:1px solid var(--sa-line);border-radius:10px;background:var(--sa-panel);overflow:hidden;margin-bottom:14px'>{lin_rows}</div>"
+            f"<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Сработки прогона ({len(dfs)})</div>{fcards}</div>"
+            "<div style='padding:12px;border-top:1px solid var(--sa-line);flex:none'>"
+            f"<div class='sa-term'><div class='sa-term-h'><i style='background:#ef4444'></i><i style='background:#f59e0b'></i><i style='background:#10b981'></i>"
+            f"<span class='sa-mono' style='font-size:10.5px;color:var(--sa-text2)'>{_e(sel_run['id'])}.log</span></div>"
+            f"<div class='sa-term-b sa-scroll sa-mono' style='max-height:200px'>{log_lines}</div></div></div>"
+        )
+    else:
+        inspector = "<div style='padding:18px;color:var(--sa-muted);font-size:13px'>выберите прогон слева</div>"
+
     gate_tag = ("<span class='sa-mono' style='font-size:8.5px;font-weight:800;color:var(--sa-bg);background:var(--sa-accent);border-radius:4px;padding:2px 6px'>FAIL-CLOSED</span>"
                 if node.get("gate") else "")
     prev_tag = "<span class='sa-chip'>preventive</span>" if nid in PREVENTIVE else ""
     chips = "".join(f"<span class='sa-chip'>{_e(c)}</span>" for c in controls) or "<span style='font-size:11.5px;color:var(--sa-muted)'>инфраструктурный узел контура</span>"
-    if findings:
-        fcards = "".join(
-            f"<div class='sa-fcard'><div style='display:flex;align-items:center;gap:7px;flex-wrap:wrap'>"
-            f"<span class='sa-badge sa-mono' style='color:{_SEVC.get(f['severity'],'var(--sa-muted)')};background:rgba(148,163,184,.12)'>{_e(f['severity'])}</span>"
-            f"<span class='sa-mono' style='font-size:11.5px;font-weight:600;color:{_SEVC.get(f['severity'],'var(--sa-text)')}'>{_e(f['verdict'])}</span>"
-            f"<span style='flex:1'></span><span class='sa-badge sa-mono' style='color:var(--sa-text2);border:1px solid var(--sa-line)'>{_e(f['status'])}</span></div>"
-            f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:5px'>{_e(f['tool'])} · {_e(f['asset'])}</div>"
-            f"<div style='font-size:11.5px;color:var(--sa-text2);margin-top:5px;line-height:1.45'>{_e(f['detail'])}</div></div>"
-            for f in findings)
-    else:
-        fcards = "<div style='font-size:12px;color:var(--sa-muted);padding:6px 0'>сработок на узле нет — контроль спокоен</div>"
-    # лог из аудита
-    log_lines = "".join(
-        f"<div class='sa-tl'><span class='t'>{_e((getattr(a,'ts','') or '').split('T')[-1][:8])}</span>"
-        f"<span class='src' style='color:var(--sa-text2)'>{_e(getattr(a,'actor','-'))}</span>"
-        f"<span style='color:#cbd5e1'>{_e(getattr(a,'action',''))}</span></div>" for a in (audit_rows or [])) or "<div style='color:var(--sa-muted);font-size:12px'>// событий нет</div>"
+    qtitle = "Прогоны на узле" if nid in {"package", "validate", "serving", "decommission", "gate-artifact"} else "Очередь прогонов контура"
     content = (
-        "<div class='sa-insp'>"
+        "<div style='display:flex;flex-direction:column;height:100%'>"
+        # шапка узла
+        "<div style='flex:none;padding:14px 22px 13px;border-bottom:1px solid var(--sa-line);background:var(--sa-panel2)'>"
         "<div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap'>"
         f"<span class='sa-led' style='width:12px;height:12px;--c:{_SC.get(st,'var(--sa-muted)')}'></span>"
         f"<h2 style='margin:0;font-size:18px;font-weight:700;color:var(--sa-head)'>{_e(node['label'])}</h2>{gate_tag}{prev_tag}"
-        f"<span style='flex:1'></span><span style='font-size:12px;color:var(--sa-text2)'>{len(controls)} контролей · сработок: {len(findings)}</span></div>"
-        f"<div style='display:flex;flex-wrap:wrap;gap:6px;margin-top:11px'>{chips}</div>"
-        "<div style='display:grid;grid-template-columns:1fr 380px;gap:16px;margin-top:18px;align-items:start'>"
-        f"<div><div class='sa-eye' style='margin-bottom:10px'>Сработки узла ({len(findings)})</div>{fcards}"
-        "<div style='font-size:11px;color:var(--sa-muted);margin-top:8px'>Очередь прогонов узла (ModelVersion'ы) — следующий этап</div></div>"
-        "<div class='sa-term'><div class='sa-term-h'><i style='background:#ef4444'></i><i style='background:#f59e0b'></i><i style='background:#10b981'></i>"
-        "<span class='sa-mono' style='font-size:10.5px;color:var(--sa-text2)'>аудит · хвост узла</span></div>"
-        f"<div class='sa-term-b sa-scroll sa-mono' style='max-height:420px'>{log_lines}</div></div></div></div>"
+        f"<span style='flex:1'></span><span style='font-size:12px;color:var(--sa-text2)'>{len(runs)} прогон(ов) · {len(controls)} контролей</span></div>"
+        f"<div style='display:flex;flex-wrap:wrap;gap:6px;margin-top:10px'>{chips}</div></div>"
+        # тело: очередь + инспектор
+        "<div style='flex:1;min-height:0;display:flex;overflow:hidden'>"
+        "<div style='flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden'>"
+        f"<div style='padding:12px 18px 6px;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-text2);font-weight:600'>{qtitle}</div>"
+        f"<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:4px 16px 16px'>{cards}</div></div>"
+        "<div style='width:384px;flex:none;border-left:1px solid var(--sa-line);background:var(--sa-panel2);display:flex;flex-direction:column;overflow:hidden'>"
+        f"{inspector}</div></div></div>"
     )
     breadcrumb = (
-        "<a class='sa-back' href='/map'>← Обзор</a><span style='color:var(--sa-line2)'>▸</span>"
+        "<a class='sa-back' href='/map'><i class='bi bi-arrow-left'></i> Обзор</a>"
+        "<i class='bi bi-chevron-right' style='color:var(--sa-line2);font-size:11px'></i>"
         f"<span class='sa-led' style='width:9px;height:9px;--c:{_SC.get(st,'var(--sa-muted)')}'></span>"
         f"<span class='h'>{_e(node['label'])}</span>{gate_tag}"
     )
@@ -439,7 +556,11 @@ def map_incident_fragment(finding, audit_rows):
     f = finding
     head = (f"<div class='flex items-center gap-2 mb-2'><span class='px-2 py-0.5 rounded text-xs {_SEV.get(f['severity'], 'bg-slate-100')}'>{_e(f['severity'])}</span>"
             f"<b>{_e(f['verdict'])}</b><span class='text-slate-400 text-xs'>· {_e(f['tool'])} · {_e(f['ts'])}</span></div>")
+    from ..runs import actor_role
+    acct, role = actor_role(f.get("actor"))
     meta = (f"<div class='text-sm text-slate-600 mb-1'>Актив: <span class='font-mono text-xs'>{_e(f['asset'])}</span></div>"
+            f"<div class='text-sm text-slate-600 mb-1'>Причастен: <b>{_e(acct)}</b> "
+            f"<span class='font-mono text-xs text-amber-600'>{_e(role)}</span></div>"
             f"<div class='text-sm text-slate-600 mb-3'>Что произошло: {_e(f['detail'])}</div>")
     tl = audit_fragment(audit_rows) if audit_rows else "<div class='p-3 text-slate-400 text-sm'>событий нет</div>"
     return ("<div class='rounded-xl border-2 border-slate-300 bg-slate-50 p-4'><h3 class='font-semibold mb-1'>Инцидент</h3>"
