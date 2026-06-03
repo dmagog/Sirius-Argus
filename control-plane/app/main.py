@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from . import vault
 vault.hydrate_env()  # подтянуть секреты из Vault в env ДО импорта signing/auth (фолбэк — env-дефолты)
 
-from . import audit, bus, domain, logging_setup, registry, scanners, signing, storage, ui
+from . import audit, bus, domain, logging_setup, mapnodes, registry, scanners, signing, storage, ui
 from .auth import Principal, get_principal, revoke
 from .db import AuditEvent, SessionLocal, init_db
 from .rbac import PERMISSIONS, can_read_sensitivity, require
@@ -165,6 +165,84 @@ def registry_view():
 def services_view():
     """Карта сервисов системы: что наружу (кликабельно) и что внутри (zero-trust)."""
     return ui.services_page()
+
+
+# ---------- /map: интерактивная карта пайплайна (ADR-0011) ----------
+_SEVRANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+
+
+def _map_status_dict():
+    """Статус каждого узла из open-findings: open-счётчик, max severity, alert/warn/clean."""
+    out = {nid: {"label": mapnodes.LABELS[nid], "status": "clean", "open": 0, "sev": None, "last": None}
+           for nid in mapnodes.ALL_NODES}
+    rank = {nid: -1 for nid in mapnodes.ALL_NODES}
+    with SessionLocal() as s:
+        rows = s.query(domain.Finding).filter(domain.Finding.status == "open").all()
+    for f in rows:
+        nid = mapnodes.node_of(f.verdict, f.tool, f.asset_type, f.asset_ref)
+        if nid not in out:
+            nid = "control-plane"
+        o = out[nid]
+        o["open"] += 1
+        r = _SEVRANK.get(f.severity, 0)
+        if r > rank[nid]:
+            rank[nid] = r
+            o["sev"] = f.severity
+            o["last"] = f.ts
+    for nid, o in out.items():
+        if o["open"] == 0:
+            o["status"] = "clean"
+        elif rank[nid] >= 3:   # high / critical
+            o["status"] = "alert"
+        else:
+            o["status"] = "warn"
+    return out
+
+
+def _node_findings(node_id, limit=60):
+    with SessionLocal() as s:
+        rows = s.query(domain.Finding).order_by(domain.Finding.id.desc()).limit(400).all()
+    items = []
+    for f in rows:
+        if mapnodes.node_of(f.verdict, f.tool, f.asset_type, f.asset_ref) == node_id:
+            items.append({"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
+                          "asset": f.asset_ref, "detail": f.detail, "status": f.status})
+        if len(items) >= limit:
+            break
+    return items
+
+
+@app.get("/map", response_class=HTMLResponse)
+def map_view():
+    """Интерактивная карта пайплайна: узлы по live-статусу + drill в инциденты (ADR-0011)."""
+    st = _map_status_dict()
+    pipeline = [{"id": nid, "label": lbl, "gate": gate, **st[nid]} for nid, lbl, gate in mapnodes.PIPELINE]
+    infra = [{"id": nid, "label": lbl, **st[nid]} for nid, lbl in mapnodes.INFRA]
+    return ui.map_page(pipeline, infra)
+
+
+@app.get("/api/map/status")
+def map_status():
+    """JSON для live-поллера карты: статус/open/severity по каждому узлу."""
+    return JSONResponse({"nodes": _map_status_dict()})
+
+
+@app.get("/ui/map/node/{node_id}", response_class=HTMLResponse)
+def ui_map_node(node_id: str):
+    """HTMX-фрагмент drill: контроли узла + его сработки + хвост аудита."""
+    label = mapnodes.LABELS.get(node_id, node_id)
+    controls = mapnodes.CONTROLS.get(node_id, [])
+    return ui.map_node_fragment(node_id, label, controls, _node_findings(node_id), audit.recent(15))
+
+
+@app.get("/ui/map/incident/{finding_id}", response_class=HTMLResponse)
+def ui_map_incident(finding_id: int):
+    """HTMX-фрагмент: одна сработка как «инцидент» + окно аудит-таймлайна."""
+    with SessionLocal() as s:
+        f = s.query(domain.Finding).filter_by(id=finding_id).first()
+        fd = ({"id": f.id, "ts": f.ts, "tool": f.tool, "verdict": f.verdict, "severity": f.severity,
+               "asset": f.asset_ref, "detail": f.detail, "status": f.status} if f else None)
+    return ui.map_incident_fragment(fd, audit.recent(20))
 
 
 @app.get("/findings", response_class=HTMLResponse)
