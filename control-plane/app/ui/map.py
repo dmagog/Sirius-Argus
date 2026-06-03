@@ -389,7 +389,7 @@ _OV_JS = r"""
 _RUNSTATE = {"blocked": ("var(--sa-alert)", "BLOCKED"), "failed": ("var(--sa-alert)", "FAILED"),
              "running": ("var(--sa-blue)", "RUNNING"), "hitl": ("var(--sa-warn)", "HITL"),
              "hold": ("var(--sa-warn)", "HOLD"), "passed": ("var(--sa-ok)", "PASSED"),
-             "retired": ("var(--sa-muted)", "RETIRED")}
+             "rejected": ("var(--sa-alert)", "REJECTED"), "retired": ("var(--sa-muted)", "RETIRED")}
 _CRITB = {"regulatory": "var(--sa-alert)", "financial": "#fb923c", "internal": "var(--sa-muted)"}
 
 
@@ -401,6 +401,165 @@ def _rs_badge(state):
 def _crit_badge(crit):
     c = _CRITB.get(crit, "var(--sa-muted)")
     return f"<span class='sa-mono' style='font-size:9.5px;font-weight:700;color:{c};border:1px solid {c};border-radius:5px;padding:1px 5px;opacity:.9'>{_e(crit)}</span>"
+
+
+# JS-обработчик HITL-кнопок: POST решения form-urlencoded → подмена внутренности инспектора.
+# Определяется один раз на странице узла; фрагмент рефреша скрипт не несёт (handler уже на странице).
+_HITL_JS = """<script>
+function hitlDecide(run, decision){
+  var box=document.getElementById('sa-inspector'); if(!box) return;
+  var ap=box.querySelector('[name=approver]'), rs=box.querySelector('[name=reason]');
+  var reason=rs?rs.value:'';
+  if(decision==='reject' && !reason.trim()){ if(rs){rs.focus();rs.style.borderColor='var(--sa-alert)';} return; }
+  var body='approver='+encodeURIComponent(ap?ap.value:'')+'&reason='+encodeURIComponent(reason);
+  box.style.opacity='.55';
+  fetch('/ui/map/run/'+encodeURIComponent(run)+'/'+decision,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body})
+    .then(function(r){return r.text();}).then(function(h){ box.innerHTML=h; box.style.opacity='1'; })
+    .catch(function(){ box.style.opacity='1'; });
+}
+</script>"""
+
+
+def _hitl_panel(sel_run, detail):
+    """Панель решения HITL для критичной версии: «почему требует внимания» (доказательный
+    чеклист гейта promote) + принятые решения + кнопки Аппрув/Отклонить с обоснованием."""
+    dec = (detail or {}).get("decision") or {}
+    if not dec.get("requires_validation"):
+        return ""
+    state = dec.get("state", "hitl")
+    sc, _sl = _RUNSTATE.get(state, _RUNSTATE["hitl"])
+    runid = sel_run["id"]
+    items = ""
+    for g in dec.get("gate", []):
+        ok = g["ok"]
+        pending = (g["key"] == "hitl" and not ok and state != "rejected")
+        if ok:
+            ic, col = "bi-check-circle-fill", "var(--sa-ok)"
+        elif pending:
+            ic, col = "bi-hourglass-split", "var(--sa-warn)"
+        else:
+            ic, col = "bi-x-circle-fill", "var(--sa-alert)"
+        items += (
+            "<div style='display:flex;gap:8px;align-items:flex-start;padding:5px 0'>"
+            f"<i class='bi {ic}' style='color:{col};font-size:13px;line-height:1.3;flex:none'></i>"
+            "<div style='min-width:0'>"
+            f"<div style='font-size:11.5px;color:var(--sa-text);font-weight:600'>{_e(g['label'])}</div>"
+            f"<div style='font-size:10.5px;color:var(--sa-text2);margin-top:1px'>{_e(g['detail'])}</div></div></div>")
+    if dec.get("decisions"):
+        rows = ""
+        for d in dec["decisions"]:
+            appr = d["decision"] == "approve"
+            dc = "var(--sa-ok)" if appr else "var(--sa-alert)"
+            dt = "аппрув" if appr else "отклонение"
+            reason = f" · «{_e(d['reason'])}»" if d.get("reason") else ""
+            rows += (
+                "<div style='font-size:10.5px;color:var(--sa-text2);padding:4px 0;border-top:1px solid var(--sa-line)'>"
+                f"<span class='sa-mono' style='color:{dc};font-weight:700'>{dt}</span> · "
+                f"{_e(d['approver'])} <span style='color:var(--sa-accent-ink);font-weight:600'>{_e(d['role'])}</span>"
+                f" · <span class='sa-mono'>{_e(d['ts'])}</span>{reason}</div>")
+        decisions_block = (
+            "<div style='font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin:12px 0 2px'>Принятые решения</div>"
+            f"{rows}")
+    else:
+        decisions_block = "<div style='font-size:10.5px;color:var(--sa-muted);margin-top:10px'>решения ещё не принимались</div>"
+    if state in ("hitl", "hold", "rejected"):
+        opts = "".join(f"<option value='{a}'>{a} · MLSecOps</option>" for a in ("mlsecops", "reviewer"))
+        owner = dec.get("owner", "—")
+        action = (
+            "<div style='margin-top:12px;padding-top:11px;border-top:1px solid var(--sa-line)'>"
+            "<div style='font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:5px'>Решение от имени (MLSecOps)</div>"
+            "<select name='approver' class='sa-mono' style='width:100%;background:var(--sa-panel2);color:var(--sa-text);border:1px solid var(--sa-line);border-radius:7px;padding:6px 8px;font-size:11.5px'>"
+            f"{opts}</select>"
+            "<textarea name='reason' rows='2' placeholder='обоснование (обязательно для отклонения)' "
+            "style='width:100%;margin-top:7px;background:var(--sa-panel2);color:var(--sa-text);border:1px solid var(--sa-line);border-radius:7px;padding:7px 8px;font-size:11.5px;font-family:inherit;resize:vertical'></textarea>"
+            "<div style='display:flex;gap:8px;margin-top:9px'>"
+            f"<button type='button' onclick=\"hitlDecide('{_e(runid)}','approve')\" "
+            "style='flex:1;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;background:var(--sa-ok);color:#04140d'>"
+            "<i class='bi bi-check-lg'></i> Аппрув</button>"
+            f"<button type='button' onclick=\"hitlDecide('{_e(runid)}','reject')\" "
+            "style='flex:1;border:1px solid var(--sa-alert);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(239,68,68,.12);color:var(--sa-alert)'>"
+            "<i class='bi bi-x-lg'></i> Отклонить</button></div>"
+            "<div style='font-size:10px;color:var(--sa-muted);margin-top:8px;line-height:1.45'>"
+            f"Аппрувер ≠ владелец (<span class='sa-mono'>{_e(owner)}</span> · DS) и ≠ тот, кто промоутит. "
+            "Промоушен выполнит отдельный MLSecOps (separation of duties, ACC-02).</div></div>")
+    else:
+        action = ("<div style='margin-top:11px;padding-top:10px;border-top:1px solid var(--sa-line);font-size:11px;color:var(--sa-ok)'>"
+                  "<i class='bi bi-check2-circle'></i> решение принято — версия в проде</div>")
+    blockers = dec.get("blockers", 0)
+    sub = (f"{blockers} условие(й) ещё не выполнено" if blockers else "все условия выполнены")
+    return (
+        f"<div style='border:1px solid var(--sa-line);border-left:3px solid {sc};border-radius:11px;background:var(--sa-panel);padding:12px 14px;margin-bottom:14px'>"
+        "<div style='display:flex;align-items:center;justify-content:space-between;gap:8px'>"
+        "<span style='font-size:11px;font-weight:700;color:var(--sa-head);display:flex;align-items:center;gap:6px'>"
+        f"<i class='bi bi-hand-index-thumb' style='color:{sc}'></i> Требует решения (HITL · VIS-03)</span>"
+        f"{_rs_badge(state)}</div>"
+        f"<div style='font-size:10.5px;color:var(--sa-text2);margin-top:3px'>Критичная модель уходит в прод только после ручного решения MLSecOps. {_e(sub)}.</div>"
+        "<div style='font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin:11px 0 2px'>Почему требует внимания</div>"
+        f"{items}{decisions_block}{action}</div>")
+
+
+def _inspector_inner(sel_run, detail):
+    """Внутренность правой колонки инспектора (шапка прогона + HITL-панель + lineage +
+    сработки + терминальный лог). Выделено, чтобы тем же кодом рендерить HTMX-рефреш."""
+    from ..runs import actor_role
+    detail = detail or {}
+    if not sel_run:
+        return "<div style='padding:18px;color:var(--sa-muted);font-size:13px'>выберите прогон слева</div>"
+    acct, role = actor_role(sel_run["actor"])
+    lin = detail.get("lineage", {})
+    lin_rows = "".join(
+        f"<div class='sa-lin'><span class='sa-mono' style='font-size:11px;color:var(--sa-text2)'>{k}</span>"
+        f"<span class='sa-mono' style='font-size:11px;color:{'var(--sa-alert)' if v=='—' else 'var(--sa-text)'};text-align:right;word-break:break-all'>{_e(v)}</span></div>"
+        for k, v in [("dataset", lin.get("dataset", "—")), ("code_commit", lin.get("code_commit", "—")),
+                     ("env_lock", lin.get("env_lock", "—")), ("artifact_hash", lin.get("artifact_hash", "—")),
+                     ("signature", lin.get("signature", "—"))])
+    dfs = detail.get("findings", [])
+    if dfs:
+        fcards = ""
+        for f in dfs:
+            fa, fr = actor_role(f.get("actor"))
+            sc = _SEVC.get(f["severity"], "var(--sa-muted)")
+            fcards += (
+                f"<div class='sa-fcard'><div style='display:flex;align-items:center;gap:7px;flex-wrap:wrap'>"
+                f"<span class='sa-badge sa-mono' style='color:{sc};background:rgba(148,163,184,.12)'>{_e(f['severity'])}</span>"
+                f"<span class='sa-mono' style='font-size:11.5px;font-weight:600;color:{sc}'>{_e(f['verdict'])}</span>"
+                f"<span style='flex:1'></span><span class='sa-badge sa-mono' style='color:var(--sa-text2);border:1px solid var(--sa-line)'>{_e(f['status'])}</span></div>"
+                f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:5px'>{_e(f['tool'])} · {_e(f['asset'])}</div>"
+                f"<div style='font-size:11.5px;color:var(--sa-text2);margin-top:5px;line-height:1.45'>{_e(f['detail'])}</div>"
+                f"<div class='sa-mono' style='font-size:10px;color:var(--sa-text2);margin-top:6px'>причастен: {_e(fa)} "
+                f"<span style='color:var(--sa-accent-ink);font-weight:600'>{_e(fr)}</span></div></div>")
+    else:
+        fcards = "<div style='font-size:12px;color:var(--sa-muted);padding:4px 0'>сработок нет — прогон чист</div>"
+    log = detail.get("log", [])
+    log_lines = "".join(
+        f"<div class='sa-tl'><span class='t'>{_e(l['t'])}</span>"
+        f"<span class='src' style='color:{_LVL.get(l['lvl'],'var(--sa-text2)')}'>{_e(l['src'])}</span>"
+        f"<span style='color:{_LVL[l['lvl']] if l['lvl'] in ('err','sec') else '#cbd5e1'}'>{_e(l['msg'])}</span></div>"
+        for l in log) or "<div style='color:var(--sa-muted);font-size:12px'>// лог пуст</div>"
+    return (
+        "<div style='padding:14px 16px;border-bottom:1px solid var(--sa-line);flex:none'>"
+        "<div style='display:flex;align-items:center;justify-content:space-between'>"
+        "<span style='font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600'>Инспектор прогона</span>"
+        f"{_rs_badge(sel_run['state'])}</div>"
+        f"<div style='display:flex;align-items:baseline;gap:8px;margin-top:8px'>"
+        f"<span class='sa-mono' style='font-size:16px;font-weight:700;color:var(--sa-head)'>{_e(sel_run['id'])}</span>"
+        f"<span style='font-size:13px;color:var(--sa-text)'>{_e(sel_run['model'])} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(sel_run['ver'])}</span></span></div>"
+        f"<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>{_crit_badge(sel_run['crit'])}"
+        f"<span class='sa-chip'>причастен: {_e(acct)} · {_e(role)}</span></div></div>"
+        "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:12px 16px;min-height:0'>"
+        f"{_hitl_panel(sel_run, detail)}"
+        "<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Lineage · воспроизводимость (MON-02)</div>"
+        f"<div style='border:1px solid var(--sa-line);border-radius:10px;background:var(--sa-panel);overflow:hidden;margin-bottom:14px'>{lin_rows}</div>"
+        f"<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Сработки прогона ({len(dfs)})</div>{fcards}</div>"
+        "<div style='padding:12px;border-top:1px solid var(--sa-line);flex:none'>"
+        f"<div class='sa-term'><div class='sa-term-h'><i style='background:#ef4444'></i><i style='background:#f59e0b'></i><i style='background:#10b981'></i>"
+        f"<span class='sa-mono' style='font-size:10.5px;color:var(--sa-text2)'>{_e(sel_run['id'])}.log</span></div>"
+        f"<div class='sa-term-b sa-scroll sa-mono' style='max-height:200px'>{log_lines}</div></div></div>")
+
+
+def map_inspector_fragment(sel_run, detail):
+    """HTMX/fetch-фрагмент: внутренность инспектора (рефреш после HITL-решения)."""
+    return _inspector_inner(sel_run, detail)
 
 
 def map_inspector_page(node, pipeline, infra, runs, sel_run, detail):
@@ -449,61 +608,8 @@ def map_inspector_page(node, pipeline, infra, runs, sel_run, detail):
     else:
         cards = "<div style='font-size:12px;color:var(--sa-muted);padding:8px 2px'>прогонов в контуре нет</div>"
 
-    # ── инспектор прогона (правая колонка) ──
-    if sel_run:
-        c0, _t = _RUNSTATE.get(sel_run["state"], _RUNSTATE["passed"])
-        acct, role = actor_role(sel_run["actor"])
-        lin = detail.get("lineage", {})
-        lin_rows = "".join(
-            f"<div class='sa-lin'><span class='sa-mono' style='font-size:11px;color:var(--sa-text2)'>{k}</span>"
-            f"<span class='sa-mono' style='font-size:11px;color:{'var(--sa-alert)' if v=='—' else 'var(--sa-text)'};text-align:right;word-break:break-all'>{_e(v)}</span></div>"
-            for k, v in [("dataset", lin.get("dataset", "—")), ("code_commit", lin.get("code_commit", "—")),
-                         ("env_lock", lin.get("env_lock", "—")), ("artifact_hash", lin.get("artifact_hash", "—")),
-                         ("signature", lin.get("signature", "—"))])
-        dfs = detail.get("findings", [])
-        if dfs:
-            fcards = ""
-            for f in dfs:
-                fa, fr = actor_role(f.get("actor"))
-                sc = _SEVC.get(f["severity"], "var(--sa-muted)")
-                fcards += (
-                    f"<div class='sa-fcard'><div style='display:flex;align-items:center;gap:7px;flex-wrap:wrap'>"
-                    f"<span class='sa-badge sa-mono' style='color:{sc};background:rgba(148,163,184,.12)'>{_e(f['severity'])}</span>"
-                    f"<span class='sa-mono' style='font-size:11.5px;font-weight:600;color:{sc}'>{_e(f['verdict'])}</span>"
-                    f"<span style='flex:1'></span><span class='sa-badge sa-mono' style='color:var(--sa-text2);border:1px solid var(--sa-line)'>{_e(f['status'])}</span></div>"
-                    f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:5px'>{_e(f['tool'])} · {_e(f['asset'])}</div>"
-                    f"<div style='font-size:11.5px;color:var(--sa-text2);margin-top:5px;line-height:1.45'>{_e(f['detail'])}</div>"
-                    f"<div class='sa-mono' style='font-size:10px;color:var(--sa-text2);margin-top:6px'>причастен: {_e(fa)} "
-                    f"<span style='color:var(--sa-accent-ink);font-weight:600'>{_e(fr)}</span></div></div>")
-        else:
-            fcards = "<div style='font-size:12px;color:var(--sa-muted);padding:4px 0'>сработок нет — прогон чист</div>"
-        log = detail.get("log", [])
-        log_lines = "".join(
-            f"<div class='sa-tl'><span class='t'>{_e(l['t'])}</span>"
-            f"<span class='src' style='color:{_LVL.get(l['lvl'],'var(--sa-text2)')}'>{_e(l['src'])}</span>"
-            f"<span style='color:{_LVL[l['lvl']] if l['lvl'] in ('err','sec') else '#cbd5e1'}'>{_e(l['msg'])}</span></div>"
-            for l in log) or "<div style='color:var(--sa-muted);font-size:12px'>// лог пуст</div>"
-        inspector = (
-            "<div style='padding:14px 16px;border-bottom:1px solid var(--sa-line);flex:none'>"
-            "<div style='display:flex;align-items:center;justify-content:space-between'>"
-            "<span style='font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600'>Инспектор прогона</span>"
-            f"{_rs_badge(sel_run['state'])}</div>"
-            f"<div style='display:flex;align-items:baseline;gap:8px;margin-top:8px'>"
-            f"<span class='sa-mono' style='font-size:16px;font-weight:700;color:var(--sa-head)'>{_e(sel_run['id'])}</span>"
-            f"<span style='font-size:13px;color:var(--sa-text)'>{_e(sel_run['model'])} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(sel_run['ver'])}</span></span></div>"
-            f"<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>{_crit_badge(sel_run['crit'])}"
-            f"<span class='sa-chip'>причастен: {_e(acct)} · {_e(role)}</span></div></div>"
-            "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:12px 16px;min-height:0'>"
-            "<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Lineage · воспроизводимость (MON-02)</div>"
-            f"<div style='border:1px solid var(--sa-line);border-radius:10px;background:var(--sa-panel);overflow:hidden;margin-bottom:14px'>{lin_rows}</div>"
-            f"<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Сработки прогона ({len(dfs)})</div>{fcards}</div>"
-            "<div style='padding:12px;border-top:1px solid var(--sa-line);flex:none'>"
-            f"<div class='sa-term'><div class='sa-term-h'><i style='background:#ef4444'></i><i style='background:#f59e0b'></i><i style='background:#10b981'></i>"
-            f"<span class='sa-mono' style='font-size:10.5px;color:var(--sa-text2)'>{_e(sel_run['id'])}.log</span></div>"
-            f"<div class='sa-term-b sa-scroll sa-mono' style='max-height:200px'>{log_lines}</div></div></div>"
-        )
-    else:
-        inspector = "<div style='padding:18px;color:var(--sa-muted);font-size:13px'>выберите прогон слева</div>"
+    # ── инспектор прогона (правая колонка) — тем же кодом, что и HTMX-рефреш ──
+    inspector = _inspector_inner(sel_run, detail)
 
     gate_tag = ("<span class='sa-mono' style='font-size:8.5px;font-weight:800;color:var(--sa-bg);background:var(--sa-accent);border-radius:4px;padding:2px 6px'>FAIL-CLOSED</span>"
                 if node.get("gate") else "")
@@ -525,7 +631,8 @@ def map_inspector_page(node, pipeline, infra, runs, sel_run, detail):
         f"<div style='padding:12px 18px 6px;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-text2);font-weight:600'>{qtitle}</div>"
         f"<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:4px 16px 16px'>{cards}</div></div>"
         "<div style='width:384px;flex:none;border-left:1px solid var(--sa-line);background:var(--sa-panel2);display:flex;flex-direction:column;overflow:hidden'>"
-        f"{inspector}</div></div></div>"
+        f"<div id='sa-inspector' style='display:flex;flex-direction:column;height:100%;min-height:0'>{inspector}</div></div></div></div>"
+        f"{_HITL_JS}"
     )
     breadcrumb = (
         "<a class='sa-back' href='/map'><i class='bi bi-arrow-left'></i> Обзор</a>"

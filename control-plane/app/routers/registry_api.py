@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from .. import audit, bus, domain, mapnodes, registry, scanners, signing, storage, ui
+from .. import audit, bus, decisions, domain, mapnodes, registry, scanners, signing, storage, ui
 from ..auth import Principal, get_principal, revoke
 from ..db import AuditEvent, SessionLocal
 from ..rbac import PERMISSIONS, can_read_sensitivity, require
@@ -221,11 +221,21 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
             if not signing.verify(model_id, ver, mv.artifact_hash or "", mv.signature_bundle or "", art_bytes):  # SUP-04: model-signing над реальным артефактом (admission/verify-on-consume)
                 audit.append_event(actor=p.sub, action="promote.blocked.unsigned", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="unsigned or invalid signature (SUP-04)")
-            # VIS-03 (HITL) + ACC-02 (separation of duties): нужен аппрув от ДРУГОГО MLSecOps
+            # стоящее решение по текущему артефакту: если последнее — reject, промоушен закрыт,
+            # пока его не сменит новый аппрув (у отклонения есть «зубы», а не просто запись).
+            standing = (s.query(domain.Approval)
+                        .filter(domain.Approval.model_version_id == mv.id,
+                                domain.Approval.artifact_hash == (mv.artifact_hash or ""))
+                        .order_by(domain.Approval.id.desc()).first())
+            if standing is not None and standing.decision == "reject":
+                audit.append_event(actor=p.sub, action="promote.blocked.rejected", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+                raise HTTPException(status_code=422, detail="version rejected by HITL — supersede with a new approval before promotion")
+            # VIS-03 (HITL) + ACC-02 (separation of duties): нужен АППРУВ от ДРУГОГО MLSecOps
             others = s.query(domain.Approval).filter(
                 domain.Approval.model_version_id == mv.id,
                 domain.Approval.approver != p.sub,
-                domain.Approval.artifact_hash == (mv.artifact_hash or "")).count()  # аппрув привязан к hash (anti-TOCTOU)
+                domain.Approval.decision == "approve",
+                domain.Approval.artifact_hash == (mv.artifact_hash or "")).count()  # решение привязано к hash (anti-TOCTOU)
             if not others:
                 audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps, bound to current artifact hash, required (VIS-03/ACC-02)")
@@ -257,15 +267,17 @@ class ApproveIn(BaseModel):
 @router.post("/api/models/{model_id}/versions/{ver}/approve")
 def approve_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depends(require("model.approve"))):
     """VIS-03 HITL: критичную версию вручную одобряет MLSecOps перед промоушеном."""
-    with SessionLocal() as s:
-        mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()
-        if not mv:
-            raise HTTPException(status_code=404, detail="version not found")
-        s.add(domain.Approval(model_version_id=mv.id, approver=p.sub, artifact_hash=mv.artifact_hash or "",
-                              ts=datetime.now(timezone.utc).isoformat(timespec="seconds"), reason=body.reason))
-        s.commit()
-        audit.append_event(actor=p.sub, action="model.approve", obj=f"model/{model_id}/v{ver}")
-        return {"approved": True, "version": ver, "approver": p.sub, "artifact_hash": mv.artifact_hash}
+    artifact_hash = decisions.record_decision(model_id, ver, p.sub, "approve", body.reason)
+    return {"approved": True, "version": ver, "approver": p.sub, "artifact_hash": artifact_hash}
+
+
+@router.post("/api/models/{model_id}/versions/{ver}/reject")
+def reject_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depends(require("model.approve"))):
+    """VIS-03 HITL: MLSecOps отклоняет критичную версию (с обязательным обоснованием).
+    Решение фиксируется в аудит и блокирует промоушен, пока его не сменит новый аппрув по
+    тому же артефакту (promote.blocked.rejected)."""
+    artifact_hash = decisions.record_decision(model_id, ver, p.sub, "reject", body.reason)
+    return {"rejected": True, "version": ver, "approver": p.sub, "artifact_hash": artifact_hash}
 
 
 @router.get("/api/models/{model_id}/versions/{ver}/review")
@@ -292,7 +304,8 @@ def review_bundle(model_id: int, ver: int, p: Principal = Depends(require("findi
             "signature": {"signed": bool(mv.signature_bundle), "tool": mv.signature or None},
             "open_critical": open_critical,
             "findings": [{"tool": f.tool, "verdict": f.verdict, "severity": f.severity, "status": f.status} for f in findings],
-            "approvals": [{"approver": a.approver, "ts": a.ts, "reason": a.reason, "artifact_hash": a.artifact_hash} for a in approvals],
+            "approvals": [{"approver": a.approver, "decision": (a.decision or "approve"), "ts": a.ts,
+                           "reason": a.reason, "artifact_hash": a.artifact_hash} for a in approvals],
         }
 
 

@@ -89,15 +89,16 @@ class Finding(Base):
 
 
 class Approval(Base):
-    """HITL-аппрув критичной версии (VIS-03): ручное одобрение MLSecOps перед
-    промоушеном в прод. Кто/когда/почему — фиксируется и идёт в аудит."""
+    """HITL-решение по критичной версии (VIS-03): ручной аппрув ИЛИ отклонение MLSecOps
+    перед промоушеном в прод. Кто/когда/почему/что решил — фиксируется и идёт в аудит."""
     __tablename__ = "approvals"
     id = Column(Integer, primary_key=True)
     model_version_id = Column(Integer, ForeignKey("model_versions.id"), nullable=False)
     approver = Column(String(255), default="")
+    decision = Column(String(16), default="approve")  # approve | reject — решение HITL
     ts = Column(String(32), default="")
     reason = Column(Text, default="")
-    artifact_hash = Column(String(64), default="")  # к какому артефакту привязан аппрув (anti-TOCTOU)
+    artifact_hash = Column(String(64), default="")  # к какому артефакту привязано решение (anti-TOCTOU)
 
 
 class RiskAcceptance(Base):

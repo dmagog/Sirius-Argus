@@ -4,7 +4,7 @@ SQLite-фоллбэк позволяет гонять каркас и тесты
 """
 import logging
 import os
-from sqlalchemy import create_engine, text, Column, Integer, String, Boolean
+from sqlalchemy import create_engine, inspect as sa_inspect, text, Column, Integer, String, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 logger = logging.getLogger("sirius.db")
@@ -74,7 +74,36 @@ def _install_append_only_guard():
         logger.warning("append-only guard не установлен (%s): %s", dialect, e)
 
 
+# Лёгкие аддитивные миграции: create_all НЕ добавляет новые колонки в уже существующие
+# таблицы. Для развёрнутых БД (sqlite/postgres) идемпотентно дотягиваем недостающие колонки,
+# чтобы не требовать пересоздания тома. Только ADD COLUMN с DEFAULT — безопасно и обратимо.
+_ADD_COLUMNS = (
+    ("approvals", "decision", "ALTER TABLE approvals ADD COLUMN decision VARCHAR(16) DEFAULT 'approve'"),
+)
+
+
+def _ensure_columns():
+    try:
+        insp = sa_inspect(engine)
+        tables = set(insp.get_table_names())
+    except Exception as e:  # noqa: BLE001
+        logger.warning("inspect недоступен, пропускаю миграции колонок: %s", e)
+        return
+    for table, col, ddl in _ADD_COLUMNS:
+        if table not in tables:
+            continue  # create_all уже создаст таблицу с актуальной схемой
+        if col in {c["name"] for c in insp.get_columns(table)}:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(ddl))
+            logger.info("миграция: добавлена колонка %s.%s", table, col)
+        except Exception as e:  # noqa: BLE001 — не валим старт из-за миграции
+            logger.warning("не удалось добавить колонку %s.%s: %s", table, col, e)
+
+
 def init_db():
     from . import domain  # noqa: F401 — регистрирует доменные модели на Base
     Base.metadata.create_all(engine)
+    _ensure_columns()
     _install_append_only_guard()

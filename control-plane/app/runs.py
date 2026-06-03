@@ -78,7 +78,7 @@ def _version_findings(idx, model_id, version, latest_version):
     return items
 
 
-def _state_of(stage, open_critical, requires_validation, has_approval):
+def _state_of(stage, open_critical, requires_validation, has_approval, rejected=False):
     if stage == "retired":
         return "retired"
     if open_critical:
@@ -86,16 +86,28 @@ def _state_of(stage, open_critical, requires_validation, has_approval):
     if stage == "prod":
         return "passed"
     if requires_validation:
+        if rejected:
+            return "rejected"
         return "hold" if has_approval else "hitl"
     return "running"
+
+
+def _standing_decision(s, mv, owner):
+    """Стоящее HITL-решение по версии: последнее (по id) решение ОТ ДРУГОГО, чем владелец,
+    привязанное к текущему артефакту. Совпадает с логикой гейта promote (anti-TOCTOU)."""
+    return (s.query(domain.Approval)
+            .filter(domain.Approval.model_version_id == mv.id,
+                    domain.Approval.approver != (owner or ""),
+                    domain.Approval.artifact_hash == (mv.artifact_hash or ""))
+            .order_by(domain.Approval.id.desc()).first())
 
 
 def _enrich(s, idx, last_actor, mv, model, latest_version):
     findings = _version_findings(idx, model.id, mv.version, latest_version)
     open_critical = sum(1 for f in findings if f.status == "open" and f.severity == "critical")
-    has_approval = bool(s.query(domain.Approval)
-                        .filter(domain.Approval.model_version_id == mv.id,
-                                domain.Approval.approver != model.owner).first())
+    standing = _standing_decision(s, mv, model.owner)
+    has_approval = bool(standing) and standing.decision == "approve"
+    rejected = bool(standing) and standing.decision == "reject"
     actor = last_actor.get(f"model/{model.id}/v{mv.version}") or model.owner or "—"
     started = min((f.ts for f in findings if f.ts), default="") or ""
     node = "gate-artifact" if open_critical else _STAGE_NODE.get(mv.stage, "package")
@@ -104,9 +116,31 @@ def _enrich(s, idx, last_actor, mv, model, latest_version):
         "crit": _crit(model.criticality), "started": started,
         "dur": _dur_stub(started or f"{model.id}:{mv.version}"), "findings": len(findings),
         "actor": actor, "node": node,
-        "state": _state_of(mv.stage, open_critical, bool(mv.requires_validation), has_approval),
+        "state": _state_of(mv.stage, open_critical, bool(mv.requires_validation), has_approval, rejected),
         "_stage": mv.stage,
     }
+
+
+def run_summary(run_id):
+    """Сводка одного прогона (тот же dict, что в очереди узла) — для рефреша инспектора
+    после HITL-действия. Переиспользует _enrich, чтобы state считался единообразно."""
+    mvid = _parse_run_id(run_id)
+    if mvid is None:
+        return None
+    with SessionLocal() as s:
+        mv = s.query(domain.ModelVersion).filter_by(id=mvid).first()
+        if not mv:
+            return None
+        m = s.query(domain.Model).filter_by(id=mv.model_id).first()
+        if not m:
+            return None
+        idx = _findings_index(s)
+        last_actor = _last_actor_by_version(s)
+        latest = (s.query(domain.ModelVersion.version).filter_by(model_id=mv.model_id)
+                  .order_by(domain.ModelVersion.version.desc()).first())
+        r = _enrich(s, idx, last_actor, mv, m, latest[0] if latest else mv.version)
+    r.pop("_stage", None)
+    return r
 
 
 def runs_for_node(node_id):
@@ -194,6 +228,50 @@ def run_detail(run_id):
             log.append({"t": _short_t(f.ts), "lvl": lvl, "src": f.tool or "finding",
                         "msg": f"{f.verdict} · {f.detail}".strip(" ·")})
         log.sort(key=lambda x: x["t"])
+        decision = _decision_block(s, mv, m, f_rows)
     return {"model": (m.name if m else ""), "ver": f"v{mv.version}", "stage": mv.stage,
             "crit": _crit(m.criticality if m else "internal"),
-            "lineage": lineage, "findings": findings, "log": log}
+            "lineage": lineage, "findings": findings, "log": log, "decision": decision}
+
+
+def _decision_block(s, mv, m, f_rows):
+    """Сводка HITL для инспектора: «почему требует внимания» (чеклист гейта promote по
+    доказательствам) + принятые решения + что нужно для действия. Гейт зеркалит promote:
+    модель-карта (GOV-01), воспроизводимость (MON-02), подпись (SUP-04), нет открытых
+    critical (GRC), аппрув другим MLSecOps (VIS-03/ACC-02)."""
+    owner = (m.owner if m else "") or ""
+    open_critical = sum(1 for f in f_rows if f.status == "open" and f.severity == "critical")
+    missing_lin = [x for x in ("dataset_version_id", "code_commit", "env_lock") if not getattr(mv, x)]
+    card_ok = bool(mv.intended_use and mv.limitations)
+    signed = bool(mv.signature_bundle)
+    appr_rows = (s.query(domain.Approval).filter(domain.Approval.model_version_id == mv.id)
+                 .order_by(domain.Approval.id.asc()).all())
+    standing = _standing_decision(s, mv, owner)
+    has_approval = bool(standing) and standing.decision == "approve"
+    rejected = bool(standing) and standing.decision == "reject"
+    state = _state_of(mv.stage, open_critical, bool(mv.requires_validation), has_approval, rejected)
+    if has_approval:
+        hitl_detail = f"одобрено: {standing.approver}"
+    elif rejected:
+        hitl_detail = f"отклонено: {standing.approver}"
+    else:
+        hitl_detail = "ожидает решения MLSecOps"
+    gate = [
+        {"key": "card", "label": "Модель-карта (GOV-01)", "ok": card_ok,
+         "detail": "intended_use + limitations заполнены" if card_ok else "не хватает intended_use / limitations"},
+        {"key": "repro", "label": "Воспроизводимость (MON-02)", "ok": not missing_lin,
+         "detail": "dataset + commit + env-lock зафиксированы" if not missing_lin else f"нет: {', '.join(missing_lin)}"},
+        {"key": "sign", "label": "Подпись артефакта (SUP-04)", "ok": signed,
+         "detail": (mv.signature or "model-signing") if signed else "версия не подписана"},
+        {"key": "crit", "label": "Нет открытых critical (GRC)", "ok": open_critical == 0,
+         "detail": "критичных открытых сработок нет" if open_critical == 0 else f"{open_critical} открытая(ых) critical"},
+        {"key": "hitl", "label": "Аппрув другим MLSecOps (VIS-03/ACC-02)", "ok": has_approval,
+         "detail": hitl_detail},
+    ]
+    dlist = [{"approver": a.approver, "role": actor_role(a.approver)[1], "ts": _short_t(a.ts),
+              "reason": a.reason or "", "decision": (a.decision or "approve")} for a in appr_rows]
+    return {"model_id": mv.model_id, "version": mv.version, "state": state,
+            "requires_validation": bool(mv.requires_validation),
+            "criticality": _crit(m.criticality if m else "internal"), "owner": owner,
+            "artifact_hash": mv.artifact_hash or "", "gate": gate, "decisions": dlist,
+            "blockers": sum(1 for g in gate if not g["ok"])}

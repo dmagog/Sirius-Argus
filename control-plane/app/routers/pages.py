@@ -9,11 +9,11 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from .. import audit, bus, domain, mapnodes, registry, runs, scanners, signing, storage, ui
+from .. import audit, bus, decisions, domain, mapnodes, registry, runs, scanners, signing, storage, ui
 from ..auth import Principal, get_principal, revoke
 from ..db import AuditEvent, SessionLocal
 from ..rbac import PERMISSIONS, can_read_sensitivity, require
@@ -197,6 +197,31 @@ def map_node_view(node_id: str, run: str = ""):
     sel = next((r for r in rlist if r["id"] == run), (rlist[0] if rlist else None))
     detail = runs.run_detail(sel["id"]) if sel else {}
     return ui.map_inspector_page(node, pipeline, infra, rlist, sel, detail)
+
+
+@router.post("/ui/map/run/{run}/{decision}", response_class=HTMLResponse)
+def ui_map_run_decision(run: str, decision: str, approver: str = Form(""), reason: str = Form("")):
+    """UI-действие HITL из инспектора прогона: зафиксировать решение (approve|reject) и
+    вернуть обновлённую внутренность инспектора. У control-plane UI нет отдельного логина
+    (SSO — у ops-консолей), поэтому аппрувер выбирается из MLSecOps-учёток; запись идёт
+    общим кодом decisions.record_decision (Approval + аудит). Реальный separation of duties
+    (аппрувер ≠ владелец, аппрувер ≠ промоутер, привязка к hash) энфорсится на промоушене."""
+    if decision not in decisions.DECISIONS:
+        raise HTTPException(status_code=422, detail="decision must be approve|reject")
+    if approver not in decisions.UI_APPROVERS:
+        raise HTTPException(status_code=403, detail="approver must be an MLSecOps account")
+    mvid = runs._parse_run_id(run)
+    if mvid is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    with SessionLocal() as s:
+        mv = s.query(domain.ModelVersion).filter_by(id=mvid).first()
+        if not mv:
+            raise HTTPException(status_code=404, detail="run not found")
+        model_id, ver = mv.model_id, mv.version
+    decisions.record_decision(model_id, ver, approver, decision, reason)
+    sel = runs.run_summary(run)
+    detail = runs.run_detail(run) if sel else {}
+    return ui.map_inspector_fragment(sel, detail)
 
 
 @router.get("/ui/map/node/{node_id}", response_class=HTMLResponse)

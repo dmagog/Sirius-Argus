@@ -162,6 +162,17 @@ def main():
     req("POST", f"/api/models/{cm}/versions/{cv}/approve", "MLSecOps", {"reason": "ревью пройдено"}, sub="reviewer")
     st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
     line(f"  другой MLSecOps (reviewer) одобрил версию  →  промоушен  →  HTTP {st} ✅ (separation of duties)")
+    # критичная версия, намеренно оставленная НА РУЧНОМ РЕШЕНИИ (HITL) — для инспектора /map:
+    # подписана и воспроизводима, но ждёт аппрува/отклонения MLSecOps (кнопки в карточке узла)
+    _, fdj = req("POST", "/api/datasets", "DE", {"name": "fraud-data", "source": "internal://curated/fraud"})
+    _, fmj = req("POST", "/api/models", "DS", {"name": "fraud-scoring", "criticality": "regulatory"})
+    fm = fmj["model_id"]
+    _, fvj = req("POST", f"/api/models/{fm}/versions", "DS",
+                 {"dataset_version_id": fdj["dataset_version_id"], "code_commit": "f00dca7", "env_lock": "req.lock",
+                  "intended_use": "детект мошеннических транзакций", "limitations": "не для кредитных решений"})
+    fv = fvj["version"]
+    req("POST", f"/api/models/{fm}/versions/{fv}/sign", "MLSecOps")
+    line(f"  критичная fraud-scoring v{fv} подписана и ОЖИДАЕТ HITL — решение принимается в инспекторе /map ⏳")
 
     hr("MONEY-SHOT #4 — рантайм: бёрст extraction → детект + троттлинг (RT-01)")
     sc, mdl = req("GET", "/models", base=SERVING)

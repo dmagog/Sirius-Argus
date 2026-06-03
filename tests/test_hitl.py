@@ -40,3 +40,44 @@ def bundle_has_evidence():
     for k in ("model_card", "lineage", "signature", "findings", "open_critical", "approvals"):
         assert k in j, j
     assert "complete" in j["model_card"] and "reproducible" in j["lineage"] and "signed" in j["signature"]
+
+
+@when("MLSecOps отклоняет критичную версию с обоснованием")
+def reject_critical_version():
+    # критичная версия с полным гейтом (модель-карта + lineage + подпись) — единственным
+    # незакрытым условием остаётся HITL-решение, чтобы изолировать поведение reject
+    dv = httpx.post(f"{BASE}/api/datasets", headers=tok("DE"),
+                    json={"name": "reject-data", "source": "internal://curated/reject"}, timeout=60).json()
+    mid = httpx.post(f"{BASE}/api/models", headers=tok("DS"),
+                     json={"name": "reject-demo", "criticality": "financial"}, timeout=60).json()["model_id"]
+    ver = httpx.post(f"{BASE}/api/models/{mid}/versions", headers=tok("DS"),
+                     json={"dataset_version_id": dv["dataset_version_id"], "code_commit": "rj01",
+                           "env_lock": "req.lock", "intended_use": "демо отклонения",
+                           "limitations": "только для теста"}, timeout=60).json()["version"]
+    httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/sign", headers=tok("MLSecOps"), timeout=60)
+    rj = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/reject", headers=tok("MLSecOps"),
+                    json={"reason": "метрики просели на холдауте"}, timeout=60)
+    assert rj.status_code == 200, rj.text
+    S.update(mid=mid, ver=ver)
+
+
+@then("промоушен этой версии блокируется как отклонённый")
+def promote_blocked_rejected():
+    r = httpx.post(f"{BASE}/api/models/{S['mid']}/versions/{S['ver']}/promote",
+                   headers=tok("MLSecOps"), timeout=60)
+    assert r.status_code == 422, r.text
+    assert "reject" in (r.json().get("detail", "").lower())
+
+
+@then("повторный аппрув другим MLSecOps снимает блок и версия уходит в прод")
+def reapprove_unblocks():
+    # аппрув ОТ ДРУГОГО MLSecOps (reviewer) поверх отклонения; промоутит третий (mlsecops) —
+    # separation of duties соблюдена, версия проходит гейт и уходит в прод
+    a = httpx.post(f"{BASE}/api/models/{S['mid']}/versions/{S['ver']}/approve",
+                   headers={"Authorization": "Bearer dev:reviewer:MLSecOps"},
+                   json={"reason": "переобучили, метрики восстановлены"}, timeout=60)
+    assert a.status_code == 200, a.text
+    p = httpx.post(f"{BASE}/api/models/{S['mid']}/versions/{S['ver']}/promote",
+                   headers=tok("MLSecOps"), timeout=60)
+    assert p.status_code == 200, p.text
+    assert p.json().get("stage") == "prod"
