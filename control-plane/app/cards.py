@@ -24,6 +24,45 @@ def _lvl(severity, status):
     return "err" if severity in ("critical", "high") else "warn" if severity == "medium" else "info"
 
 
+# Машинный код события аудита → человекочитаемая подпись (сырой код остаётся рядом для трассы).
+_ACT_LABELS = {
+    "model.register": "модель зарегистрирована",
+    "model.version": "загружена версия",
+    "model.sign": "артефакт подписан",
+    "model.promote": "промоушен в прод",
+    "model.promote.risk-accepted": "промоушен с принятием риска",
+    "model.retire": "версия выведена",
+    "promote.blocked.open-critical": "промоушен заблокирован: открытый critical",
+    "promote.blocked": "промоушен заблокирован",
+    "artifact.tamper.detected": "обнаружена подмена артефакта",
+    "gate.approve": "аппрув гейта",
+    "gate.reject": "отклонение гейта",
+    "risk.accept": "принятие остаточного риска",
+    "dataset.create": "датасет создан",
+    "dataset.scan.flagged": "скан данных: аномалия",
+    "dataset.scan.clean": "скан данных: чисто",
+    "deps.scan.flagged": "скан зависимостей: уязвимость",
+    "deps.scan.clean": "скан зависимостей: чисто",
+    "dataset.read": "чтение датасета",
+    "dataset.read.deny": "чтение датасета отклонено",
+    "dataset.schema.read": "чтение схемы",
+}
+
+
+def _humanize(action):
+    """Подпись события на естественном языке (без знания внутренней номенклатуры)."""
+    a = action or ""
+    if a in _ACT_LABELS:
+        return _ACT_LABELS[a]
+    base = a.split(":", 1)[0]                      # dataset.create:active → dataset.create
+    if base in _ACT_LABELS:
+        return _ACT_LABELS[base]
+    for k, v in _ACT_LABELS.items():
+        if a.startswith(k):
+            return v
+    return a.replace(".", " · ").replace("_", " ") or "—"
+
+
 def _audit_timeline(s, like):
     """События аудита по объекту (obj LIKE), отсортированные по времени — «что происходило»."""
     out = []
@@ -33,8 +72,38 @@ def _audit_timeline(s, like):
                else "sec" if ("sign" in act or "approve" in act or "promote" in act) else "info")
         acct, rl = actor_role(ev.actor)
         out.append({"t": _short_t(ev.ts), "actor": acct, "role": rl, "action": act,
-                    "obj": ev.obj or "", "lvl": lvl})
+                    "label": _humanize(act), "obj": ev.obj or "", "lvl": lvl})
     return out
+
+
+# ─────────────────────────── РЕЕСТР МОДЕЛЕЙ ───────────────────────────
+def model_registry():
+    """Список моделей со сводкой: критичность, версии·стадии, владелец и число
+    открытых критичных/high-проблем (чтобы «кто требует внимания» был виден сразу)."""
+    with SessionLocal() as s:
+        models = s.query(domain.Model).order_by(domain.Model.id.desc()).all()
+        ver_by_m = defaultdict(list)
+        for mv in s.query(domain.ModelVersion).all():
+            ver_by_m[mv.model_id].append(mv)
+        open_by_m = defaultdict(int)
+        for f in (s.query(domain.Finding)
+                  .filter(domain.Finding.status == "open",
+                          domain.Finding.severity.in_(("critical", "high"))).all()):
+            ref = (f.asset_ref or "").split("/")
+            if len(ref) >= 2 and ref[0] == "model" and ref[1].isdigit():
+                open_by_m[int(ref[1])] += 1
+        rows, vt, prod, crit = [], 0, 0, 0
+        for m in models:
+            vers = sorted(ver_by_m.get(m.id, []), key=lambda v: v.version)
+            vt += len(vers)
+            prod += sum(1 for v in vers if v.stage == "prod")
+            crit += 1 if m.criticality in ("regulatory", "financial") else 0
+            rows.append({"id": m.id, "name": m.name, "criticality": m.criticality,
+                         "owner": m.owner or "—", "open": open_by_m.get(m.id, 0),
+                         "versions": [{"version": v.version, "stage": v.stage} for v in vers]})
+    kpi = {"models": len(rows), "versions": vt, "prod": prod, "critical": crit,
+           "problems": sum(1 for r in rows if r["open"])}
+    return rows, kpi
 
 
 # ─────────────────────────── РЕЕСТР ДАННЫХ ───────────────────────────
@@ -71,9 +140,20 @@ def data_registry():
                          "versions": ver_by_ds.get(d.id, 0), "columns": col_by_ds.get(d.id, 0),
                          "pii": pii_by_ds.get(d.id, 0), "open": open_by_ds.get(d.id, 0),
                          "consumers": len(cons_by_ds.get(d.id, set()))})
+        # Scoped-сканы качества/целостности (DATA-02/03/05): сканируют полезную нагрузку,
+        # а не зарегистрированный датасет → asset_ref="dataset/scan" без id. Показываем
+        # отдельно, чтобы такие находки не «терялись» вне карточек.
+        scans = []
+        for f in (s.query(domain.Finding).filter(domain.Finding.asset_ref == "dataset/scan")
+                  .order_by(domain.Finding.id.desc()).all()):
+            acct, rl = role_of({"actor": f.actor, "role": f.role})
+            scans.append({"id": f.id, "ts": _short_t(f.ts), "tool": f.tool, "verdict": f.verdict,
+                          "severity": f.severity, "status": f.status, "detail": f.detail,
+                          "actor": acct, "role": rl})
     kpi = {"datasets": len(rows), "quarantined": sum(1 for r in rows if not r["trusted"]),
-           "pii": sum(1 for r in rows if r["pii"]), "open": sum(r["open"] for r in rows)}
-    return rows, kpi
+           "pii": sum(1 for r in rows if r["pii"]), "open": sum(r["open"] for r in rows),
+           "scoped_scans": sum(1 for x in scans if x["status"] == "open")}
+    return rows, kpi, scans
 
 
 # ─────────────────────────── КАРТОЧКА ДАТАСЕТА ───────────────────────────
@@ -323,7 +403,8 @@ def user_card(actor):
             act = ev.action or ""
             lvl = ("err" if (not ev.was_authorized or "blocked" in act or "denied" in act or "reject" in act)
                    else "sec" if ("sign" in act or "approve" in act or "promote" in act or "secret" in act) else "info")
-            activity.append({"t": _short_t(ev.ts), "action": act, "obj": ev.obj or "", "lvl": lvl})
+            activity.append({"t": _short_t(ev.ts), "action": act, "label": _humanize(act),
+                             "obj": ev.obj or "", "lvl": lvl})
         decisions = []
         for a in appr:
             ref = mv_ref.get(a.model_version_id, {})

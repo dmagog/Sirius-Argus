@@ -1,5 +1,5 @@
 """ui.decisions — реестр решений ручного аппрув-гейта (дизайн-язык SA)."""
-from .layout import _e, _page
+from .layout import _e, _page, _toolbar
 
 
 def _decision_badge(decision):
@@ -44,6 +44,7 @@ def decisions_page(decisions, risks, kpi):
 
     # ── Panel 1: решения аппрув-гейта ──
     if not decisions:
+        toolbar1 = ""
         panel1 = ("<div class='sa-panel' style='padding:18px;color:var(--sa-muted)'>"
                   "решений ещё не было</div>")
     else:
@@ -70,7 +71,8 @@ def decisions_page(decisions, risks, kpi):
                 f"<td class='sa-mono' style='color:var(--sa-muted);font-size:11.5px;white-space:nowrap'>{_e(d.get('ts', ''))}</td>"
                 f"<td style='max-width:360px'>{reason_cell}</td>"
                 "</tr>")
-        panel1 = ("<div class='sa-panel'><table class='sa-table'><thead><tr>"
+        toolbar1 = _toolbar("dec-gate", len(decisions), "решений", "поиск по модели, аппруверу, обоснованию…")
+        panel1 = ("<div class='sa-scroll'><table id='dec-gate' class='sa-table'><thead><tr>"
                   "<th>решение</th><th>модель · версия</th><th>аппрувер</th>"
                   "<th>время</th><th>обоснование</th>"
                   f"</tr></thead><tbody>{rows}</tbody></table></div>")
@@ -101,7 +103,8 @@ def decisions_page(decisions, risks, kpi):
                 f"<td>{status}</td>"
                 "</tr>")
         panel2 = (
-            "<div class='sa-eye' style='margin-top:26px'>принятия остаточного риска (GOV-02)</div>"
+            "<div class='sa-eye' style='margin-top:30px;padding-top:22px;"
+            "border-top:1px solid var(--sa-line2)'>принятия остаточного риска (GOV-02)</div>"
             "<div class='sa-panel'><table class='sa-table'><thead><tr>"
             "<th>область</th><th>объект</th><th>кем</th><th>время</th>"
             "<th>обоснование</th><th>условия</th><th>срок</th><th>статус</th>"
@@ -119,7 +122,7 @@ def decisions_page(decisions, risks, kpi):
         "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0'>"
         f"{kpis}</div>"
         "<div class='sa-eye' style='margin-top:22px'>решения аппрув-гейта</div>"
-        f"{panel1}"
+        f"{toolbar1}{panel1}"
         f"{panel2}"
     )
     return _page("Sirius Argus — реестр решений", body, "decisions")

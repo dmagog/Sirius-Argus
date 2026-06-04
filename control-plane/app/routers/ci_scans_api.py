@@ -180,6 +180,7 @@ async def scan_deps_endpoint(request: Request, filename: str = Query("requiremen
 
 
 class DatasetScanIn(BaseModel):
+    dataset_id: int = 0  # >0 → находки привязываются к dataset/<id> (видны в карточке); 0 → scoped-скан
     labels: list = []
     expected_labels: list = []
     baseline_dist: dict = {}
@@ -194,15 +195,17 @@ def scan_dataset_endpoint(body: DatasetScanIn, p: Principal = Depends(require("d
     """Гейт качества/целостности данных (scoped): DATA-02 label-flip, DATA-03 UGC-бэкдор-триггер,
     DATA-05 train-serve skew, FB-01 провенанс петли дообучения. Аномалия → Finding + карантин-сигнал."""
     findings = scanners.scan_dataset(body.model_dump())
+    # привязка к зарегистрированному датасету, если передан dataset_id (>0) — иначе scoped-скан
+    ref = f"dataset/{body.dataset_id}" if body.dataset_id else "dataset/scan"
     if findings:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         with SessionLocal() as s:
             for r in findings:
                 s.add(domain.Finding(ts=now, tool=r["tool"], verdict=r["verdict"], severity=r["severity"],
-                                     status="open", asset_type="dataset", asset_ref="dataset/scan", detail=r["detail"],
+                                     status="open", asset_type="dataset", asset_ref=ref, detail=r["detail"],
                                      actor=p.sub, role=p.primary_role()))
             s.commit()
-        audit.append_event(actor=p.sub, action="dataset.scan.flagged", obj="dataset/scan")
+        audit.append_event(actor=p.sub, action="dataset.scan.flagged", obj=ref)
         return {"clean": False, "findings": findings}
-    audit.append_event(actor=p.sub, action="dataset.scan.clean", obj="dataset/scan")
+    audit.append_event(actor=p.sub, action="dataset.scan.clean", obj=ref)
     return {"clean": True, "findings": []}

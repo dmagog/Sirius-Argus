@@ -1,7 +1,7 @@
 """ui.users — реестр пользователей/акторов (дизайн-язык SA)."""
 from urllib.parse import quote
 
-from .layout import _e, _page
+from .layout import _e, _page, _toolbar
 
 # роль → цвет (люди и сервис-акторы)
 _ROLE_COL = {"MLSecOps": "var(--sa-accent-ink)", "CEO": "var(--sa-alert)", "Product": "#fb923c",
@@ -31,6 +31,7 @@ def users_page(rows, kpi):
     )
 
     if not rows:
+        toolbar = ""
         table = ("<div class='sa-panel' style='padding:18px;color:var(--sa-muted)'>"
                  "акторов пока нет</div>")
     else:
@@ -54,8 +55,10 @@ def users_page(rows, kpi):
                 f"<td>{dec_cell}</td>"
                 f"<td>{owns_cell}</td>"
                 f"<td class='sa-mono' style='color:var(--sa-muted);font-size:11px;white-space:nowrap'>{_e(r['last'])}</td></tr>")
-        table = ("<div class='sa-panel'><table class='sa-table'><thead><tr>"
-                 "<th>актор</th><th>роль</th><th>действий</th><th>инцидентов</th><th>открытых</th>"
+        toolbar = _toolbar("reg-users", len(rows), "акторов", "поиск по актору, роли…")
+        table = ("<div class='sa-scroll'><table id='reg-users' class='sa-table'><thead><tr>"
+                 "<th>актор</th><th>роль</th><th>действий</th><th>инцидентов</th>"
+                 "<th title='открытые critical/high находки причастности'>открытых</th>"
                  "<th>решений</th><th>владеет</th><th>посл. активность</th>"
                  f"</tr></thead><tbody>{trs}</tbody></table></div>")
 
@@ -67,6 +70,6 @@ def users_page(rows, kpi):
         "По каждому видно роль и активность; клик по актору — карточка «кто что делал»: "
         "его действия, инциденты причастности, решения и что он владеет.</p>"
         "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0'>"
-        f"{kpis}</div>{table}"
+        f"{kpis}</div>{toolbar}{table}"
     )
     return _page("Sirius Argus — пользователи", body, "users")

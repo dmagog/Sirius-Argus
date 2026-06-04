@@ -1,5 +1,5 @@
 """ui.registry — реестр моделей (дизайн-язык SA в рамках общего sidebar)."""
-from .layout import _e, _page
+from .layout import _e, _page, _toolbar
 
 
 # Стадии жизненного цикла версии: цвет через токены SA.
@@ -25,7 +25,11 @@ def _stage_badge(stage):
 
 
 def registry_page(models, kpi):
-    """Read-only витрина реестра: модели, критичность, версии и стадии."""
+    """Read-only витрина реестра: модели, критичность, версии·стадии, владелец, открытые проблемы."""
+    from ..runs import actor_href
+    problems = kpi.get("problems", 0)
+    p_border = " style='border-color:var(--sa-alert)'" if problems else ""
+    p_val = " style='color:var(--sa-alert)'" if problems else ""
     kpis = (
         f"<div class='sa-kpi'><div class='l'>Моделей</div><div class='v'>{kpi.get('models', 0)}</div></div>"
         f"<div class='sa-kpi'><div class='l'>Версий</div><div class='v'>{kpi.get('versions', 0)}</div>"
@@ -35,9 +39,12 @@ def registry_page(models, kpi):
         f"<div class='sa-kpi' style='border-color:var(--sa-alert)'><div class='l'>Критичные</div>"
         f"<div class='v' style='color:var(--sa-alert)'>{kpi.get('critical', 0)}</div>"
         "<div class='s'>regulatory / financial</div></div>"
+        f"<div class='sa-kpi'{p_border}><div class='l'>С проблемами</div>"
+        f"<div class='v'{p_val}>{problems}</div><div class='s'>откр. critical/high</div></div>"
     )
 
     if not models:
+        toolbar = ""
         table = ("<div class='sa-panel' style='padding:18px;color:var(--sa-muted)'>"
                  "в реестре пока нет моделей</div>")
     else:
@@ -48,6 +55,13 @@ def registry_page(models, kpi):
             crit_badge = (f"<span class='sa-badge' "
                           f"style='color:{crit_col};background:color-mix(in srgb,{crit_col} 15%,transparent)'>"
                           f"{_e(crit)}</span>")
+            owner = m.get("owner", "—")
+            ohref = actor_href(owner)
+            owner_cell = (f"<a href='{_e(ohref)}' style='color:var(--sa-accent-ink);text-decoration:none'>{_e(owner)}</a>"
+                          if ohref else f"<span style='color:var(--sa-text2)'>{_e(owner)}</span>")
+            op = m.get("open", 0)
+            prob_cell = (f"<span class='sa-mono' style='color:var(--sa-alert);font-weight:700'>&#9679; {_e(op)}</span>"
+                         if op else "<span style='color:var(--sa-muted)'>—</span>")
             if m["versions"]:
                 vers = " ".join(
                     f"<span class='sa-mono' style='font-size:11.5px'>v{_e(v['version'])}</span>"
@@ -61,9 +75,13 @@ def registry_page(models, kpi):
                 f"<td><a href='/registry/model/{_e(m['id'])}' style='color:var(--sa-head);font-weight:600;text-decoration:none'>{_e(m['name'])} "
                 f"<i class='bi bi-arrow-right-short' style='color:var(--sa-muted)'></i></a></td>"
                 f"<td>{crit_badge}</td>"
-                f"<td>{vers}</td></tr>")
-        table = ("<div class='sa-panel'><table class='sa-table'><thead><tr>"
-                 "<th>id</th><th>модель</th><th>критичность</th><th>версии · стадии</th>"
+                f"<td>{owner_cell}</td>"
+                f"<td>{vers}</td>"
+                f"<td style='text-align:center'>{prob_cell}</td></tr>")
+        toolbar = _toolbar("reg-models", len(models), "моделей", "поиск по имени, владельцу, id…")
+        table = ("<div class='sa-scroll'><table id='reg-models' class='sa-table'><thead><tr>"
+                 "<th>id</th><th>модель</th><th>критичность</th><th>владелец</th>"
+                 "<th>версии · стадии</th><th>проблемы</th>"
                  f"</tr></thead><tbody>{rows}</tbody></table></div>")
 
     body = (
@@ -74,6 +92,6 @@ def registry_page(models, kpi):
         "<span class='sa-mono' style='color:var(--sa-accent-ink)'>/api/*</span> под RBAC. "
         "Клик по модели — карточка с историей, статусом и проблемами; по шапке столбца — сортировка.</p>"
         "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0'>"
-        f"{kpis}</div>{table}"
+        f"{kpis}</div>{toolbar}{table}"
     )
     return _page("Sirius Argus — реестр", body, "registry")

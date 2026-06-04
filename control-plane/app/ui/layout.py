@@ -28,12 +28,14 @@ _SORT_JS = """<script>
       if(t.dataset.srt)return; t.dataset.srt='1';
       var ths=t.querySelectorAll('thead th');
       ths.forEach(function(th,i){
+        if('nosort' in th.dataset)return;
         th.style.cursor='pointer'; th.style.userSelect='none'; if(!th.title)th.title='сортировать';
+        var hint=document.createElement('span'); hint.className='srt-i'; hint.textContent='\\u21c5'; th.appendChild(hint);
         th.addEventListener('click',function(){
           var tb=t.querySelector('tbody'); if(!tb)return;
           var rows=Array.prototype.slice.call(tb.children).filter(function(r){return r.tagName==='TR';});
           var asc=th.dataset.asc!=='1';
-          ths.forEach(function(o){o.dataset.asc='';var s=o.querySelector('.srt-i');if(s)s.remove();});
+          ths.forEach(function(o){o.dataset.asc='';var s=o.querySelector('.srt-i');if(s){s.textContent='\\u21c5';s.classList.remove('on');}});
           th.dataset.asc=asc?'1':'';
           rows.sort(function(a,b){
             var ca=a.children[i],cb=b.children[i];
@@ -43,13 +45,34 @@ _SORT_JS = """<script>
             return asc?c:-c;
           });
           rows.forEach(function(r){tb.appendChild(r);});
-          var ind=document.createElement('span'); ind.className='srt-i'; ind.textContent=asc?' \\u25b2':' \\u25bc'; th.appendChild(ind);
+          var s=th.querySelector('.srt-i'); if(s){s.textContent=asc?'\\u25b2':'\\u25bc';s.classList.add('on');}
         });
       });
     });
   }
   sortable(document);
   if(document.body)document.body.addEventListener('htmx:afterSwap',function(e){sortable(e.target);});
+})();
+</script>"""
+
+
+# Живой текстовый фильтр любой таблицы: <input data-filter-target="#id"> прячет несовпавшие
+# строки и обновляет счётчик [data-filter-count] .n в том же .sa-toolbar (без перезагрузки).
+_FILTER_JS = """<script>
+(function(){
+  function wire(inp){
+    if(inp.dataset.fw)return; inp.dataset.fw='1';
+    var tbl=document.querySelector(inp.dataset.filterTarget); if(!tbl)return;
+    var bar=inp.closest('.sa-toolbar'); var cnt=bar?bar.querySelector('[data-filter-count] .n'):null;
+    function run(){
+      var q=inp.value.trim().toLowerCase(), rows=tbl.querySelectorAll('tbody tr'), shown=0;
+      rows.forEach(function(r){var hit=q===''||r.innerText.toLowerCase().indexOf(q)>=0;
+        r.style.display=hit?'':'none'; if(hit)shown++;});
+      if(cnt)cnt.textContent=shown;
+    }
+    inp.addEventListener('input',run);
+  }
+  document.querySelectorAll('input[data-filter-target]').forEach(wire);
 })();
 </script>"""
 
@@ -96,8 +119,8 @@ saThemeIcon();
 _THEME = """<style>
 :root{--bg:#0b1220;--panel:#111a2e;--panel2:#0e1626;--line:#1f2a44;--text:#cbd5e1;--text2:#94a3b8;--muted:#64748b;--head:#f1f5f9;--accent:#facc15;
 --sa-bg:#0b1220;--sa-panel:#111a2e;--sa-panel2:#0e1626;--sa-panel3:#15203a;--sa-line:#1f2a44;--sa-line2:#28344f;--sa-text:#cbd5e1;--sa-text2:#94a3b8;--sa-muted:#64748b;--sa-head:#f1f5f9;--sa-accent:#facc15;--sa-accent-ink:#facc15;--sa-ok:#10b981;--sa-warn:#f59e0b;--sa-alert:#ef4444;--sa-blue:#38bdf8;--sa-card-grad:linear-gradient(180deg,#121d33,#0e1626);--sa-hover:#16203a;--sa-rail:#0a111f;}
-[data-sa-theme='light']{--bg:#eef1f5;--panel:#ffffff;--panel2:#f6f8fb;--line:#e2e8f0;--text:#334155;--text2:#64748b;--muted:#94a3b8;--head:#0f172a;--accent:#eab308;
---sa-bg:#eef1f5;--sa-panel:#ffffff;--sa-panel2:#f6f8fb;--sa-panel3:#ffffff;--sa-line:#e2e8f0;--sa-line2:#dbe3ec;--sa-text:#334155;--sa-text2:#64748b;--sa-muted:#94a3b8;--sa-head:#0f172a;--sa-accent:#eab308;--sa-accent-ink:#a16207;--sa-ok:#059669;--sa-warn:#d97706;--sa-alert:#dc2626;--sa-blue:#0284c7;--sa-card-grad:linear-gradient(180deg,#ffffff,#f7f9fc);--sa-hover:#eef2f7;--sa-rail:#f1f4f8;}
+[data-sa-theme='light']{--bg:#eef1f5;--panel:#ffffff;--panel2:#f6f8fb;--line:#d6deea;--text:#334155;--text2:#64748b;--muted:#7c8a9f;--head:#0f172a;--accent:#eab308;
+--sa-bg:#eef1f5;--sa-panel:#ffffff;--sa-panel2:#f6f8fb;--sa-panel3:#ffffff;--sa-line:#d6deea;--sa-line2:#c9d3e1;--sa-text:#334155;--sa-text2:#64748b;--sa-muted:#7c8a9f;--sa-head:#0f172a;--sa-accent:#eab308;--sa-accent-ink:#a16207;--sa-ok:#059669;--sa-warn:#d97706;--sa-alert:#dc2626;--sa-blue:#0284c7;--sa-card-grad:linear-gradient(180deg,#ffffff,#eef2f8);--sa-hover:#eef2f7;--sa-rail:#f1f4f8;}
 body{background:var(--bg)!important;color:var(--text)!important;font-family:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
 table{font-variant-numeric:tabular-nums;}
 h1,h2,h3{color:var(--head);}
@@ -174,6 +197,32 @@ code{color:#e2e8f0;}
 .sa-table tbody tr:hover{background:var(--sa-hover);}
 .sa-h1{font-size:21px;font-weight:700;color:var(--sa-head);margin:0;}
 .sa-sub{font-size:12.5px;color:var(--sa-text2);margin-top:5px;line-height:1.5;}
+/* сортировка: дискаверабл-индикатор ⇅ в шапке + sticky-шапка (липнет только в .sa-scroll) */
+.sa-table thead th{position:sticky;top:0;z-index:3;}
+.sa-table thead th .srt-i{margin-left:5px;font-size:9px;opacity:.32;color:var(--sa-text2);}
+.sa-table thead th:hover .srt-i{opacity:.75;color:var(--sa-accent);}
+.sa-table thead th .srt-i.on{opacity:1;color:var(--sa-accent);}
+/* бокс прокрутки длинных реестров: шапка реально остаётся видна */
+.sa-scroll{border:1px solid var(--sa-line);border-radius:14px;background:var(--sa-panel);max-height:72vh;overflow:auto;}
+/* панель инструментов реестра: живой поиск + счётчик найденного */
+.sa-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap;}
+.sa-search{display:flex;align-items:center;gap:7px;border:1px solid var(--sa-line);border-radius:9px;background:var(--sa-panel);padding:7px 11px;flex:1;min-width:220px;max-width:380px;}
+.sa-search i{color:var(--sa-muted);font-size:13px;flex:none;}
+.sa-search input{border:0;outline:0;background:transparent;color:var(--sa-text);font-size:13px;width:100%;font-family:inherit;}
+.sa-search input::placeholder{color:var(--sa-muted);}
+.sa-count{font-size:11.5px;color:var(--sa-text2);white-space:nowrap;}
+.sa-count .n{color:var(--sa-head);font-weight:700;font-variant-numeric:tabular-nums;}
+/* алерт-полоса карточки (сводка проблем/гейта сверху) */
+.sa-alertbar{display:flex;align-items:center;gap:10px;border-radius:12px;padding:11px 15px;margin:14px 0 2px;font-size:13px;border:1px solid;}
+.sa-alertbar i{font-size:16px;flex:none;}
+/* доступность: видимый фокус + подчёркивание ссылок по ховеру в контенте */
+a:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--sa-accent);outline-offset:2px;border-radius:4px;}
+.sa-table a:hover,.sa-sub a:hover,.sa-alertbar a:hover{text-decoration:underline;}
+/* хлебные крошки: секция › сущность */
+.sb-top .crumb a.crumb-sec{color:var(--sa-text2);text-decoration:none;}
+.sb-top .crumb a.crumb-sec:hover{color:var(--head);text-decoration:underline;}
+.sb-top .crumb .crumb-sep{color:var(--muted);font-weight:400;}
+.sb-top .crumb .crumb-cur{color:var(--head);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 </style>"""
 
 
@@ -228,7 +277,18 @@ _NAV_ICON = {"map": "bi-diagram-3", "dashboard": "bi-speedometer2", "registry": 
              "users": "bi-person-vcard", "roles": "bi-people"}
 
 
-def _page(title, body, nav="dashboard"):
+def _toolbar(table_id, total, noun="строк", placeholder="фильтр по таблице…"):
+    """Панель над реестром: живой текстовый поиск (прячет строки) + счётчик найденного."""
+    return (
+        "<div class='sa-toolbar'>"
+        "<label class='sa-search'><i class='bi bi-search'></i>"
+        f"<input type='search' autocomplete='off' placeholder='{_e(placeholder)}' "
+        f"aria-label='{_e(placeholder)}' data-filter-target='#{_e(table_id)}'></label>"
+        f"<span class='sa-count' data-filter-count><span class='n'>{_e(total)}</span> {_e(noun)}</span>"
+        "</div>")
+
+
+def _page(title, body, nav="dashboard", crumb=None):
     def link(href, label, key):
         active = " sb-active" if key == nav else ""
         icon = _NAV_ICON.get(key, "bi-dot")
@@ -237,7 +297,15 @@ def _page(title, body, nav="dashboard"):
                 f'<span class="sb-badge" data-badge="{key}"></span></a>')
     nav_html = "".join(link(h, l, k) for h, l, k in _NAV)
     sec_label = next((l for h, l, k in _NAV if k == nav), "Sirius Argus")
+    sec_href = next((h for h, l, k in _NAV if k == nav), "/")
     sec_icon = _NAV_ICON.get(nav, "bi-dot")
+    if crumb:
+        crumb_html = (f"<span class='crumb'><i class='bi {sec_icon}'></i>"
+                      f"<a class='crumb-sec' href='{sec_href}'>{_e(sec_label)}</a>"
+                      f"<span class='crumb-sep'>›</span>"
+                      f"<span class='crumb-cur'>{_e(crumb)}</span></span>")
+    else:
+        crumb_html = f"<span class='crumb'><i class='bi {sec_icon}'></i>{_e(sec_label)}</span>"
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
         "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);}catch(e){}</script>"
@@ -259,14 +327,14 @@ def _page(title, body, nav="dashboard"):
         "<div class='sb-foot'><span class='env-chip'>local · dev</span></div>"
         "</aside>"
         "<div class='app-col'>"
-        f"<header class='sb-top'><span class='crumb'><i class='bi {sec_icon}'></i>{_e(sec_label)}</span>"
+        f"<header class='sb-top'>{crumb_html}"
         "<span class='sb-tools'>"
-        "<button class='sb-theme' onclick='saTheme()' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button>"
+        "<button class='sb-theme' onclick='saTheme()' aria-label='Переключить тему' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button>"
         "</span></header>"
         f"<main class='app-main'>{body}</main>"
         "</div>"
         "</div>"
-        f"{_SORT_JS}{_NAV_JS}{_THEME_JS}</body></html>"
+        f"{_SORT_JS}{_FILTER_JS}{_NAV_JS}{_THEME_JS}</body></html>"
     )
 
 

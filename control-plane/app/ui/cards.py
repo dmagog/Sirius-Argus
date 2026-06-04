@@ -122,7 +122,8 @@ def _table(head_cells, rows):
 
 
 def _timeline(rows):
-    """Компактный терминалоподобный список событий, скроллящийся по высоте."""
+    """Компактный терминалоподобный список событий, скроллящийся по высоте.
+    Подпись — человекочитаемая (label), рядом приглушённо сырой код для трассы."""
     items = ""
     for r in rows:
         acol = _LVL_COL.get(r.get("lvl"), "var(--sa-text2)")
@@ -134,13 +135,26 @@ def _timeline(rows):
             f"<span style='color:{acol};font-size:12.5px;white-space:nowrap'>"
             f"{_e(r.get('actor'))} <span class='sa-mono' style='color:var(--sa-text2);"
             f"font-size:11px'>{_e(r.get('role'))}</span></span>"
-            f"<span class='sa-mono' style='color:var(--sa-text);font-size:11.5px'>"
+            f"<span style='color:var(--sa-text);font-size:12px'>"
+            f"{_e(r.get('label') or r.get('action'))}</span>"
+            f"<span class='sa-mono' style='color:var(--sa-muted);font-size:10px'>"
             f"{_e(r.get('action'))}</span></div>")
     if not items:
         items = ("<div style='color:var(--sa-muted);font-size:13px;padding:4px 0'>"
                  "событий пока нет</div>")
-    return ("<div class='sa-panel' style='padding:6px 16px 10px;max-height:260px;"
+    return ("<div class='sa-panel' style='padding:6px 16px 10px;max-height:320px;"
             f"overflow:auto'>{items}</div>")
+
+
+def _alertbar(kind, html_inner):
+    """Полоса-сводка вверху карточки: alert (проблемы), warn (ждёт решения), ok (спокойно)."""
+    col = {"alert": "var(--sa-alert)", "warn": "var(--sa-warn)", "ok": "var(--sa-ok)"}.get(
+        kind, "var(--sa-text2)")
+    icon = {"alert": "bi-exclamation-octagon-fill", "warn": "bi-hourglass-split",
+            "ok": "bi-shield-check"}.get(kind, "bi-info-circle")
+    return (f"<div class='sa-alertbar' style='border-color:color-mix(in srgb,{col} 45%,transparent);"
+            f"background:color-mix(in srgb,{col} 12%,transparent);color:{col}'>"
+            f"<i class='bi {icon}'></i><span style='color:var(--sa-text)'>{html_inner}</span></div>")
 
 
 # ── карточка модели ──────────────────────────────────────────────────────────
@@ -263,14 +277,25 @@ def model_card_page(card):
         dec_panel = _table(
             ["версия", "решение", "аппрувер", "время", "обоснование"], rows)
 
+    # алерт-полоса: сводка проблем/ожидания гейта сразу под KPI
+    if status == "проблемы":
+        bar = _alertbar("alert", f"Есть нерешённые проблемы — открытых сработок: "
+                        f"<b>{_e(card['open'])}</b>. Версии с критичными находками заблокированы "
+                        "перед продом (PROMOTE-GATE). Детали — в блоке «Проблемы» ниже.")
+    elif status == "ждёт решения":
+        bar = _alertbar("warn", "Версия ждёт <b>ручного аппрув-гейта</b> перед промоушеном "
+                        "в прод. Решение примет уполномоченная роль.")
+    else:
+        bar = ""
+
     body = (
-        head + kpis
-        + _section("Версии", ver_panel)
+        head + kpis + bar
         + _section("Проблемы", prob_panel)
+        + _section("Версии", ver_panel)
         + _section("Решения аппрув-гейта", dec_panel)
         + _section("Таймлайн", _timeline(card.get("timeline", [])))
     )
-    return _page(f"Sirius Argus — {card['name']}", body, "registry")
+    return _page(f"Sirius Argus — {card['name']}", body, "registry", crumb=name)
 
 
 # ── карточка датасета ────────────────────────────────────────────────────────
@@ -395,18 +420,26 @@ def dataset_card_page(card):
                 f"<td>{_stage_badge(c.get('stage'))}</td></tr>")
         cons_panel = _table(["модель", "версия", "стадия"], rows)
 
+    if status == "карантин":
+        bar = _alertbar("alert", "Источник <b>недоверенный</b> — датасет в карантине (DATA-01). "
+                        "Обучение на нём требует явного принятия остаточного риска.")
+    elif status == "проблемы":
+        bar = _alertbar("warn", "Есть открытые проблемы по датасету — см. блок «Проблемы» ниже.")
+    else:
+        bar = ""
+
     body = (
-        head + kpis
+        head + kpis + bar
+        + _section("Проблемы", find_panel)
         + _section("Доверенность источника", trust_panel)
         + _section("Схема", schema_panel,
                    note="PII-значения маскируются для ролей без допуска (DATA-04).")
         + _section("Версии", ver_panel)
-        + _section("Проблемы", find_panel)
         + _section("Потребители (lineage)", cons_panel,
                    note="какие версии моделей обучены на этих данных")
         + _section("Таймлайн", _timeline(card.get("timeline", [])))
     )
-    return _page(f"Sirius Argus — {card['name']}", body, "data")
+    return _page(f"Sirius Argus — {card['name']}", body, "data", crumb=name)
 
 
 # ── карточка пользователя / актора ────────────────────────────────────────────
@@ -488,7 +521,8 @@ def user_card_page(card):
         act_items += (
             "<div style='display:flex;gap:12px;align-items:baseline;padding:4px 0;border-top:1px solid var(--sa-line)'>"
             f"<span class='sa-mono' style='color:var(--sa-muted);font-size:11.5px;white-space:nowrap'>{_e(a['t'])}</span>"
-            f"<span class='sa-mono' style='color:{acol};font-size:11.5px'>{_e(a['action'])}</span>"
+            f"<span style='color:{acol};font-size:12px'>{_e(a.get('label') or a['action'])}</span>"
+            f"<span class='sa-mono' style='color:var(--sa-muted);font-size:10px'>{_e(a['action'])}</span>"
             f"<span class='sa-mono' style='color:var(--sa-text2);font-size:11px'>{_e(a['obj'])}</span></div>")
     act_panel = (f"<div class='sa-panel' style='padding:6px 16px 10px;max-height:280px;overflow:auto'>{act_items}</div>"
                  if act_items else _empty("действий в аудите нет"))
@@ -507,9 +541,12 @@ def user_card_page(card):
             _kpi("Решений", k.get("decisions", 0)),
             _kpi("Владеет", k.get("owns", 0)),
         ])
+        + (_alertbar("alert", f"Причастен к открытым инцидентам: <b>{_e(k.get('open'))}</b> "
+                     "(critical/high). Подробности — в блоке «Инциденты» ниже.")
+           if k.get("open") else "")
         + _section("Инциденты (причастность)", inc_panel)
         + _section("Решения", dec_panel)
         + _section("Владеет", owns_panel)
         + _section("Активность (аудит)", act_panel)
     )
-    return _page(f"Sirius Argus — {acct}", body, "users")
+    return _page(f"Sirius Argus — {acct}", body, "users", crumb=acct)

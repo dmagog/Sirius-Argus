@@ -81,17 +81,7 @@ def roles_view():
 def registry_view():
     """Read-only витрина реестра (как дашборд, без логина): модели, версии, стадии.
     Чувствительные операции и lineage — через /api/* под RBAC."""
-    with SessionLocal() as s:
-        models, versions_total, prod, critical = [], 0, 0, 0
-        for m in s.query(domain.Model).all():
-            vers = (s.query(domain.ModelVersion).filter_by(model_id=m.id)
-                    .order_by(domain.ModelVersion.version).all())
-            versions_total += len(vers)
-            prod += sum(1 for v in vers if v.stage == "prod")
-            critical += 1 if m.criticality in ("regulatory", "financial") else 0
-            models.append({"id": m.id, "name": m.name, "criticality": m.criticality,
-                           "versions": [{"version": v.version, "stage": v.stage} for v in vers]})
-    kpi = {"models": len(models), "versions": versions_total, "prod": prod, "critical": critical}
+    models, kpi = cards.model_registry()
     return ui.registry_page(models, kpi)
 
 
@@ -109,8 +99,8 @@ def model_card_view(model_id: int):
 def data_view():
     """Реестр данных: датасеты, чувствительность, доверенность источника (DATA-01),
     PII-схема (DATA-04), lineage к обученным моделям. Клик по датасету — карточка."""
-    datasets, kpi = cards.data_registry()
-    return ui.data_page(datasets, kpi)
+    datasets, kpi, scans = cards.data_registry()
+    return ui.data_page(datasets, kpi, scans)
 
 
 @router.get("/data/dataset/{dataset_id}", response_class=HTMLResponse)
