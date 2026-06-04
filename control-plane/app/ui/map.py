@@ -148,12 +148,15 @@ def _sa_css():
         ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--sa-bg);transition:opacity .55s ease;}"
         ".sa-splash.out{opacity:0;pointer-events:none;}"
         ".sa-splash .halo{position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;}"
-        # акцентная дуга: и длина (dasharray), и СМЕЩЕНИЕ (dashoffset) идут МОНОТОННО → оба конца
-        # всегда движутся вперёд, центр не откатывается; дуга растёт/сжимается и непрерывно обходит круг.
-        # offset 0→-283 (ровно длина окружности) → стык цикла бесшовный; отдельное вращение не нужно.
-        # stroke через CSS-свойство (не SVG-атрибут) → резолвит var() и уважает выбранный акцент.
-        ".sa-splash .ring{position:absolute;inset:-6px;}"
-        ".sa-splash .ring .arc{fill:none;stroke:var(--sa-accent);stroke-width:2.4;stroke-linecap:round;opacity:.85;stroke-dasharray:12 283;stroke-dashoffset:0;animation:saDash 4.8s ease-in-out infinite;}"
+        # комета: конический градиент transparent→accent даёт яркую ГОЛОВУ (на стыке 360°/0°) и
+        # затухающий ХВОСТ. Голова движется с ПОСТОЯННОЙ скоростью (saComet linear — зависит только
+        # от вращения, не от длины). Длина хвоста дышит через анимируемый @property-угол (saTail), но
+        # НЕ схлопывается (минимум ~130°). Маска вырезает тонкое кольцо. conic var() → уважает акцент.
+        ".sa-splash .ring{position:absolute;inset:-6px;border-radius:50%;--comet-tail:180deg;"
+        "background:conic-gradient(from 0deg,transparent 0deg,transparent var(--comet-tail),var(--sa-accent) 360deg);"
+        "-webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - 7px),#000 calc(100% - 6px));"
+        "mask:radial-gradient(farthest-side,#0000 calc(100% - 7px),#000 calc(100% - 6px));"
+        "opacity:.9;animation:saComet 5s linear infinite,saTail 4s ease-in-out infinite;}"
         # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
         ".sa-splash .halo::after{content:'';position:absolute;inset:10px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
         # логотип ОЧЕНЬ неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 80с/оборот)
@@ -170,12 +173,14 @@ def _sa_css():
         ".sa-splash .step .txt{display:inline-block;will-change:transform,opacity;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
-        "@keyframes saDash{0%{stroke-dasharray:12 283;stroke-dashoffset:0}50%{stroke-dasharray:190 283;stroke-dashoffset:-55}100%{stroke-dasharray:12 283;stroke-dashoffset:-283}}"
+        "@property --comet-tail{syntax:'<angle>';inherits:false;initial-value:180deg;}"
+        "@keyframes saComet{to{transform:rotate(360deg)}}"
+        "@keyframes saTail{0%,100%{--comet-tail:230deg}50%{--comet-tail:120deg}}"
         "@keyframes saLogoSpin{to{transform:rotate(-360deg)}}"
         "@keyframes saGlow{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.05);opacity:1}}"
         "@keyframes saDot{0%,100%{opacity:.4}50%{opacity:1}}"
         "@keyframes saSplashBar{from{width:0}to{width:100%}}"
-        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .logospin,.sa-splash .ring,.sa-splash .ring .arc,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}.sa-splash .ring .arc{stroke-dasharray:200 283}}"
+        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .logospin,.sa-splash .ring,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
         "</style>"
     )
 
@@ -240,7 +245,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     # hero-сплэш — только на стартовом экране (обзор); играет при каждой загрузке
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
-        "<div class='halo'><svg class='ring' viewBox='0 0 100 100'><circle class='arc' cx='50' cy='50' r='45'/></svg>"
+        "<div class='halo'><span class='ring'></span>"
         "<span class='logospin'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></span></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
         "<div style='display:flex;flex-direction:column;align-items:center;gap:11px'>"
