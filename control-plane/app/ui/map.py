@@ -158,12 +158,15 @@ def _sa_css():
         ".sa-splash .bar{width:248px;height:4px;border-radius:4px;background:var(--sa-line2);overflow:hidden;opacity:0;animation:saRise .5s ease .6s forwards;}"
         ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
         ".sa-splash.go .bar i{animation:saSplashBar 1.9s cubic-bezier(.4,0,.2,1) .6s forwards;}"
+        # «бутлог»: текст этапа под баром сменяется по мере заполнения (JS), плавная подмена
+        ".sa-splash .step{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.2px;color:var(--sa-text2);min-height:15px;opacity:0;transition:opacity .18s ease;}"
+        ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;animation:saPulse 1.1s ease-in-out infinite;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
         "@keyframes saSpin{to{transform:rotate(360deg)}}"
         "@keyframes saPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}"
         "@keyframes saSplashBar{from{width:0}to{width:100%}}"
-        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .halo::before,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
+        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .halo::before,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
         "</style>"
     )
 
@@ -230,7 +233,10 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         "<div class='sa-splash' id='sa-splash'>"
         "<div class='halo'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
-        "<div class='bar'><i></i></div></div>"
+        "<div style='display:flex;flex-direction:column;align-items:center;gap:11px'>"
+        "<div class='bar'><i></i></div>"
+        "<div class='step'><span class='dot'></span><span class='txt'>Инициализация control-plane…</span></div>"
+        "</div></div>"
     ) if active == "overview" else ""
 
     gates_col = "var(--sa-alert)" if gates_ok < len(gates) else "var(--sa-ok)"
@@ -282,13 +288,23 @@ function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||''
     b.setAttribute('aria-current',(b.getAttribute('data-a')||'')===cur?'true':'false');});}
 (function(){saThemeIcon();saAccentMark();function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
  setInterval(tick,4000);tick();})();
-// hero-сплэш: играет ПРИ КАЖДОЙ загрузке обзора (удобно отлаживать промо-материалы), гасим по
-// таймеру (~2.5с, декоративный прогресс); уважаем prefers-reduced-motion; оверлей не блокирует контент.
+// hero-сплэш: играет ПРИ КАЖДОЙ загрузке обзора (удобно отлаживать промо-материалы). По мере
+// заполнения прогрессбара под ним сменяются тексты этапов («прорабатываем модули контура»).
+// ~2.5с, декоративно; уважаем prefers-reduced-motion; оверлей не блокирует контент.
 (function(){var el=document.getElementById('sa-splash');if(!el)return;
+ var step=el.querySelector('.step'),txt=el.querySelector('.step .txt');
+ var STEPS=['Инициализация control-plane…','Проверка hash-chain аудита…','Загрузка карты покрытия угроз…',
+            'Гейты и сканеры на постах…','Контур под наблюдением'];
  function done(){el.classList.add('out');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},600);}
  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- if(reduce){setTimeout(done,600);return;}
- el.classList.add('go');setTimeout(done,2500);})();
+ if(reduce){if(step&&txt){step.style.opacity='1';txt.textContent=STEPS[STEPS.length-1];}setTimeout(done,600);return;}
+ el.classList.add('go');
+ var i=0;
+ function show(){if(!step||!txt)return;step.style.opacity='0';
+   setTimeout(function(){txt.textContent=STEPS[i];step.style.opacity='1';},110);}
+ setTimeout(function(){show();var iv=setInterval(function(){
+   if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show();},400);},650);
+ setTimeout(done,2500);})();
 """
 
 
