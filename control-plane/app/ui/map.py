@@ -193,7 +193,7 @@ def _sa_css():
         ".sa-splash.go .bar i{animation:saSplashBar 6.4s linear .6s forwards;}"
         # «бутлог»: текст этапа под баром сменяется по мере заполнения (JS), плавная подмена
         ".sa-splash .step{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.2px;color:var(--sa-text2);min-height:18px;opacity:0;transition:opacity .25s ease;}"
-        ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;opacity:0;transition:opacity .34s ease;}"
+        ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;opacity:0;transition:opacity .34s ease,transform .34s ease;}"
         ".sa-splash .step .txt{display:inline-block;will-change:transform,opacity;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
@@ -344,14 +344,18 @@ function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||''
  if(reduce){if(step&&txt){step.style.opacity='1';txt.textContent=STEPS[STEPS.length-1];if(dot)dot.style.opacity='1';}setTimeout(done,700);return;}
  el.classList.add('go');
  var i=0, TR='transform .34s ease, opacity .34s ease';
- // новая строка ВСПЛЫВАЕТ снизу (translateY 14→0 + fade-in); точка появляется ВМЕСТЕ с текстом
+ // новая строка И ТОЧКА ВСПЛЫВАЮТ снизу одинаково (translateY 14→0 + fade-in)
  function enter(){txt.style.transition='none';txt.textContent=STEPS[i];
-   txt.style.opacity='0';txt.style.transform='translateY(14px)';void txt.offsetWidth;
-   txt.style.transition=TR;txt.style.opacity='1';txt.style.transform='translateY(0)';if(dot)dot.style.opacity='1';}
- // текущая УХОДИТ вверх (+ точка гаснет синхронно), затем входит новая — без наложения и без «скачка» точки
+   txt.style.opacity='0';txt.style.transform='translateY(14px)';
+   if(dot){dot.style.transition='none';dot.style.opacity='0';dot.style.transform='translateY(14px)';}
+   void txt.offsetWidth;
+   txt.style.transition=TR;txt.style.opacity='1';txt.style.transform='translateY(0)';
+   if(dot){dot.style.transition=TR;dot.style.opacity='1';dot.style.transform='translateY(0)';}}
+ // текущая строка И ТОЧКА УХОДЯТ вверх синхронно, затем входит новая — без наложения
  function show(first){if(!step||!txt)return;
    if(first){enter();return;}
-   txt.style.transition=TR;txt.style.opacity='0';txt.style.transform='translateY(-14px)';if(dot)dot.style.opacity='0';
+   txt.style.transition=TR;txt.style.opacity='0';txt.style.transform='translateY(-14px)';
+   if(dot){dot.style.transition=TR;dot.style.opacity='0';dot.style.transform='translateY(-14px)';}
    setTimeout(enter,340);}
  setTimeout(function(){step.style.opacity='1';show(true);
    var iv=setInterval(function(){if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show(false);},1500);},1000);
