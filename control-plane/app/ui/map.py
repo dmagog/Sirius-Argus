@@ -147,22 +147,23 @@ def _sa_css():
         # ── hero-сплэш при входе (играет каждую загрузку обзора; фон = --sa-bg, тема до отрисовки) ──
         ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--sa-bg);transition:opacity .55s ease;}"
         ".sa-splash.out{opacity:0;pointer-events:none;}"
-        ".sa-splash .halo{position:relative;width:154px;height:154px;display:flex;align-items:center;justify-content:center;}"
+        ".sa-splash .halo{position:relative;width:200px;height:200px;display:flex;align-items:center;justify-content:center;}"
         # вращающееся акцентное кольцо вокруг логотипа
-        ".sa-splash .halo::before{content:'';position:absolute;inset:-8px;border-radius:999px;border:2px solid transparent;border-top-color:var(--sa-accent);border-right-color:var(--sa-accent);opacity:.75;animation:saSpin 2.4s linear infinite;}"
+        ".sa-splash .halo::before{content:'';position:absolute;inset:-10px;border-radius:999px;border:2px solid transparent;border-top-color:var(--sa-accent);border-right-color:var(--sa-accent);opacity:.75;animation:saSpin 2.4s linear infinite;}"
         # пульсирующий золотой ореол
-        ".sa-splash .halo::after{content:'';position:absolute;inset:6px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.34) 0%,rgba(250,204,21,.10) 55%,rgba(250,204,21,0) 100%);animation:saPulse 2.2s ease-in-out infinite;}"
-        # логотип неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 16с/оборот)
-        ".sa-splash .logospin{position:relative;z-index:1;display:flex;animation:saLogoSpin 16s linear infinite;}"
-        ".sa-splash .logo{width:120px;height:120px;border-radius:999px;box-shadow:0 0 50px rgba(250,204,21,.30);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
+        ".sa-splash .halo::after{content:'';position:absolute;inset:8px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.34) 0%,rgba(250,204,21,.10) 55%,rgba(250,204,21,0) 100%);animation:saPulse 2.2s ease-in-out infinite;}"
+        # логотип ОЧЕНЬ неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 80с/оборот)
+        ".sa-splash .logospin{position:relative;z-index:1;display:flex;animation:saLogoSpin 80s linear infinite;}"
+        ".sa-splash .logo{width:156px;height:156px;border-radius:999px;box-shadow:0 0 56px rgba(250,204,21,.30);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
         ".sa-splash .t1{font-size:34px;font-weight:700;color:var(--sa-head);letter-spacing:.5px;opacity:0;animation:saRise .6s ease .35s forwards;}"
         ".sa-splash .t2{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;margin-top:8px;opacity:0;animation:saRise .6s ease .5s forwards;}"
         ".sa-splash .bar{width:248px;height:4px;border-radius:4px;background:var(--sa-line2);overflow:hidden;opacity:0;animation:saRise .5s ease .6s forwards;}"
         ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
-        ".sa-splash.go .bar i{animation:saSplashBar 4.4s cubic-bezier(.4,0,.2,1) .6s forwards;}"
+        ".sa-splash.go .bar i{animation:saSplashBar 5.6s cubic-bezier(.4,0,.2,1) .6s forwards;}"
         # «бутлог»: текст этапа под баром сменяется по мере заполнения (JS), плавная подмена
-        ".sa-splash .step{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.2px;color:var(--sa-text2);min-height:15px;opacity:0;transition:opacity .18s ease;}"
+        ".sa-splash .step{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.2px;color:var(--sa-text2);min-height:18px;opacity:0;transition:opacity .25s ease;}"
         ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;animation:saPulse 1.1s ease-in-out infinite;}"
+        ".sa-splash .step .txt{display:inline-block;will-change:transform,opacity;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
         "@keyframes saSpin{to{transform:rotate(360deg)}}"
@@ -298,16 +299,23 @@ function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||''
  var step=el.querySelector('.step'),txt=el.querySelector('.step .txt');
  var STEPS=['Инициализация control-plane…','Проверка hash-chain аудита…','Загрузка карты покрытия угроз…',
             'Гейты и сканеры на постах…','Контур под наблюдением'];
- function done(){el.classList.add('out');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},600);}
+ function done(){el.classList.add('out');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},700);}
  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- if(reduce){if(step&&txt){step.style.opacity='1';txt.textContent=STEPS[STEPS.length-1];}setTimeout(done,600);return;}
+ if(reduce){if(step&&txt){step.style.opacity='1';txt.textContent=STEPS[STEPS.length-1];}setTimeout(done,700);return;}
  el.classList.add('go');
- var i=0;
- function show(){if(!step||!txt)return;step.style.opacity='0';
-   setTimeout(function(){txt.textContent=STEPS[i];step.style.opacity='1';},110);}
- setTimeout(function(){show();var iv=setInterval(function(){
-   if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show();},1000);},750);
- setTimeout(done,5400);})();
+ var i=0, TR='transform .34s ease, opacity .34s ease';
+ // новая строка ВСПЛЫВАЕТ снизу (translateY 14→0 + fade-in)
+ function enter(){txt.style.transition='none';txt.textContent=STEPS[i];
+   txt.style.opacity='0';txt.style.transform='translateY(14px)';void txt.offsetWidth;
+   txt.style.transition=TR;txt.style.opacity='1';txt.style.transform='translateY(0)';}
+ // текущая УХОДИТ вверх (translateY 0→-14 + fade-out), затем входит новая — без наложения
+ function show(first){if(!step||!txt)return;
+   if(first){enter();return;}
+   txt.style.transition=TR;txt.style.opacity='0';txt.style.transform='translateY(-14px)';
+   setTimeout(enter,340);}
+ setTimeout(function(){step.style.opacity='1';show(true);
+   var iv=setInterval(function(){if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show(false);},1300);},800);
+ setTimeout(done,6600);})();
 """
 
 
