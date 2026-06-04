@@ -192,8 +192,10 @@ def ingest_benign_code():
 @then("есть сработка suspicious от эвристического сканера")
 def suspicious_finding():
     r = httpx.get(f"{BASE}/api/findings", headers=tok("MLSecOps"), timeout=60)
+    # admitted-ингест пишет findings с версионным asset_ref (model/<id>/v<n>); model-scoped
+    # (model/<id>) остаётся только у блокированных. Матчим обе формы по префиксу.
     fs = [f for f in r.json()["findings"]
-          if f["asset"] == f"model/{S['model_id']}" and f["verdict"] == "suspicious"
+          if (f["asset"] or "").startswith(f"model/{S['model_id']}") and f["verdict"] == "suspicious"
           and f["tool"] == "sirius-heuristic-scan"]
     assert fs, r.text
     S["finding_id"] = fs[0]["id"]

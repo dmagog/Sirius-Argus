@@ -10,6 +10,9 @@ networks:
   runtime:
     internal: true
   edge: {}
+  # Отдельная публикующая сеть для веб-консоли MinIO на хост. НЕ общая с edge (где serving):
+  # иначе serving делил бы сеть с MinIO и мог достать его S3 — пробой RT-06 (сегментация рантайма).
+  edge-minio: {}
 
 volumes:
   pg_data: {}
@@ -151,7 +154,7 @@ services:
     volumes: [minio_data:/data]
     ports:
       - "9001:9001"   # веб-консоль MinIO наружу (ops-доступ; вход root — console-SSO недоступен, ADR-0012)
-    networks: [internal, edge]   # edge — чтобы консоль публиковалась на хост (internal — Docker-internal, без хоста)
+    networks: [internal, edge-minio]   # edge-minio — публикация консоли на хост; НЕ общий edge с serving (RT-06)
 
   mlflow-db:
     image: postgres:17-alpine
