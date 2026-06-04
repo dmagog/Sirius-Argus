@@ -17,10 +17,11 @@ def _e(s):
     return _html.escape(str(s if s is not None else ""))
 
 
-def _comet_path(cx=50.0, cy=50.0, R=45.0, span=165.0, w_head=6.0, n=60):
-    """SVG-путь кометы: дуга от головы (угол 0) назад на span°, ширина плавно СУЖАЕТСЯ к хвосту
-    (от w_head до ~0 → точка). Заполняется градиентом → хвост ещё и затухает по прозрачности.
-    Голова — на стыке, движется только вращением SVG (постоянная скорость)."""
+def _comet_path(cx=50.0, cy=50.0, R=45.0, span=160.0, w_head=2.6, n=60):
+    """SVG-путь кометы: дуга от головы (угол 0) назад на span°. Ширина плавно СУЖАЕТСЯ к хвосту
+    (w_head→0 → точка). Передний край СКРУГЛЁН дуговой шапкой (как stroke-linecap:round раньше).
+    Голова закреплена на угле 0 (одинакова при любом span) → при морфинге span дышит только хвост,
+    а голова движется лишь вращением SVG (постоянная скорость). Заполняется градиентом → хвост тает."""
     out, inn = [], []
     for k in range(n + 1):
         t = k / n
@@ -34,6 +35,9 @@ def _comet_path(cx=50.0, cy=50.0, R=45.0, span=165.0, w_head=6.0, n=60):
         d += "L%.2f %.2f" % p
     for p in reversed(inn):
         d += "L%.2f %.2f" % p
+    # скруглённая голова: полудуга радиусом w_head/2 от внутренней кромки головы к внешней
+    rcap = w_head / 2.0
+    d += "A%.2f %.2f 0 0 1 %.2f %.2f" % (rcap, rcap, out[0][0], out[0][1])
     return d + "Z"
 
 
@@ -172,7 +176,7 @@ def _sa_css():
         # комета (SVG-путь): ширина плавно СУЖАЕТСЯ к хвосту (до точки) + градиент #cometg затухает
         # по прозрачности. Голова движется ТОЛЬКО вращением SVG (saComet linear) → постоянная скорость.
         # stop-color через CSS-свойство (не SVG-атрибут) → резолвит var() и уважает выбранный акцент.
-        ".sa-splash .ring{position:absolute;inset:-6px;animation:saComet 5s linear infinite;}"
+        ".sa-splash .ring{position:absolute;inset:-6px;animation:saComet 4.5s linear infinite;}"
         ".sa-splash .ring stop{stop-color:var(--sa-accent);}"
         # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
         ".sa-splash .halo::after{content:'';position:absolute;inset:10px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
@@ -257,12 +261,15 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     )
 
     # hero-сплэш — только на стартовом экране (обзор); играет при каждой загрузке
+    _cmin, _cmax = _comet_path(span=120), _comet_path(span=195)  # короткая/длинная для дыхания длины
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
         "<div class='halo'><svg class='ring' viewBox='0 0 100 100'>"
         "<defs><linearGradient id='cometg' x1='95' y1='50' x2='8' y2='34' gradientUnits='userSpaceOnUse'>"
         "<stop offset='0' stop-opacity='.95'/><stop offset='1' stop-opacity='0'/></linearGradient></defs>"
-        f"<path class='comet' d='{_comet_path()}' fill='url(#cometg)'/></svg>"
+        f"<path class='comet' fill='url(#cometg)' d='{_cmin}'>"
+        f"<animate attributeName='d' dur='4.5s' repeatCount='indefinite' calcMode='spline' "
+        f"keyTimes='0;0.5;1' keySplines='.4 0 .2 1;.4 0 .2 1' values='{_cmin};{_cmax};{_cmin}'/></path></svg>"
         "<span class='logospin'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></span></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
         "<div style='display:flex;flex-direction:column;align-items:center;gap:11px'>"
