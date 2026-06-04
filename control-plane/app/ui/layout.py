@@ -81,20 +81,13 @@ _NAV_JS = """<script>
 </script>"""
 
 
-# Переключатели темы и акцента (сквозные: те же ключи 'sa-theme'/'sa-accent', что и в /map).
+# Переключатель темы (сквозной: тот же ключ 'sa-theme', что и в /map). Базовый акцент — золото.
 _THEME_JS = """<script>
 function saTheme(){var c=document.documentElement.getAttribute('data-sa-theme')||'dark';var n=c==='light'?'dark':'light';
  document.documentElement.setAttribute('data-sa-theme',n);try{localStorage.setItem('sa-theme',n);}catch(e){}saThemeIcon();}
 function saThemeIcon(){var t=document.documentElement.getAttribute('data-sa-theme')||'dark';var i=document.getElementById('sa-theme-ic');
  if(i)i.className='bi '+(t==='light'?'bi-sun':'bi-moon-stars');}
-function saAccent(a){var d=document.documentElement;
- if(a){d.style.setProperty('--sa-accent',a);d.style.setProperty('--sa-accent-ink',a);d.style.setProperty('--accent',a);}
- else{d.style.removeProperty('--sa-accent');d.style.removeProperty('--sa-accent-ink');d.style.removeProperty('--accent');}
- try{a?localStorage.setItem('sa-accent',a):localStorage.removeItem('sa-accent');}catch(e){}saAccentMark();}
-function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||'';}catch(e){}
- document.querySelectorAll('.sb-accent-pick [data-a]').forEach(function(b){
-  b.setAttribute('aria-current',(b.getAttribute('data-a')||'')===cur?'true':'false');});}
-saThemeIcon();saAccentMark();
+saThemeIcon();
 </script>"""
 
 
@@ -109,7 +102,14 @@ body{background:var(--bg)!important;color:var(--text)!important;font-family:'Int
 table{font-variant-numeric:tabular-nums;}
 h1,h2,h3{color:var(--head);}
 .app-shell{display:flex;min-height:100vh;}
-.app-main{flex:1;min-width:0;max-width:1180px;margin:0 auto;padding:26px 32px;}
+.app-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+.app-main{width:100%;max-width:1180px;margin:0 auto;padding:24px 32px;}
+/* сквозная верхняя шапка раздела (как топбар в /map) */
+.sb-top{height:56px;flex:none;padding:0 28px;border-bottom:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;justify-content:space-between;gap:1rem;position:sticky;top:0;z-index:5;}
+.sb-top .crumb{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--head);min-width:0;}
+.sb-top .crumb i{font-size:15px;color:var(--accent);}
+.sb-top .crumb small{font-size:10.5px;font-weight:500;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;}
+.sb-tools{display:flex;align-items:center;gap:10px;flex:none;}
 .sb{width:250px;flex-shrink:0;background:var(--sa-rail);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
 .sb-brand{display:flex;align-items:center;gap:.6rem;padding:18px 16px 14px;border-bottom:1px solid var(--line);color:var(--head);text-decoration:none;}
 .sb-brand .sirius-badge{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;flex-shrink:0;}
@@ -125,9 +125,6 @@ h1,h2,h3{color:var(--head);}
 .sb-link:hover .lbl i,.sb-active .lbl i{color:var(--accent);}
 .sb-theme{width:30px;height:30px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;}
 .sb-theme:hover{border-color:var(--accent);color:var(--accent);}
-.sb-accent-pick{display:inline-flex;align-items:center;gap:5px;}
-.sb-accent-pick button{width:15px;height:15px;border-radius:999px;border:2px solid transparent;background:var(--sw);cursor:pointer;padding:0;box-shadow:0 0 0 1px var(--line);}
-.sb-accent-pick button[aria-current='true']{border-color:var(--head);}
 .sb-badge{min-width:20px;height:18px;padding:0 6px;border-radius:999px;font-size:10.5px;font-weight:700;align-items:center;justify-content:center;display:none;font-variant-numeric:tabular-nums;line-height:1;}
 .sb-badge-warn{background:rgba(245,158,11,.18);color:#fcd34d;box-shadow:inset 0 0 0 1px rgba(245,158,11,.35);}
 .sb-badge-alert{background:rgba(239,68,68,.20);color:#fca5a5;box-shadow:inset 0 0 0 1px rgba(239,68,68,.42);}
@@ -237,10 +234,11 @@ def _page(title, body, nav="dashboard"):
                 f'<span class="lbl"><i class="bi {icon}"></i>{_e(label)}</span>'
                 f'<span class="sb-badge" data-badge="{key}"></span></a>')
     nav_html = "".join(link(h, l, k) for h, l, k in _NAV)
+    sec_label = next((l for h, l, k in _NAV if k == nav), "Sirius Argus")
+    sec_icon = _NAV_ICON.get(nav, "bi-dot")
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
-        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);"
-        "var _a=localStorage.getItem('sa-accent');if(_a){var _d=document.documentElement.style;_d.setProperty('--sa-accent',_a);_d.setProperty('--sa-accent-ink',_a);_d.setProperty('--accent',_a);}}catch(e){}</script>"
+        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);}catch(e){}</script>"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         f"<title>{_e(title)}</title>"
         "<link rel=icon type=image/png href='/static/avatar.png'>"
@@ -256,15 +254,15 @@ def _page(title, body, nav="dashboard"):
         "<span class='sirius-badge'><img src='/static/avatar.png' alt='Sirius Argus' class='sb-logo'></span>"
         "<span class='sb-title'>Sirius Argus<small>MLSecOps Platform</small></span></a>"
         f"<nav class='sb-nav'>{nav_html}</nav>"
-        "<div class='sb-foot'><span class='env-chip'>local · dev</span>"
-        "<span style='display:flex;align-items:center;gap:8px'>"
-        "<span class='sb-accent-pick' title='Акцент'>"
-        "<button data-a='' style='--sw:#facc15' onclick=\"saAccent('')\" title='Золото'></button>"
-        "<button data-a='#fb923c' style='--sw:#fb923c' onclick=\"saAccent('#fb923c')\" title='Оранжевый'></button>"
-        "<button data-a='#38bdf8' style='--sw:#38bdf8' onclick=\"saAccent('#38bdf8')\" title='Голубой'></button></span>"
-        "<button class='sb-theme' onclick='saTheme()' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button></span></div>"
+        "<div class='sb-foot'><span class='env-chip'>local · dev</span></div>"
         "</aside>"
+        "<div class='app-col'>"
+        f"<header class='sb-top'><span class='crumb'><i class='bi {sec_icon}'></i>{_e(sec_label)}</span>"
+        "<span class='sb-tools'>"
+        "<button class='sb-theme' onclick='saTheme()' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button>"
+        "</span></header>"
         f"<main class='app-main'>{body}</main>"
+        "</div>"
         "</div>"
         f"{_SORT_JS}{_NAV_JS}{_THEME_JS}</body></html>"
     )

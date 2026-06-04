@@ -72,9 +72,6 @@ def _sa_css():
         ".sa-themebtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;"
         "border:1px solid var(--sa-line);border-radius:999px;background:var(--sa-panel);color:var(--sa-text2);cursor:pointer;font-size:14px;}"
         ".sa-themebtn:hover{border-color:var(--sa-accent);color:var(--sa-accent-ink);}"
-        ".sa-accent-pick{display:inline-flex;align-items:center;gap:5px;}"
-        ".sa-accent-pick button{width:15px;height:15px;border-radius:999px;border:2px solid transparent;background:var(--sw);cursor:pointer;padding:0;box-shadow:0 0 0 1px var(--sa-line);}"
-        ".sa-accent-pick button[aria-current='true']{border-color:var(--sa-head);}"
         "*{box-sizing:border-box;}html,body{margin:0;height:100%;}"
         "body{background:var(--sa-bg);color:var(--sa-text);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;}"
         ".sa-mono{font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;}"
@@ -292,17 +289,12 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:var(--sa-head)'>{nnodes}</span><span class='k'>узлов</span></div>"
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:var(--sa-warn)'>{open_total}</span><span class='k'>сработок</span></div>"
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:{gates_col}'>{gates_ok}/{len(gates)}</span><span class='k'>гейтов</span></div>"
-        "<span class='sa-accent-pick' title='Акцент'>"
-        "<button data-a='' style='--sw:#facc15' onclick=\"saAccent('')\" title='Золото'></button>"
-        "<button data-a='#fb923c' style='--sw:#fb923c' onclick=\"saAccent('#fb923c')\" title='Оранжевый'></button>"
-        "<button data-a='#38bdf8' style='--sw:#38bdf8' onclick=\"saAccent('#38bdf8')\" title='Голубой'></button></span>"
         "<button class='sa-themebtn' onclick='saTheme()' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button>"
         "<span class='sa-live'><span class='d'></span>LIVE · <span id='sa-upd'>—</span></span></div></header>"
     )
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
-        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);"
-        "var _a=localStorage.getItem('sa-accent');if(_a){document.documentElement.style.setProperty('--sa-accent',_a);document.documentElement.style.setProperty('--sa-accent-ink',_a);}}catch(e){}</script>"
+        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);}catch(e){}</script>"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         f"<title>{_e(title)}</title><link rel=icon type=image/png href='/static/avatar.png'>"
         "<link rel=preconnect href='https://fonts.googleapis.com'><link rel=preconnect href='https://fonts.gstatic.com' crossorigin>"
@@ -324,14 +316,7 @@ function saTheme(){var c=document.documentElement.getAttribute('data-sa-theme')|
   document.documentElement.setAttribute('data-sa-theme',n);try{localStorage.setItem('sa-theme',n);}catch(e){}saThemeIcon();}
 function saThemeIcon(){var t=document.documentElement.getAttribute('data-sa-theme')||'dark';var i=document.getElementById('sa-theme-ic');
   if(i)i.className='bi '+(t==='light'?'bi-sun':'bi-moon-stars');}
-function saAccent(a){var d=document.documentElement;
-  if(a){d.style.setProperty('--sa-accent',a);d.style.setProperty('--sa-accent-ink',a);}
-  else{d.style.removeProperty('--sa-accent');d.style.removeProperty('--sa-accent-ink');}
-  try{a?localStorage.setItem('sa-accent',a):localStorage.removeItem('sa-accent');}catch(e){}saAccentMark();}
-function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||'';}catch(e){}
-  document.querySelectorAll('.sa-accent-pick [data-a],.sb-accent-pick [data-a]').forEach(function(b){
-    b.setAttribute('aria-current',(b.getAttribute('data-a')||'')===cur?'true':'false');});}
-(function(){saThemeIcon();saAccentMark();function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
+(function(){saThemeIcon();function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
  setInterval(tick,4000);tick();})();
 // hero-сплэш: играет ПРИ КАЖДОЙ загрузке обзора (удобно отлаживать промо-материалы). По мере
 // заполнения прогрессбара под ним сменяются тексты этапов («прорабатываем модули контура»).
