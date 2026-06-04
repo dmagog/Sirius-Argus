@@ -148,10 +148,12 @@ def _sa_css():
         ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--sa-bg);transition:opacity .55s ease;}"
         ".sa-splash.out{opacity:0;pointer-events:none;}"
         ".sa-splash .halo{position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;}"
-        # акцентная дуга: длина РАСТЁТ и СЖИМАЕТСЯ (stroke-dasharray, saDash) + медленный обход (saSpin 5.5с).
+        # акцентная дуга: и длина (dasharray), и СМЕЩЕНИЕ (dashoffset) идут МОНОТОННО → оба конца
+        # всегда движутся вперёд, центр не откатывается; дуга растёт/сжимается и непрерывно обходит круг.
+        # offset 0→-283 (ровно длина окружности) → стык цикла бесшовный; отдельное вращение не нужно.
         # stroke через CSS-свойство (не SVG-атрибут) → резолвит var() и уважает выбранный акцент.
-        ".sa-splash .ring{position:absolute;inset:-6px;transform-origin:center;animation:saSpin 5.5s linear infinite;}"
-        ".sa-splash .ring .arc{fill:none;stroke:var(--sa-accent);stroke-width:2.4;stroke-linecap:round;opacity:.85;stroke-dasharray:10 283;animation:saDash 3.2s ease-in-out infinite;}"
+        ".sa-splash .ring{position:absolute;inset:-6px;}"
+        ".sa-splash .ring .arc{fill:none;stroke:var(--sa-accent);stroke-width:2.4;stroke-linecap:round;opacity:.85;stroke-dasharray:12 283;stroke-dashoffset:0;animation:saDash 4.8s ease-in-out infinite;}"
         # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
         ".sa-splash .halo::after{content:'';position:absolute;inset:10px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
         # логотип ОЧЕНЬ неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 80с/оборот)
@@ -168,8 +170,7 @@ def _sa_css():
         ".sa-splash .step .txt{display:inline-block;will-change:transform,opacity;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
-        "@keyframes saSpin{to{transform:rotate(360deg)}}"
-        "@keyframes saDash{0%,100%{stroke-dasharray:10 283}50%{stroke-dasharray:200 283}}"
+        "@keyframes saDash{0%{stroke-dasharray:12 283;stroke-dashoffset:0}50%{stroke-dasharray:190 283;stroke-dashoffset:-55}100%{stroke-dasharray:12 283;stroke-dashoffset:-283}}"
         "@keyframes saLogoSpin{to{transform:rotate(-360deg)}}"
         "@keyframes saGlow{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.05);opacity:1}}"
         "@keyframes saDot{0%,100%{opacity:.4}50%{opacity:1}}"
