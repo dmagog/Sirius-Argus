@@ -17,7 +17,7 @@ def _e(s):
     return _html.escape(str(s if s is not None else ""))
 
 
-def _comet_path(cx=50.0, cy=50.0, R=45.0, span=160.0, w_head=2.6, n=60):
+def _comet_path(cx=50.0, cy=50.0, R=42.0, span=160.0, w_head=2.6, n=60):
     """SVG-путь кометы: дуга от головы (угол 0) назад на span°. Ширина плавно СУЖАЕТСЯ к хвосту
     (w_head→0 → точка). Передний край СКРУГЛЁН дуговой шапкой (как stroke-linecap:round раньше).
     Голова закреплена на угле 0 (одинакова при любом span) → при морфинге span дышит только хвост,
@@ -179,7 +179,7 @@ def _sa_css():
         ".sa-splash .ring{position:absolute;inset:-6px;animation:saComet 4.5s linear infinite;}"
         ".sa-splash .ring stop{stop-color:var(--sa-accent);}"
         # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
-        ".sa-splash .halo::after{content:'';position:absolute;inset:10px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
+        ".sa-splash .halo::after{content:'';position:absolute;inset:24px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
         # логотип ОЧЕНЬ неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 80с/оборот)
         ".sa-splash .logospin{position:relative;z-index:1;display:flex;animation:saLogoSpin 80s linear infinite;}"
         ".sa-splash .logo{width:202px;height:202px;border-radius:999px;box-shadow:0 0 64px rgba(250,204,21,.28);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
@@ -187,7 +187,7 @@ def _sa_css():
         ".sa-splash .t2{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;margin-top:8px;opacity:0;animation:saRise .6s ease .5s forwards;}"
         ".sa-splash .bar{width:248px;height:4px;border-radius:4px;background:var(--sa-line2);overflow:hidden;opacity:0;animation:saRise .5s ease .6s forwards;}"
         ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
-        ".sa-splash.go .bar i{animation:saSplashBar 6.4s cubic-bezier(.4,0,.2,1) .6s forwards;}"
+        ".sa-splash.go .bar i{animation:saSplashBar 6.4s linear .6s forwards;}"
         # «бутлог»: текст этапа под баром сменяется по мере заполнения (JS), плавная подмена
         ".sa-splash .step{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.2px;color:var(--sa-text2);min-height:18px;opacity:0;transition:opacity .25s ease;}"
         ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;opacity:0;transition:opacity .34s ease;}"
@@ -197,7 +197,7 @@ def _sa_css():
         "@keyframes saComet{to{transform:rotate(360deg)}}"
         "@keyframes saLogoSpin{to{transform:rotate(-360deg)}}"
         "@keyframes saGlow{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.05);opacity:1}}"
-        "@keyframes saSplashBar{from{width:0}to{width:100%}}"
+        "@keyframes saSplashBar{0%{width:0}60%{width:84%}100%{width:100%}}"
         "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .logospin,.sa-splash .ring,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
         "</style>"
     )
@@ -265,7 +265,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
         "<div class='halo'><svg class='ring' viewBox='0 0 100 100'>"
-        "<defs><linearGradient id='cometg' x1='95' y1='50' x2='8' y2='34' gradientUnits='userSpaceOnUse'>"
+        "<defs><linearGradient id='cometg' x1='92' y1='50' x2='10' y2='35' gradientUnits='userSpaceOnUse'>"
         "<stop offset='0' stop-opacity='.95'/><stop offset='1' stop-opacity='0'/></linearGradient></defs>"
         f"<path class='comet' fill='url(#cometg)' d='{_cmin}'>"
         f"<animate attributeName='d' dur='4.5s' repeatCount='indefinite' calcMode='spline' "
