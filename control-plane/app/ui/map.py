@@ -636,10 +636,25 @@ def _inspector_inner(sel_run, detail):
     acct, role = actor_role(sel_run["actor"])
     _rah = actor_href(sel_run.get("actor"))
     acct_link = (f"<a href='{_rah}' style='color:var(--sa-text2);text-decoration:none'>{_e(acct)}</a>" if _rah else _e(acct))
+    _mid = sel_run.get("model_id")
+    model_link = (f"<a href='/registry/model/{_e(_mid)}' style='color:var(--sa-text);text-decoration:none'>"
+                  f"{_e(sel_run['model'])} <i class='bi bi-box-arrow-up-right' style='font-size:8px;color:var(--sa-muted)'></i></a>"
+                  if _mid is not None else _e(sel_run['model']))
     lin = detail.get("lineage", {})
+    _dsid = lin.get("dataset_id")
+
+    def _linval(k, v):
+        col = "var(--sa-alert)" if v == "—" else "var(--sa-text)"
+        inner = _e(v)
+        if k == "dataset" and _dsid is not None and v != "—":
+            inner = (f"<a href='/data/dataset/{_e(_dsid)}' style='color:var(--sa-blue);text-decoration:none'>"
+                     f"{_e(v)} <i class='bi bi-box-arrow-up-right' style='font-size:8px'></i></a>")
+            col = "var(--sa-text)"
+        return (f"<span class='sa-mono' style='font-size:11px;color:{col};text-align:right;"
+                f"word-break:break-all'>{inner}</span>")
     lin_rows = "".join(
         f"<div class='sa-lin'><span class='sa-mono' style='font-size:11px;color:var(--sa-text2)'>{k}</span>"
-        f"<span class='sa-mono' style='font-size:11px;color:{'var(--sa-alert)' if v=='—' else 'var(--sa-text)'};text-align:right;word-break:break-all'>{_e(v)}</span></div>"
+        f"{_linval(k, v)}</div>"
         for k, v in [("dataset", lin.get("dataset", "—")), ("code_commit", lin.get("code_commit", "—")),
                      ("env_lock", lin.get("env_lock", "—")), ("artifact_hash", lin.get("artifact_hash", "—")),
                      ("signature", lin.get("signature", "—"))])
@@ -690,7 +705,7 @@ def _inspector_inner(sel_run, detail):
         f"{_rs_badge(sel_run['state'])}</div>"
         f"<div style='display:flex;align-items:baseline;gap:8px;margin-top:8px'>"
         f"<span class='sa-mono' style='font-size:16px;font-weight:700;color:var(--sa-head)'>{_e(sel_run['id'])}</span>"
-        f"<span style='font-size:13px;color:var(--sa-text)'>{_e(sel_run['model'])} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(sel_run['ver'])}</span></span></div>"
+        f"<span style='font-size:13px;color:var(--sa-text)'>{model_link} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(sel_run['ver'])}</span></span></div>"
         f"<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>{_crit_badge(sel_run['crit'])}"
         f"<span class='sa-chip'>причастен: {acct_link} · {_e(role)}</span></div>{timing_line}</div>"
         "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:12px 16px;min-height:0'>"

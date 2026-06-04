@@ -176,7 +176,7 @@ def _enrich(s, idx, last_actor, mv, model):
     started = mv.created_at or (min((f.ts for f in findings if f.ts), default="") or "")
     node = "gate-artifact" if open_critical else _STAGE_NODE.get(mv.stage, "package")
     return {
-        "id": f"RUN-{mv.id}", "model": model.name, "ver": f"v{mv.version}",
+        "id": f"RUN-{mv.id}", "model": model.name, "model_id": model.id, "ver": f"v{mv.version}",
         "crit": _crit(model.criticality), "started": started,
         "dur": _duration(mv.created_at, mv.retired_at or mv.promoted_at, f"{model.id}:{mv.version}"),
         "findings": len(findings),
@@ -255,13 +255,16 @@ def run_detail(run_id):
             return {}
         m = s.query(domain.Model).filter_by(id=mv.model_id).first()
         ds_name = None
+        ds_id = None
         if mv.dataset_version_id:
             dv = s.query(domain.DatasetVersion).filter_by(id=mv.dataset_version_id).first()
             if dv:
                 ds = s.query(domain.Dataset).filter_by(id=dv.dataset_id).first()
                 ds_name = (f"{ds.name} (dv#{dv.id})" if ds else f"dv#{dv.id}")
+                ds_id = ds.id if ds else None
         lineage = {
             "dataset": ds_name or (f"dv#{mv.dataset_version_id}" if mv.dataset_version_id else "—"),
+            "dataset_id": ds_id,
             "code_commit": mv.code_commit or "—", "env_lock": mv.env_lock or "—",
             "artifact_hash": mv.artifact_hash or "—",
             "signature": mv.signature or ("model-signing" if mv.signature_bundle else "—"),
