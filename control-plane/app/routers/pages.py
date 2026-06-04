@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from .. import audit, bus, decisions, domain, mapnodes, registry, runs, scanners, signing, storage, ui
+from .. import audit, bus, cards, decisions, domain, mapnodes, registry, runs, scanners, signing, storage, ui
 from ..auth import Principal, get_principal, revoke
 from ..db import AuditEvent, SessionLocal
 from ..rbac import PERMISSIONS, can_read_sensitivity, require
@@ -93,6 +93,42 @@ def registry_view():
                            "versions": [{"version": v.version, "stage": v.stage} for v in vers]})
     kpi = {"models": len(models), "versions": versions_total, "prod": prod, "critical": critical}
     return ui.registry_page(models, kpi)
+
+
+@router.get("/registry/model/{model_id}", response_class=HTMLResponse)
+def model_card_view(model_id: int):
+    """Карточка модели: что с ней происходило (версии, lineage, проблемы, решения
+    аппрув-гейта, таймлайн аудита) и текущий статус. Read-only витрина поверх реестра."""
+    card = cards.model_card(model_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="model not found")
+    return ui.model_card_page(card)
+
+
+@router.get("/data", response_class=HTMLResponse)
+def data_view():
+    """Реестр данных: датасеты, чувствительность, доверенность источника (DATA-01),
+    PII-схема (DATA-04), lineage к обученным моделям. Клик по датасету — карточка."""
+    datasets, kpi = cards.data_registry()
+    return ui.data_page(datasets, kpi)
+
+
+@router.get("/data/dataset/{dataset_id}", response_class=HTMLResponse)
+def dataset_card_view(dataset_id: int):
+    """Карточка датасета: версии, схема (PII), доверенность источника, проблемы,
+    модели-потребители (lineage) и таймлайн аудита."""
+    card = cards.dataset_card(dataset_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return ui.dataset_card_page(card)
+
+
+@router.get("/decisions", response_class=HTMLResponse)
+def decisions_view():
+    """Реестр решений: журнал ручного аппрув-гейта (VIS-03) + принятия остаточного
+    риска (GOV-02) — governance system-of-record поверх append-only аудита."""
+    ledger, risks, kpi = cards.decisions_ledger()
+    return ui.decisions_page(ledger, risks, kpi)
 
 
 @router.get("/services", response_class=HTMLResponse)

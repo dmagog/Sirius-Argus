@@ -48,6 +48,7 @@ _SEVC = {"critical": "var(--sa-alert)", "high": "#fb923c", "medium": "var(--sa-w
          "low": "var(--sa-muted)", "info": "var(--sa-muted)"}
 # Bootstrap-иконки разделов верхнего уровня (по ключу _NAV).
 _NAV_ICON = {"map": "bi-diagram-3", "dashboard": "bi-speedometer2", "registry": "bi-box-seam",
+             "data": "bi-database", "decisions": "bi-clipboard2-check",
              "findings": "bi-exclamation-triangle", "coverage": "bi-shield-check",
              "serving": "bi-hdd-network", "services": "bi-hdd-stack", "roles": "bi-people"}
 

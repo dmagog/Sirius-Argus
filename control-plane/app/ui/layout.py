@@ -212,7 +212,9 @@ def _e(s):
 _NAV = (
     ("/map", "Пайплайн", "map"),
     ("/dashboard", "Дашборд", "dashboard"),
-    ("/registry", "Реестр", "registry"),
+    ("/registry", "Реестр моделей", "registry"),
+    ("/data", "Реестр данных", "data"),
+    ("/decisions", "Реестр решений", "decisions"),
     ("/findings", "Сработки", "findings"),
     ("/coverage", "Карта покрытия", "coverage"),
     ("/serving", "Сервинг", "serving"),
@@ -222,6 +224,7 @@ _NAV = (
 
 # Bootstrap-иконки разделов (тот же набор, что в SA-рейле /map) — для сквозного меню.
 _NAV_ICON = {"map": "bi-diagram-3", "dashboard": "bi-speedometer2", "registry": "bi-box-seam",
+             "data": "bi-database", "decisions": "bi-clipboard2-check",
              "findings": "bi-exclamation-triangle", "coverage": "bi-shield-check",
              "serving": "bi-hdd-network", "services": "bi-hdd-stack", "roles": "bi-people"}
 

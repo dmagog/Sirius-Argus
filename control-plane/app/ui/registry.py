@@ -58,7 +58,8 @@ def registry_page(models, kpi):
             rows += (
                 "<tr>"
                 f"<td class='sa-mono' style='color:var(--sa-accent-ink);font-size:11.5px;white-space:nowrap'>{_e(m['id'])}</td>"
-                f"<td style='color:var(--sa-head);font-weight:600'>{_e(m['name'])}</td>"
+                f"<td><a href='/registry/model/{_e(m['id'])}' style='color:var(--sa-head);font-weight:600;text-decoration:none'>{_e(m['name'])} "
+                f"<i class='bi bi-arrow-right-short' style='color:var(--sa-muted)'></i></a></td>"
                 f"<td>{crit_badge}</td>"
                 f"<td>{vers}</td></tr>")
         table = ("<div class='sa-panel'><table class='sa-table'><thead><tr>"
@@ -71,7 +72,7 @@ def registry_page(models, kpi):
         "<p class='sa-sub'>Защищённый реестр (zero-trust) поверх обёрнутого MLflow. "
         "Чувствительные операции, lineage и blast-radius — через "
         "<span class='sa-mono' style='color:var(--sa-accent-ink)'>/api/*</span> под RBAC. "
-        "Клик по шапке столбца — сортировка.</p>"
+        "Клик по модели — карточка с историей, статусом и проблемами; по шапке столбца — сортировка.</p>"
         "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0'>"
         f"{kpis}</div>{table}"
     )
