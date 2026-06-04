@@ -152,21 +152,24 @@ def _sa_css():
         ".sa-splash .halo::before{content:'';position:absolute;inset:-8px;border-radius:999px;border:2px solid transparent;border-top-color:var(--sa-accent);border-right-color:var(--sa-accent);opacity:.75;animation:saSpin 2.4s linear infinite;}"
         # пульсирующий золотой ореол
         ".sa-splash .halo::after{content:'';position:absolute;inset:6px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.34) 0%,rgba(250,204,21,.10) 55%,rgba(250,204,21,0) 100%);animation:saPulse 2.2s ease-in-out infinite;}"
-        ".sa-splash .logo{position:relative;z-index:1;width:120px;height:120px;border-radius:999px;box-shadow:0 0 50px rgba(250,204,21,.30);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
+        # логотип неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 16с/оборот)
+        ".sa-splash .logospin{position:relative;z-index:1;display:flex;animation:saLogoSpin 16s linear infinite;}"
+        ".sa-splash .logo{width:120px;height:120px;border-radius:999px;box-shadow:0 0 50px rgba(250,204,21,.30);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
         ".sa-splash .t1{font-size:34px;font-weight:700;color:var(--sa-head);letter-spacing:.5px;opacity:0;animation:saRise .6s ease .35s forwards;}"
         ".sa-splash .t2{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;margin-top:8px;opacity:0;animation:saRise .6s ease .5s forwards;}"
         ".sa-splash .bar{width:248px;height:4px;border-radius:4px;background:var(--sa-line2);overflow:hidden;opacity:0;animation:saRise .5s ease .6s forwards;}"
         ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
-        ".sa-splash.go .bar i{animation:saSplashBar 1.9s cubic-bezier(.4,0,.2,1) .6s forwards;}"
+        ".sa-splash.go .bar i{animation:saSplashBar 4.4s cubic-bezier(.4,0,.2,1) .6s forwards;}"
         # «бутлог»: текст этапа под баром сменяется по мере заполнения (JS), плавная подмена
         ".sa-splash .step{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.2px;color:var(--sa-text2);min-height:15px;opacity:0;transition:opacity .18s ease;}"
         ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;animation:saPulse 1.1s ease-in-out infinite;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
         "@keyframes saSpin{to{transform:rotate(360deg)}}"
+        "@keyframes saLogoSpin{to{transform:rotate(-360deg)}}"
         "@keyframes saPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}"
         "@keyframes saSplashBar{from{width:0}to{width:100%}}"
-        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .halo::before,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
+        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .logospin,.sa-splash .halo::before,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
         "</style>"
     )
 
@@ -231,7 +234,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     # hero-сплэш — только на стартовом экране (обзор); играет при каждой загрузке
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
-        "<div class='halo'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></div>"
+        "<div class='halo'><span class='logospin'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></span></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
         "<div style='display:flex;flex-direction:column;align-items:center;gap:11px'>"
         "<div class='bar'><i></i></div>"
@@ -303,8 +306,8 @@ function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||''
  function show(){if(!step||!txt)return;step.style.opacity='0';
    setTimeout(function(){txt.textContent=STEPS[i];step.style.opacity='1';},110);}
  setTimeout(function(){show();var iv=setInterval(function(){
-   if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show();},400);},650);
- setTimeout(done,2500);})();
+   if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show();},1000);},750);
+ setTimeout(done,5400);})();
 """
 
 
