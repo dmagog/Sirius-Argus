@@ -137,7 +137,9 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_USER:-sirius}
       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-sirius-minio}
-      # консоль за Keycloak-SSO: claim "policy"=consoleAdmin (маппер) → admin-доступ оператору
+      # OIDC-клиент для S3-API (STS AssumeRoleWithWebIdentity, claim "policy"=consoleAdmin через маппер).
+      # ВНИМАНИЕ: вход в саму ВЕБ-КОНСОЛЬ — root (см. ниже): community-образ (RELEASE.2025-09+) вырезал
+      # OIDC-логин консоли (/api/v1/login/oauth2/auth → 404) — апстрим, не конфиг. Решение в ADR-0012.
       MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
       MINIO_IDENTITY_OPENID_CONFIG_URL: http://keycloak:8080/auth/realms/sirius/.well-known/openid-configuration
       MINIO_IDENTITY_OPENID_CLIENT_ID: minio
@@ -148,7 +150,7 @@ services:
       MINIO_IDENTITY_OPENID_DISPLAY_NAME: Keycloak
     volumes: [minio_data:/data]
     ports:
-      - "9001:9001"   # консоль MinIO наружу — за Keycloak-SSO (ops-доступ)
+      - "9001:9001"   # веб-консоль MinIO наружу (ops-доступ; вход root — console-SSO недоступен, ADR-0012)
     networks: [internal, edge]   # edge — чтобы консоль публиковалась на хост (internal — Docker-internal, без хоста)
 
   mlflow-db:
