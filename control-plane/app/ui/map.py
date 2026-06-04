@@ -148,8 +148,10 @@ def _sa_css():
         ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--sa-bg);transition:opacity .55s ease;}"
         ".sa-splash.out{opacity:0;pointer-events:none;}"
         ".sa-splash .halo{position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;}"
-        # вращающееся акцентное кольцо вокруг логотипа
-        ".sa-splash .halo::before{content:'';position:absolute;inset:-12px;border-radius:999px;border:2px solid transparent;border-top-color:var(--sa-accent);border-right-color:var(--sa-accent);opacity:.75;animation:saSpin 2.4s linear infinite;}"
+        # акцентная дуга: длина РАСТЁТ и СЖИМАЕТСЯ (stroke-dasharray, saDash) + медленный обход (saSpin 5.5с).
+        # stroke через CSS-свойство (не SVG-атрибут) → резолвит var() и уважает выбранный акцент.
+        ".sa-splash .ring{position:absolute;inset:-6px;transform-origin:center;animation:saSpin 5.5s linear infinite;}"
+        ".sa-splash .ring .arc{fill:none;stroke:var(--sa-accent);stroke-width:2.4;stroke-linecap:round;opacity:.85;stroke-dasharray:10 283;animation:saDash 3.2s ease-in-out infinite;}"
         # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
         ".sa-splash .halo::after{content:'';position:absolute;inset:10px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
         # логотип ОЧЕНЬ неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 80с/оборот)
@@ -167,11 +169,12 @@ def _sa_css():
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
         "@keyframes saSpin{to{transform:rotate(360deg)}}"
+        "@keyframes saDash{0%,100%{stroke-dasharray:10 283}50%{stroke-dasharray:200 283}}"
         "@keyframes saLogoSpin{to{transform:rotate(-360deg)}}"
         "@keyframes saGlow{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.05);opacity:1}}"
         "@keyframes saDot{0%,100%{opacity:.4}50%{opacity:1}}"
         "@keyframes saSplashBar{from{width:0}to{width:100%}}"
-        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .logospin,.sa-splash .halo::before,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
+        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .logospin,.sa-splash .ring,.sa-splash .ring .arc,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}.sa-splash .ring .arc{stroke-dasharray:200 283}}"
         "</style>"
     )
 
@@ -236,7 +239,8 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     # hero-сплэш — только на стартовом экране (обзор); играет при каждой загрузке
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
-        "<div class='halo'><span class='logospin'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></span></div>"
+        "<div class='halo'><svg class='ring' viewBox='0 0 100 100'><circle class='arc' cx='50' cy='50' r='45'/></svg>"
+        "<span class='logospin'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></span></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
         "<div style='display:flex;flex-direction:column;align-items:center;gap:11px'>"
         "<div class='bar'><i></i></div>"
@@ -316,8 +320,8 @@ function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||''
    setTimeout(enter,340);}
  setTimeout(function(){step.style.opacity='1';show(true);
    var iv=setInterval(function(){if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show(false);},1500);},1000);
- // последний этап встаёт ~7000мс; держим экран до 7900мс — небольшая пауза перед исчезновением
- setTimeout(done,7900);})();
+ // последний этап встаёт ~7000мс; держим экран до 9000мс — заметная пауза перед исчезновением
+ setTimeout(done,9000);})();
 """
 
 
