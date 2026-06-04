@@ -4,33 +4,128 @@
 
 [![last commit](https://img.shields.io/github/last-commit/dmagog/Sirius-Argus?style=flat-square)](https://github.com/dmagog/Sirius-Argus/commits/main)
 ![BDD](https://img.shields.io/badge/BDD-53%2F54_green-2ea44f?style=flat-square)
+![tests](https://img.shields.io/badge/pytest-73_green-2ea44f?style=flat-square)
 ![run](https://img.shields.io/badge/run-make_up-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![SSO](https://img.shields.io/badge/SSO-Keycloak_OIDC-FF6C37?style=flat-square&logo=keycloak&logoColor=white)
 
-*Sirius Argus* встраивает безопасность прямо в ML-пайплайн: проверки запускаются автоматически на переходах от приёма данных до вывода модели из эксплуатации. Для каждого актива видно, какие угрозы закрыты и каким контролем.
+**Слой безопасности и видимости поверх ML-пайплайна.** Проверки встроены прямо в жизненный цикл модели — от приёма данных и артефактов до вывода из эксплуатации. В прод модель попадает только через единую точку входа, где её сканируют, подписывают, проводят через policy-гейт и, для критичных, через ручной аппрув. Каждое действие и каждый отказ пишутся в неизменяемый аудит, а для каждого актива видно, какие угрозы закрыты и каким контролем.
 
 > Argus — стоокий страж из мифа: имя про суть платформы, которая видит весь ML-пайплайн и оберегает от угроз. Sirius — звезда-сторож, α Большого Пса; девиз — *the all-seeing watchdog star*.
 
+## Что внутри
+
+- **Zero-trust + единая точка входа.** Право на каждое действие проверяется на control-plane; в прод не попасть в обход — только через него.
+- **Гейты на каждом переходе ЖЦ.** Приём артефактов (вредоносный pickle блокируется до десериализации), скан кода/данных/зависимостей, политика форматов по критичности, подпись и воспроизводимость.
+- **Ручной аппрув-гейт.** Критичную версию в прод пускает другой MLSecOps — доказательный чеклист и separation of duties; аппрув привязан к hash артефакта (anti-TOCTOU).
+- **Finding — сквозная сущность.** Все сканы пишут единую «сработку» с привязкой к активу и причастному; расхождения вердиктов триажатся вручную.
+- **Реестры и карточки.** Модели, данные, решения, акторы — со сквозной связью **актив ⇄ актор ⇄ находка** и «историей актива» в один клик.
+- **Карта покрытия угроз.** Угроза → контроль → live-статус (CEO-вью) на реальных данных, аудит-цепочка tamper-evident.
+- **Неизменяемый аудит.** Append-only на БД-триггере + hash-chain; подмена записи видна.
+- **Реальные тулзы.** modelaudit, OpenSSF model-signing, Semgrep, detect-secrets, pip-audit — поверх собственных сканеров; секреты в HashiCorp Vault.
+
+Модели в демо — три НЕ-генеративные (sklearn на наборе iris): бустинг, линейная, anomaly-detection. Домен абстрактный, без привязки к отрасли.
+
 ## Интерфейс
 
-Тёмная и светлая темы (на парах: слева — тёмная, справа — светлая).
+Тёмная и светлая темы (SOC-консоль). Слева — тёмная, справа — светлая; клик по картинке открывает оригинал в полном размере.
 
-**Карта пайплайна** — пространственный жизненный цикл модели, здоровье узлов, единая точка входа в прод:
+**Ручной аппрув-гейт** — критичная версия уходит в прод только после решения MLSecOps: доказательный чеклист (модель-карта, воспроизводимость, подпись, нет открытых critical) и кнопки Аппрув/Отклонить с separation of duties.
 
-![Карта пайплайна](docs/_assets/img/pairs/01-map-pair.png)
+<table>
+<tr>
+<td><img src="docs/_assets/img/02-approval-gate.png" alt="Ручной аппрув-гейт — тёмная тема"></td>
+<td><img src="docs/_assets/img/light/02-approval-gate.png" alt="Ручной аппрув-гейт — светлая тема"></td>
+</tr>
+</table>
 
-**Ручной аппрув-гейт** — критичная версия уходит в прод только после решения MLSecOps: доказательный чеклист (модель-карта, воспроизводимость, подпись, нет открытых critical) и кнопки Аппрув/Отклонить с separation of duties:
+<details>
+<summary><b>Ещё экраны</b> — карта пайплайна, покрытие, реестры, карточки, дашборд</summary>
 
-![Ручной аппрув-гейт](docs/_assets/img/pairs/02-approval-gate-pair.png)
+<br>
 
-**Карта покрытия (CEO-вью)** — угроза → контроль → live-статус, аудит-цепочка цела:
+**Карта пайплайна** — пространственный жизненный цикл модели, здоровье узлов, единая точка входа.
 
-![Карта покрытия](docs/_assets/img/pairs/03-coverage-pair.png)
+<table><tr>
+<td><img src="docs/_assets/img/01-map.png" alt="Карта пайплайна — тёмная"></td>
+<td><img src="docs/_assets/img/light/01-map.png" alt="Карта пайплайна — светлая"></td>
+</tr></table>
 
+**Карта покрытия (CEO-вью)** — угроза → контроль → live-статус.
 
+<table><tr>
+<td><img src="docs/_assets/img/03-coverage.png" alt="Карта покрытия — тёмная"></td>
+<td><img src="docs/_assets/img/light/03-coverage.png" alt="Карта покрытия — светлая"></td>
+</tr></table>
 
-> Статус: в разработке, итерации [И0–И6](docs/roadmap.md). Сделано: **И0** + **И1** (реестр, zero-trust RBAC, lineage/blast-radius, MON-02-гейт, реальный OIDC через Keycloak, Redis-шина, маскирование логов, реестр на обёрнутом MLflow) + **И2** (ingestion-гейт: вредоносный pickle блокируется + Finding + триаж; политика форматов по критичности; gate на закачку датасета — карантин; расхождение вердиктов сканеров + триаж фолза; PII-маскирование по допуску; ML-aware SAST на код/ноутбуки) + **И3** (policy-матрица промоушена критичных моделей: модель-карта + подпись + ручной аппрув; скан зависимостей на CVE + секретов; separation of duties; запрет отката) + **И4** (3 НЕ-генеративные модели задеплоены за рантайм-защитами; extraction-detect RT-01 → троттлинг + сработка) + **И5** (карта покрытия угроз + CEO-вью на live-данных) + **И6** (сквозной конвейер ЖЦ одной командой — `make pipeline`; decommission, детект эксфильтрации, tamper-evidence аудита) + **инфра-доводка** (observability Prometheus/Loki/Grafana; реальные сканеры modelaudit/detect-secrets; единая точка входа Gitea-CI; веб-UI: live-дашборд сработок и аудита на HTMX + матрица прав RBAC) + **добор residual** (дрейф данных, output-reduction, сетевая сегментация рантайма, typosquat/dependency-confusion, hardcoded-логика, качество данных: label-flip/UGC-триггер/skew/петля дообучения, стоимостная квота DOW-01, сервис-аккаунт сервинга без DEV_AUTH) + **supply-chain/GRC-доводка** (карантин-стор артефактов + reject архивов; подпись OpenSSF model-signing офлайн-ключом; артефакт-скан modelaudit; evidence-based ручной аппрув + привязан к hash; risk-acceptance под условиями; лимит больших загрузок; секреты в HashiCorp Vault — AppRole + политика + аудит + revoke) + **защита энфорсера** (по итогам security-review: append-only аудит на БД-триггере LOG-02, атомарный промоушен под row-lock GOV-03, непрерывная ре-верификация прода MON-05, EXF-01-счётчик в общем Redis, anti-replay HMAC-вебхука, Keycloak brute-force CRED-03, лимит чтения артефакта, догфудинг bandit по своему коду) — **73 pytest-функции green** (53 уникальных сценариев каталога из 54; остаток — 1 честный: ShadowLogic как предел статического анализа, см. [risk-register](docs/threat-model/risk-register.md)). Документация идёт впереди кода намеренно — модель угроз и поведения (BDD) задают, что строим.
+**Реестр моделей** — поиск, сортировка, KPI «с проблемами», владелец.
+
+<table><tr>
+<td><img src="docs/_assets/img/04-registry.png" alt="Реестр моделей — тёмная"></td>
+<td><img src="docs/_assets/img/light/04-registry.png" alt="Реестр моделей — светлая"></td>
+</tr></table>
+
+**Карточка модели** — алерт-бар, проблемы, версии (lineage), решения гейта, таймлайн.
+
+<table><tr>
+<td><img src="docs/_assets/img/05-model-card.png" alt="Карточка модели — тёмная"></td>
+<td><img src="docs/_assets/img/light/05-model-card.png" alt="Карточка модели — светлая"></td>
+</tr></table>
+
+**Карточка датасета** — богатая PII-схема с маскированием для ролей без допуска (DATA-04).
+
+<table><tr>
+<td><img src="docs/_assets/img/12-dataset-schema.png" alt="Карточка датасета — тёмная"></td>
+<td><img src="docs/_assets/img/light/12-dataset-schema.png" alt="Карточка датасета — светлая"></td>
+</tr></table>
+
+**Реестр решений** — журнал аппрув-гейта (VIS-03) и принятий остаточного риска (GOV-02).
+
+<table><tr>
+<td><img src="docs/_assets/img/08-decisions.png" alt="Реестр решений — тёмная"></td>
+<td><img src="docs/_assets/img/light/08-decisions.png" alt="Реестр решений — светлая"></td>
+</tr></table>
+
+**Карточка актора** — «кто что делал»: активность, инциденты причастности, решения, владение.
+
+<table><tr>
+<td><img src="docs/_assets/img/09-user-card.png" alt="Карточка актора — тёмная"></td>
+<td><img src="docs/_assets/img/light/09-user-card.png" alt="Карточка актора — светлая"></td>
+</tr></table>
+
+**Live-дашборд** — поток сработок и таймлайн аудита в реальном времени.
+
+<table><tr>
+<td><img src="docs/_assets/img/14-dashboard.png" alt="Дашборд — тёмная"></td>
+<td><img src="docs/_assets/img/light/14-dashboard.png" alt="Дашборд — светлая"></td>
+</tr></table>
+
+</details>
+
+## Запуск
+
+```bash
+cp .env.example .env      # поправь секреты
+make up                   # core: control-plane + Postgres + Keycloak + Redis + MinIO + MLflow + reverse-proxy
+# или: make up-full       # + observability (Loki/Grafana/Prometheus) + Gitea
+```
+
+Открыть: дашборд — http://localhost:8080 · карта пайплайна — `/map` · карта покрытия (CEO) — `/coverage` · Keycloak — `/auth/` · сервинг моделей — http://localhost:8001/models · Grafana (full) — http://localhost:3000.
+
+Демо и тесты:
+
+```bash
+DEV_AUTH=1 make up      # локальное демо с dev-токенами ролей
+make demo               # money-shot'ы по живому стеку
+make pipeline           # сквозной ЖЦ одной модели: приём→скан→gate→аппрув-гейт→деплой→атака→decommission
+cd tests && pip install -r requirements.txt && pytest -q   # BDD против живого стека
+```
+
+AuthN — через Keycloak; для локали без Keycloak можно `DEV_AUTH=1` и токены `Bearer dev:<user>:<role>` (иначе dev-токены отклоняются — fail-closed). Профили `core`/`full` — см. [roadmap](docs/roadmap.md).
+
+## Статус
+
+В разработке, итерации [И0–И6](docs/roadmap.md) — всё обязательное к сдаче готово, money-shot'ы гоняются одной командой (`make demo` / `make pipeline`). **73 pytest-функции green** (53 из 54 сценариев каталога; 1 честный остаток — ShadowLogic как предел статического анализа, см. [risk-register](docs/threat-model/risk-register.md)). Документация идёт впереди кода намеренно: модель угроз и поведения (BDD) задают, что строим.
 
 ## Документация
 
@@ -69,29 +164,3 @@
 ## Безопасность этого репозитория
 
 Репозиторий живёт по тем же правилам, что платформа применяет к ML: стоят pre-commit-хуки (gitleaks), чувствительные изменения проходят ревью через CODEOWNERS, конфиг fail-closed гейтов (gitleaks, Trivy, Semgrep) хранится как reference в `ci/`. Серверный гейт по плану — локальный control-plane как CI (ADR-0002); GitLab CI запаркован, потому что gitlab.com не запускает пайплайны на аккаунте владельца. Подробности — в [SECURITY.md](SECURITY.md).
-
-## Запуск
-
-```bash
-cp .env.example .env      # поправь секреты
-make up                   # core: control-plane + Postgres + Keycloak + Redis + MinIO + MLflow + reverse-proxy
-# или: make up-full       # + observability (Loki/Grafana/Prometheus) + Gitea
-```
-
-Открыть: дашборд — http://localhost:8080 · карта покрытия (CEO) — http://localhost:8080/coverage · Keycloak — http://localhost:8080/auth/ · Сервинг моделей — http://localhost:8001/models · Grafana (full) — http://localhost:3000.
-
-Тесты (BDD против живого стека):
-
-```bash
-cd tests && pip install -r requirements.txt && pytest -q
-```
-
-Живое демо money-shot'ов (вредоносная модель → блок, гейты, ручной аппрув-гейт, рантайм-атака, карта покрытия). Для локального демо со скриптовыми ролями поднимай с `DEV_AUTH=1` (иначе authN — только через Keycloak, dev-токены отклоняются):
-
-```bash
-DEV_AUTH=1 make up      # локальное демо с dev-токенами ролей
-make demo               # все 5 money-shot'ов по живому стеку
-make pipeline           # сквозной ЖЦ одной модели: приём→скан→gate→аппрув-гейт→деплой→атака→decommission
-```
-
-Профили `core`/`full` — см. [docs/roadmap.md](docs/roadmap.md). AuthN — через Keycloak; для локали без Keycloak можно `DEV_AUTH=1` и токены `Bearer dev:<user>:<role>`.

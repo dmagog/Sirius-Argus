@@ -111,17 +111,26 @@ Sirius Argus — слой безопасности и видимости пов�
 
 ## Как это выглядит
 
-Тёмная │ светлая тема. Узлы контура (карта пайплайна):
+Слева — тёмная тема, справа — светлая; клик открывает оригинал. Узлы контура (карта пайплайна):
 
-![Карта пайплайна](_assets/img/pairs/01-map-pair.png)
+<table><tr>
+<td><img src="_assets/img/01-map.png" alt="Карта пайплайна — тёмная"></td>
+<td><img src="_assets/img/light/01-map.png" alt="Карта пайплайна — светлая"></td>
+</tr></table>
 
 Ручной аппрув-гейт критичной модели (VIS-03 + separation of duties ACC-02):
 
-![Ручной аппрув-гейт](_assets/img/pairs/02-approval-gate-pair.png)
+<table><tr>
+<td><img src="_assets/img/02-approval-gate.png" alt="Ручной аппрув-гейт — тёмная"></td>
+<td><img src="_assets/img/light/02-approval-gate.png" alt="Ручной аппрув-гейт — светлая"></td>
+</tr></table>
 
 Карта покрытия угроз (CEO-вью):
 
-![Карта покрытия](_assets/img/pairs/03-coverage-pair.png)
+<table><tr>
+<td><img src="_assets/img/03-coverage.png" alt="Карта покрытия — тёмная"></td>
+<td><img src="_assets/img/light/03-coverage.png" alt="Карта покрытия — светлая"></td>
+</tr></table>
 
 ## Честный остаток
 
