@@ -216,6 +216,7 @@ _NAV = (
     ("/coverage", "Карта покрытия", "coverage"),
     ("/serving", "Сервинг", "serving"),
     ("/services", "Сервисы", "services"),
+    ("/users", "Пользователи", "users"),
     ("/roles", "Роли (RBAC)", "roles"),
 )
 
@@ -223,7 +224,8 @@ _NAV = (
 _NAV_ICON = {"map": "bi-diagram-3", "dashboard": "bi-speedometer2", "registry": "bi-box-seam",
              "data": "bi-database", "decisions": "bi-clipboard2-check",
              "findings": "bi-exclamation-triangle", "coverage": "bi-shield-check",
-             "serving": "bi-hdd-network", "services": "bi-hdd-stack", "roles": "bi-people"}
+             "serving": "bi-hdd-network", "services": "bi-hdd-stack",
+             "users": "bi-person-vcard", "roles": "bi-people"}
 
 
 def _page(title, body, nav="dashboard"):

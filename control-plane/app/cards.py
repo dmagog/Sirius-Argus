@@ -225,3 +225,120 @@ def decisions_ledger():
     kpi = {"total": len(decisions), "approve": sum(1 for d in decisions if d["decision"] == "approve"),
            "reject": sum(1 for d in decisions if d["decision"] == "reject"), "risk": len(risks)}
     return decisions, risks, kpi
+
+
+# ─────────────────────────── РЕЕСТР ПОЛЬЗОВАТЕЛЕЙ / АКТОРОВ ───────────────────────────
+def users_registry():
+    """Реестр акторов (люди и сервис-аккаунты), собранный из аудита / findings / решений /
+    владения. Для каждого — роль и счётчики: действий (аудит), инцидентов (причастность),
+    открытых критичных, решений, владения. «Кто что делал» в одном месте."""
+    with SessionLocal() as s:
+        agg = {}
+
+        def touch(a):
+            a = (a or "").strip()
+            if not a:
+                return None
+            return agg.setdefault(a, {"actor": a, "audit": 0, "findings": 0, "open": 0,
+                                      "decisions": 0, "owns": 0, "role": "", "last": ""})
+        for f in s.query(domain.Finding).all():
+            d = touch(f.actor)
+            if d:
+                d["findings"] += 1
+                if f.status == "open" and f.severity in ("critical", "high"):
+                    d["open"] += 1
+                if f.role and not d["role"]:
+                    d["role"] = f.role
+        for ev in s.query(AuditEvent).all():
+            d = touch(ev.actor)
+            if d:
+                d["audit"] += 1
+                if (ev.ts or "") > d["last"]:
+                    d["last"] = ev.ts or ""
+        for a in s.query(domain.Approval).all():
+            d = touch(a.approver)
+            if d:
+                d["decisions"] += 1
+                if a.role and not d["role"]:
+                    d["role"] = a.role
+        for r in s.query(domain.RiskAcceptance).all():
+            d = touch(r.accepted_by)
+            if d:
+                d["decisions"] += 1
+        for m in s.query(domain.Model).all():
+            d = touch(m.owner)
+            if d:
+                d["owns"] += 1
+        for ds in s.query(domain.Dataset).all():
+            d = touch(ds.owner)
+            if d:
+                d["owns"] += 1
+        rows = []
+        for a, d in agg.items():
+            acct, heur = actor_role(a)
+            rows.append({**d, "account": acct, "role": (d["role"] or heur), "last": _short_t(d["last"])})
+    rows.sort(key=lambda r: -(r["audit"] + r["findings"] * 3 + r["decisions"] * 2))
+    kpi = {"users": len(rows), "with_incidents": sum(1 for r in rows if r["open"]),
+           "decision_makers": sum(1 for r in rows if r["decisions"]),
+           "owners": sum(1 for r in rows if r["owns"])}
+    return rows, kpi
+
+
+# ─────────────────────────── КАРТОЧКА ПОЛЬЗОВАТЕЛЯ / АКТОРА ───────────────────────────
+def user_card(actor):
+    """История актора в одном месте: активность (аудит), инциденты (сработки причастности,
+    актив кликабелен), решения (аппрув-гейт + принятие риска), владение (модели/датасеты).
+    Кросс-ссылки на карточки сущностей. None — если актор нигде не встречается."""
+    actor = (actor or "").strip()
+    if not actor:
+        return None
+    with SessionLocal() as s:
+        f_rows = (s.query(domain.Finding).filter(domain.Finding.actor == actor)
+                  .order_by(domain.Finding.id.desc()).all())
+        ev_rows = (s.query(AuditEvent).filter(AuditEvent.actor == actor)
+                   .order_by(AuditEvent.id.desc()).limit(150).all())
+        appr = (s.query(domain.Approval).filter(domain.Approval.approver == actor)
+                .order_by(domain.Approval.id.desc()).all())
+        risks = (s.query(domain.RiskAcceptance).filter(domain.RiskAcceptance.accepted_by == actor)
+                 .order_by(domain.RiskAcceptance.id.desc()).all())
+        own_m = s.query(domain.Model).filter(domain.Model.owner == actor).all()
+        own_d = s.query(domain.Dataset).filter(domain.Dataset.owner == actor).all()
+        if not (f_rows or ev_rows or appr or risks or own_m or own_d):
+            return None
+        role = next((f.role for f in f_rows if f.role), "") or next((a.role for a in appr if a.role), "")
+        acct, heur = actor_role(actor)
+        role = role or heur
+        mv_ref = {}
+        for a in appr:
+            mv = s.get(domain.ModelVersion, a.model_version_id)
+            if mv:
+                m = s.get(domain.Model, mv.model_id)
+                mv_ref[a.model_version_id] = {"model_id": mv.model_id, "model": (m.name if m else "—"),
+                                              "version": mv.version}
+        incidents = [{"id": f.id, "ts": _short_t(f.ts), "tool": f.tool, "verdict": f.verdict,
+                      "severity": f.severity, "status": f.status, "asset": f.asset_ref, "detail": f.detail}
+                     for f in f_rows]
+        activity = []
+        for ev in ev_rows:
+            act = ev.action or ""
+            lvl = ("err" if (not ev.was_authorized or "blocked" in act or "denied" in act or "reject" in act)
+                   else "sec" if ("sign" in act or "approve" in act or "promote" in act or "secret" in act) else "info")
+            activity.append({"t": _short_t(ev.ts), "action": act, "obj": ev.obj or "", "lvl": lvl})
+        decisions = []
+        for a in appr:
+            ref = mv_ref.get(a.model_version_id, {})
+            decisions.append({"kind": "gate", "decision": (a.decision or "approve"), "ts": _short_t(a.ts),
+                              "model_id": ref.get("model_id"), "model": ref.get("model", "—"),
+                              "version": ref.get("version", "—"), "reason": a.reason or ""})
+        for r in risks:
+            decisions.append({"kind": "risk", "ref": r.ref, "ts": _short_t(r.ts),
+                              "justification": r.justification or "", "active": bool(r.active)})
+        owns = ([{"kind": "model", "id": m.id, "name": m.name, "crit": _crit(m.criticality)} for m in own_m]
+                + [{"kind": "dataset", "id": dd.id, "name": dd.name, "sensitivity": dd.sensitivity} for dd in own_d])
+        open_inc = sum(1 for f in f_rows if f.status == "open" and f.severity in ("critical", "high"))
+        status = "есть инциденты" if open_inc else ("активен" if ev_rows else "—")
+        card = {"actor": actor, "account": acct, "role": role, "status": status,
+                "incidents": incidents, "activity": activity, "decisions": decisions, "owns": owns,
+                "kpi": {"audit": len(ev_rows), "incidents": len(f_rows), "open": open_inc,
+                        "decisions": len(appr) + len(risks), "owns": len(owns)}}
+    return card

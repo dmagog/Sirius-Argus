@@ -74,6 +74,14 @@ def _actor(actor, role):
             f"font-size:11px'>{_e(role)}</span>")
 
 
+def _owner_link(owner):
+    """Владелец → ссылка на карточку актора (если актор известен)."""
+    from ..runs import actor_href
+    href = actor_href(owner)
+    return (f"<a href='{_e(href)}' style='color:var(--sa-accent-ink);text-decoration:none'>{_e(owner)}</a>"
+            if href else _e(owner))
+
+
 def _back_link(href, label):
     return (f"<a href='{_e(href)}' style='display:inline-flex;align-items:center;gap:6px;"
             f"color:var(--sa-muted);font-size:12px;text-decoration:none;margin-bottom:12px'>"
@@ -159,7 +167,7 @@ def model_card_page(card):
         + _badge(_e(status), status_col)
         + "</div>"
         + "<p class='sa-sub'>тип · " + _e(card["type"])
-        + " · владелец · " + _e(card["owner"])
+        + " · владелец · " + _owner_link(card["owner"])
         + " · открытых проблем: " + _e(card["open"]) + "</p>"
     )
 
@@ -296,7 +304,7 @@ def dataset_card_page(card):
         + status_badge
         + "</div>"
         + "<p class='sa-sub'>источник · " + _e(card["source"])
-        + " · владелец · " + _e(card["owner"]) + "</p>"
+        + " · владелец · " + _owner_link(card["owner"]) + "</p>"
     )
 
     kpis = _kpi_grid([
@@ -399,3 +407,109 @@ def dataset_card_page(card):
         + _section("Таймлайн", _timeline(card.get("timeline", [])))
     )
     return _page(f"Sirius Argus — {card['name']}", body, "data")
+
+
+# ── карточка пользователя / актора ────────────────────────────────────────────
+_USTATUS_COL = {"есть инциденты": "var(--sa-alert)", "активен": "var(--sa-ok)", "—": "var(--sa-muted)"}
+
+
+def user_card_page(card):
+    """Карточка актора: всё «кто что делал» в одном месте — активность (аудит), инциденты
+    (причастность, актив кликабелен), решения (аппрув-гейт + риск), владение (модели/датасеты)."""
+    from ..runs import asset_href
+    acct, role, status = card["account"], card["role"], card["status"]
+    k = card.get("kpi", {})
+    scol = _USTATUS_COL.get(status, "var(--sa-muted)")
+
+    def _asset(a):
+        href = asset_href(a)
+        return (f"<a href='{_e(href)}' class='sa-mono' style='color:var(--sa-blue);font-size:11.5px;"
+                f"text-decoration:none'>{_e(a)} <i class='bi bi-box-arrow-up-right' style='font-size:9px'></i></a>"
+                if href else f"<span class='sa-mono' style='color:var(--sa-text2);font-size:11.5px'>{_e(a)}</span>")
+
+    # инциденты (причастность)
+    if card.get("incidents"):
+        rows = "".join(
+            "<tr>"
+            f"<td class='sa-mono' style='color:var(--sa-muted);white-space:nowrap'>{_e(i['ts'])}</td>"
+            f"<td>{_sev_badge(i['severity'], i['verdict'])}</td>"
+            f"<td class='sa-mono' style='color:var(--sa-text2);font-size:11.5px'>{_e(i['tool'])}</td>"
+            f"<td>{_asset(i['asset'])}</td>"
+            f"<td style='color:var(--sa-text2);max-width:360px'>{_e(i['detail'])}</td>"
+            f"<td>{_badge(_e(i['status']), 'var(--sa-warn)' if i['status'] == 'open' else 'var(--sa-muted)', mono=True)}</td></tr>"
+            for i in card["incidents"])
+        inc_panel = _table(["время", "вердикт", "инструмент", "актив", "детали", "статус"], rows)
+    else:
+        inc_panel = _empty("инцидентов с причастностью нет")
+
+    # решения
+    if card.get("decisions"):
+        rows = ""
+        for d in card["decisions"]:
+            if d["kind"] == "gate":
+                appr = d["decision"] == "approve"
+                badge = _badge("аппрув" if appr else "отклонение",
+                               "var(--sa-ok)" if appr else "var(--sa-alert)")
+                obj = (f"<a href='/registry/model/{_e(d['model_id'])}' style='color:var(--sa-blue);text-decoration:none'>"
+                       f"{_e(d['model'])}</a> v{_e(d['version'])}" if d.get("model_id") is not None
+                       else f"{_e(d['model'])} v{_e(d['version'])}")
+                detail = _e(d.get("reason") or "—")
+            else:
+                badge = _badge("принятие риска", "#fb923c")
+                obj = f"<span class='sa-mono' style='font-size:11.5px'>{_e(d['ref'])}</span>"
+                detail = _e(d.get("justification") or "—")
+            rows += (f"<tr><td>{badge}</td><td>{obj}</td>"
+                     f"<td class='sa-mono' style='color:var(--sa-muted);white-space:nowrap'>{_e(d['ts'])}</td>"
+                     f"<td style='color:var(--sa-text2);max-width:360px'>{detail}</td></tr>")
+        dec_panel = _table(["решение", "объект", "время", "обоснование"], rows)
+    else:
+        dec_panel = _empty("решений не принимал")
+
+    # владение
+    if card.get("owns"):
+        chips = ""
+        for o in card["owns"]:
+            if o["kind"] == "model":
+                href, ic, tail = f"/registry/model/{o['id']}", "bi-box-seam", _crit_badge(o["crit"])
+            else:
+                href, ic, tail = f"/data/dataset/{o['id']}", "bi-database", _badge(_e(o["sensitivity"]), "var(--sa-text2)")
+            chips += (f"<a href='{href}' style='display:inline-flex;align-items:center;gap:7px;text-decoration:none;"
+                      "border:1px solid var(--sa-line);border-radius:9px;padding:7px 11px;background:var(--sa-panel)'>"
+                      f"<i class='bi {ic}' style='color:var(--sa-accent-ink)'></i>"
+                      f"<span style='color:var(--sa-head);font-weight:600;font-size:12.5px'>{_e(o['name'])}</span>{tail}</a>")
+        owns_panel = f"<div style='display:flex;flex-wrap:wrap;gap:10px'>{chips}</div>"
+    else:
+        owns_panel = _empty("ничего не владеет")
+
+    # активность (аудит) — действия самого актора
+    act_items = ""
+    for a in card.get("activity", []):
+        acol = _LVL_COL.get(a.get("lvl"), "var(--sa-text2)")
+        act_items += (
+            "<div style='display:flex;gap:12px;align-items:baseline;padding:4px 0;border-top:1px solid var(--sa-line)'>"
+            f"<span class='sa-mono' style='color:var(--sa-muted);font-size:11.5px;white-space:nowrap'>{_e(a['t'])}</span>"
+            f"<span class='sa-mono' style='color:{acol};font-size:11.5px'>{_e(a['action'])}</span>"
+            f"<span class='sa-mono' style='color:var(--sa-text2);font-size:11px'>{_e(a['obj'])}</span></div>")
+    act_panel = (f"<div class='sa-panel' style='padding:6px 16px 10px;max-height:280px;overflow:auto'>{act_items}</div>"
+                 if act_items else _empty("действий в аудите нет"))
+
+    body = (
+        _eye("Sirius Argus · карточка пользователя")
+        + _back_link("/users", "Реестр пользователей")
+        + f"<h1 class='sa-h1' style='display:inline'>{_e(acct)}</h1> "
+        + f"<span style='margin-left:6px'>{_badge(_e(role), 'var(--sa-accent-ink)')} {_badge(_e(status), scol)}</span>"
+        + f"<p class='sa-sub'>актор <span class='sa-mono'>{_e(card['actor'])}</span> · «кто что делал»: "
+          "активность, инциденты причастности, решения и владение в одном месте.</p>"
+        + _kpi_grid([
+            _kpi("Действий", k.get("audit", 0)),
+            _kpi("Инцидентов", k.get("incidents", 0)),
+            _kpi("Открытых", k.get("open", 0), accent=("var(--sa-alert)" if k.get("open") else "")),
+            _kpi("Решений", k.get("decisions", 0)),
+            _kpi("Владеет", k.get("owns", 0)),
+        ])
+        + _section("Инциденты (причастность)", inc_panel)
+        + _section("Решения", dec_panel)
+        + _section("Владеет", owns_panel)
+        + _section("Активность (аудит)", act_panel)
+    )
+    return _page(f"Sirius Argus — {acct}", body, "users")

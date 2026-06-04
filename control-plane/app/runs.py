@@ -72,6 +72,16 @@ def asset_href(asset_ref):
     return None
 
 
+def actor_href(actor):
+    """URL карточки актора по строке актора, иначе None. Любой непустой актор (человек или
+    сервис-аккаунт) → /users/<actor>; «—»/пусто — без ссылки."""
+    a = (actor or "").strip()
+    if not a or a == "—":
+        return None
+    from urllib.parse import quote
+    return "/users/" + quote(a, safe="")
+
+
 def _crit(criticality):
     return criticality if criticality in ("regulatory", "financial") else "internal"
 

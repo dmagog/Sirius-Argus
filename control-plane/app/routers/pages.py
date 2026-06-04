@@ -131,6 +131,24 @@ def decisions_view():
     return ui.decisions_page(ledger, risks, kpi)
 
 
+@router.get("/users", response_class=HTMLResponse)
+def users_view():
+    """Реестр пользователей/акторов: люди и сервис-аккаунты с ролью и активностью.
+    Клик по актору — карточка «кто что делал»."""
+    rows, kpi = cards.users_registry()
+    return ui.users_page(rows, kpi)
+
+
+@router.get("/users/{actor}", response_class=HTMLResponse)
+def user_card_view(actor: str):
+    """Карточка актора: активность (аудит), инциденты (причастность), решения
+    (аппрув-гейт + риск), владение (модели/датасеты) — всё «кто что делал» в одном месте."""
+    card = cards.user_card(actor)
+    if card is None:
+        raise HTTPException(status_code=404, detail="actor not found")
+    return ui.user_card_page(card)
+
+
 @router.get("/services", response_class=HTMLResponse)
 def services_view():
     """Карта сервисов системы: что наружу (кликабельно) и что внутри (zero-trust)."""

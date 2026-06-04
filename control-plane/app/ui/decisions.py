@@ -14,8 +14,12 @@ def _decision_badge(decision):
 
 
 def _actor(name, role):
-    """Имя актора + роль (accent-ink, полужирный) — единый формат для гейта и GRC."""
-    return (f"{_e(name)} "
+    """Имя актора (ссылка на карточку) + роль (accent-ink, полужирный) — единый формат для гейта и GRC."""
+    from ..runs import actor_href
+    href = actor_href(name)
+    who = (f"<a href='{_e(href)}' style='color:var(--sa-text);text-decoration:none'>{_e(name)}</a>"
+           if href else _e(name))
+    return (f"{who} "
             f"<span class='sa-mono' style='color:var(--sa-accent-ink);font-weight:600;font-size:11.5px'>"
             f"{_e(role)}</span>")
 

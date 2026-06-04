@@ -52,12 +52,15 @@ def findings_table(findings):
     """Полный список сработок (SA-стиль): тяжесть/вердикт, актив, причастный (учётка+роль), статус."""
     if not findings:
         return "<div style='padding:18px;color:var(--sa-muted)'>сработок по фильтру нет</div>"
-    from ..runs import asset_href, role_of
+    from ..runs import actor_href, asset_href, role_of
     rows = ""
     for f in findings:
         sc = _F_SEVC.get(f["severity"], "var(--sa-muted)")
         col, bg = _F_STC.get(f["status"], ("var(--sa-muted)", "rgba(100,116,139,.16)"))
         acct, role = role_of(f)
+        ahref = actor_href(f.get("actor"))
+        actor_cell = (f"<a href='{ahref}' style='color:var(--sa-text);text-decoration:none'>{_e(acct)}</a>"
+                      if ahref else _e(acct))
         href = asset_href(f.get("asset"))
         asset_cell = (f"<a href='{href}' style='color:var(--sa-blue);text-decoration:none' title='открыть карточку'>"
                       f"{_e(f['asset'])} <i class='bi bi-box-arrow-up-right' style='font-size:9px'></i></a>"
@@ -70,7 +73,7 @@ def findings_table(findings):
             f"<span class='sa-mono' style='color:{sc};font-weight:600'>{_e(f['verdict'])}</span></td>"
             f"<td class='sa-mono' style='color:var(--sa-text2);font-size:11.5px'>{asset_cell}</td>"
             f"<td style='color:var(--sa-text2);max-width:420px'>{_e(f['detail'])}</td>"
-            f"<td class='sa-mono' style='font-size:11px;white-space:nowrap'>{_e(acct)} "
+            f"<td class='sa-mono' style='font-size:11px;white-space:nowrap'>{actor_cell} "
             f"<span style='color:var(--sa-accent-ink);font-weight:600'>{_e(role)}</span></td>"
             f"<td><span class='sa-badge sa-mono' style='color:{col};background:{bg}'>{_e(f['status'])}</span></td></tr>")
     return ("<table class='sa-table'><thead><tr>"

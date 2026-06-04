@@ -50,7 +50,8 @@ _SEVC = {"critical": "var(--sa-alert)", "high": "#fb923c", "medium": "var(--sa-w
 _NAV_ICON = {"map": "bi-diagram-3", "dashboard": "bi-speedometer2", "registry": "bi-box-seam",
              "data": "bi-database", "decisions": "bi-clipboard2-check",
              "findings": "bi-exclamation-triangle", "coverage": "bi-shield-check",
-             "serving": "bi-hdd-network", "services": "bi-hdd-stack", "roles": "bi-people"}
+             "serving": "bi-hdd-network", "services": "bi-hdd-stack",
+             "users": "bi-person-vcard", "roles": "bi-people"}
 
 
 def _sa_css():
@@ -628,11 +629,13 @@ def _gate_panel(sel_run, detail):
 def _inspector_inner(sel_run, detail):
     """Внутренность правой колонки инспектора (шапка прогона + панель аппрув-гейта + lineage +
     сработки + терминальный лог). Выделено, чтобы тем же кодом рендерить HTMX-рефреш."""
-    from ..runs import actor_role, asset_href, role_of
+    from ..runs import actor_href, actor_role, asset_href, role_of
     detail = detail or {}
     if not sel_run:
         return "<div style='padding:18px;color:var(--sa-muted);font-size:13px'>выберите прогон слева</div>"
     acct, role = actor_role(sel_run["actor"])
+    _rah = actor_href(sel_run.get("actor"))
+    acct_link = (f"<a href='{_rah}' style='color:var(--sa-text2);text-decoration:none'>{_e(acct)}</a>" if _rah else _e(acct))
     lin = detail.get("lineage", {})
     lin_rows = "".join(
         f"<div class='sa-lin'><span class='sa-mono' style='font-size:11px;color:var(--sa-text2)'>{k}</span>"
@@ -649,6 +652,8 @@ def _inspector_inner(sel_run, detail):
             _href = asset_href(f.get("asset"))
             _asset = (f"<a href='{_href}' style='color:var(--sa-blue);text-decoration:none'>{_e(f['asset'])} "
                       f"<i class='bi bi-box-arrow-up-right' style='font-size:8px'></i></a>" if _href else _e(f.get("asset", "")))
+            _pah = actor_href(f.get("actor"))
+            _pa = (f"<a href='{_pah}' style='color:var(--sa-text2);text-decoration:none'>{_e(fa)}</a>" if _pah else _e(fa))
             fcards += (
                 f"<div class='sa-fcard'><div style='display:flex;align-items:center;gap:7px;flex-wrap:wrap'>"
                 f"<span class='sa-badge sa-mono' style='color:{sc};background:rgba(148,163,184,.12)'>{_e(f['severity'])}</span>"
@@ -656,7 +661,7 @@ def _inspector_inner(sel_run, detail):
                 f"<span style='flex:1'></span><span class='sa-badge sa-mono' style='color:var(--sa-text2);border:1px solid var(--sa-line)'>{_e(f['status'])}</span></div>"
                 f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:5px'>{_e(f['tool'])} · {_asset}</div>"
                 f"<div style='font-size:11.5px;color:var(--sa-text2);margin-top:5px;line-height:1.45'>{_e(f['detail'])}</div>"
-                f"<div class='sa-mono' style='font-size:10px;color:var(--sa-text2);margin-top:6px'>причастен: {_e(fa)} "
+                f"<div class='sa-mono' style='font-size:10px;color:var(--sa-text2);margin-top:6px'>причастен: {_pa} "
                 f"<span style='color:var(--sa-accent-ink);font-weight:600'>{_e(fr)}</span></div></div>")
     else:
         fcards = "<div style='font-size:12px;color:var(--sa-muted);padding:4px 0'>сработок нет — прогон чист</div>"
@@ -687,7 +692,7 @@ def _inspector_inner(sel_run, detail):
         f"<span class='sa-mono' style='font-size:16px;font-weight:700;color:var(--sa-head)'>{_e(sel_run['id'])}</span>"
         f"<span style='font-size:13px;color:var(--sa-text)'>{_e(sel_run['model'])} <span class='sa-mono' style='color:var(--sa-text2)'>{_e(sel_run['ver'])}</span></span></div>"
         f"<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>{_crit_badge(sel_run['crit'])}"
-        f"<span class='sa-chip'>причастен: {_e(acct)} · {_e(role)}</span></div>{timing_line}</div>"
+        f"<span class='sa-chip'>причастен: {acct_link} · {_e(role)}</span></div>{timing_line}</div>"
         "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:12px 16px;min-height:0'>"
         f"{_gate_panel(sel_run, detail)}"
         "<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Lineage · воспроизводимость (MON-02)</div>"
@@ -829,14 +834,17 @@ def map_incident_fragment(finding, audit_rows):
     f = finding
     head = (f"<div class='flex items-center gap-2 mb-2'><span class='px-2 py-0.5 rounded text-xs {_SEV.get(f['severity'], 'bg-slate-100')}'>{_e(f['severity'])}</span>"
             f"<b>{_e(f['verdict'])}</b><span class='text-slate-400 text-xs'>· {_e(f['tool'])} · {_e(f['ts'])}</span></div>")
-    from ..runs import asset_href, role_of
+    from ..runs import actor_href, asset_href, role_of
     acct, role = role_of(f)
     _href = asset_href(f.get("asset"))
     _asset = (f"<a href='{_href}' class='font-mono text-xs' style='color:var(--sa-blue);text-decoration:none'>"
               f"{_e(f['asset'])} <i class='bi bi-box-arrow-up-right' style='font-size:9px'></i></a>"
               if _href else f"<span class='font-mono text-xs'>{_e(f['asset'])}</span>")
+    _pah = actor_href(f.get("actor"))
+    _party = (f"<a href='{_pah}' style='color:var(--sa-blue);text-decoration:none'><b>{_e(acct)}</b></a>"
+              if _pah else f"<b>{_e(acct)}</b>")
     meta = (f"<div class='text-sm text-slate-600 mb-1'>Актив: {_asset}</div>"
-            f"<div class='text-sm text-slate-600 mb-1'>Причастен: <b>{_e(acct)}</b> "
+            f"<div class='text-sm text-slate-600 mb-1'>Причастен: {_party} "
             f"<span class='font-mono text-xs text-amber-600'>{_e(role)}</span></div>"
             f"<div class='text-sm text-slate-600 mb-3'>Что произошло: {_e(f['detail'])}</div>")
     tl = audit_fragment(audit_rows) if audit_rows else "<div class='p-3 text-slate-400 text-sm'>событий нет</div>"
