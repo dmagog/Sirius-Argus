@@ -17,7 +17,7 @@ def _e(s):
     return _html.escape(str(s if s is not None else ""))
 
 
-def _comet_path(cx=50.0, cy=50.0, R=42.0, span=160.0, w_head=2.6, n=60):
+def _comet_path(cx=50.0, cy=50.0, R=42.0, span=160.0, w_head=2.3, n=60):
     """SVG-путь кометы: дуга от головы (угол 0) назад на span°. Ширина плавно СУЖАЕТСЯ к хвосту
     (w_head→0 → точка). Передний край СКРУГЛЁН дуговой шапкой (как stroke-linecap:round раньше).
     Голова закреплена на угле 0 (одинакова при любом span) → при морфинге span дышит только хвост,
@@ -176,7 +176,10 @@ def _sa_css():
         # комета (SVG-путь): ширина плавно СУЖАЕТСЯ к хвосту (до точки) + градиент #cometg затухает
         # по прозрачности. Голова движется ТОЛЬКО вращением SVG (saComet linear) → постоянная скорость.
         # stop-color через CSS-свойство (не SVG-атрибут) → резолвит var() и уважает выбранный акцент.
-        ".sa-splash .ring{position:absolute;inset:-6px;animation:saComet 4.5s linear infinite;}"
+        # вращаем ОБЁРТКУ-span (не SVG): обычный блок крутится строго вокруг центра → орбита ровно
+        # по кругу; inset −20 выносит комету наружу (с запасом от свечения, орбита крупнее).
+        ".sa-splash .ring{position:absolute;inset:-20px;transform-origin:50% 50%;animation:saComet 4.5s linear infinite;}"
+        ".sa-splash .ring svg{width:100%;height:100%;display:block;}"
         ".sa-splash .ring stop{stop-color:var(--sa-accent);}"
         # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
         ".sa-splash .halo::after{content:'';position:absolute;inset:24px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
@@ -264,12 +267,12 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     _cmin, _cmax = _comet_path(span=120), _comet_path(span=195)  # короткая/длинная для дыхания длины
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
-        "<div class='halo'><svg class='ring' viewBox='0 0 100 100'>"
+        "<div class='halo'><span class='ring'><svg viewBox='0 0 100 100'>"
         "<defs><linearGradient id='cometg' x1='92' y1='50' x2='10' y2='35' gradientUnits='userSpaceOnUse'>"
         "<stop offset='0' stop-opacity='.95'/><stop offset='1' stop-opacity='0'/></linearGradient></defs>"
         f"<path class='comet' fill='url(#cometg)' d='{_cmin}'>"
         f"<animate attributeName='d' dur='4.5s' repeatCount='indefinite' calcMode='spline' "
-        f"keyTimes='0;0.5;1' keySplines='.4 0 .2 1;.4 0 .2 1' values='{_cmin};{_cmax};{_cmin}'/></path></svg>"
+        f"keyTimes='0;0.5;1' keySplines='.4 0 .2 1;.4 0 .2 1' values='{_cmin};{_cmax};{_cmin}'/></path></svg></span>"
         "<span class='logospin'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></span></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
         "<div style='display:flex;flex-direction:column;align-items:center;gap:11px'>"
