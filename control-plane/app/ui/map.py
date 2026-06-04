@@ -144,20 +144,26 @@ def _sa_css():
         ".sa-runcard:hover{border-color:var(--sa-accent);}"
         ".sa-lin{display:flex;justify-content:space-between;gap:10px;padding:7px 11px;}.sa-lin+.sa-lin{border-top:1px solid var(--sa-line);}"
         ".sa-badge{font-size:10px;font-weight:700;border-radius:5px;padding:2px 6px;}"
-        # ── hero-сплэш при входе (один раз за сессию; фон = --sa-bg, тема применена до отрисовки) ──
-        ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--sa-bg);transition:opacity .4s ease;}"
+        # ── hero-сплэш при входе (играет каждую загрузку обзора; фон = --sa-bg, тема до отрисовки) ──
+        ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--sa-bg);transition:opacity .55s ease;}"
         ".sa-splash.out{opacity:0;pointer-events:none;}"
-        ".sa-splash .logo{width:96px;height:96px;border-radius:999px;display:flex;align-items:center;justify-content:center;"
-        "background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.34) 0%,rgba(250,204,21,.10) 60%,rgba(250,204,21,0) 100%);box-shadow:0 0 46px rgba(250,204,21,.28);animation:saSplashIn .5s ease;}"
-        ".sa-splash .logo img{width:72px;height:72px;border-radius:999px;}"
-        ".sa-splash .t1{font-size:21px;font-weight:700;color:var(--sa-head);letter-spacing:.4px;}"
-        ".sa-splash .t2{font-size:9.5px;letter-spacing:2.4px;text-transform:uppercase;color:var(--sa-text2);font-weight:500;margin-top:5px;}"
-        ".sa-splash .bar{width:182px;height:3px;border-radius:3px;background:var(--sa-line2);overflow:hidden;margin-top:8px;}"
-        ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
-        ".sa-splash.go .bar i{animation:saSplashBar .82s ease forwards;}"
-        "@keyframes saSplashIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}"
+        ".sa-splash .halo{position:relative;width:154px;height:154px;display:flex;align-items:center;justify-content:center;}"
+        # вращающееся акцентное кольцо вокруг логотипа
+        ".sa-splash .halo::before{content:'';position:absolute;inset:-8px;border-radius:999px;border:2px solid transparent;border-top-color:var(--sa-accent);border-right-color:var(--sa-accent);opacity:.75;animation:saSpin 2.4s linear infinite;}"
+        # пульсирующий золотой ореол
+        ".sa-splash .halo::after{content:'';position:absolute;inset:6px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.34) 0%,rgba(250,204,21,.10) 55%,rgba(250,204,21,0) 100%);animation:saPulse 2.2s ease-in-out infinite;}"
+        ".sa-splash .logo{position:relative;z-index:1;width:120px;height:120px;border-radius:999px;box-shadow:0 0 50px rgba(250,204,21,.30);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
+        ".sa-splash .t1{font-size:34px;font-weight:700;color:var(--sa-head);letter-spacing:.5px;opacity:0;animation:saRise .6s ease .35s forwards;}"
+        ".sa-splash .t2{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;margin-top:8px;opacity:0;animation:saRise .6s ease .5s forwards;}"
+        ".sa-splash .bar{width:248px;height:4px;border-radius:4px;background:var(--sa-line2);overflow:hidden;opacity:0;animation:saRise .5s ease .6s forwards;}"
+        ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
+        ".sa-splash.go .bar i{animation:saSplashBar 1.9s cubic-bezier(.4,0,.2,1) .6s forwards;}"
+        "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
+        "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
+        "@keyframes saSpin{to{transform:rotate(360deg)}}"
+        "@keyframes saPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}"
         "@keyframes saSplashBar{from{width:0}to{width:100%}}"
-        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash.go .bar i{animation:none!important}.sa-splash .bar i{width:100%}}"
+        "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .halo::before,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
         "</style>"
     )
 
@@ -219,10 +225,10 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         f"<div class='sa-railfoot'><span class='sa-mono'>argus · prod</span><span class='sa-mono'>{nnodes} узлов</span></div></nav>"
     )
 
-    # hero-сплэш — только на стартовом экране (обзор); JS гасит его один раз за сессию
+    # hero-сплэш — только на стартовом экране (обзор); играет при каждой загрузке
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
-        "<span class='logo'><img src='/static/avatar.png' alt='Sirius Argus'></span>"
+        "<div class='halo'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
         "<div class='bar'><i></i></div></div>"
     ) if active == "overview" else ""
@@ -276,16 +282,13 @@ function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||''
     b.setAttribute('aria-current',(b.getAttribute('data-a')||'')===cur?'true':'false');});}
 (function(){saThemeIcon();saAccentMark();function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
  setInterval(tick,4000);tick();})();
-// hero-сплэш: показываем один раз за сессию, гасим по таймеру (декоративный прогресс),
-// уважаем prefers-reduced-motion; не блокирует контент (оверлей поверх готовой страницы).
+// hero-сплэш: играет ПРИ КАЖДОЙ загрузке обзора (удобно отлаживать промо-материалы), гасим по
+// таймеру (~2.5с, декоративный прогресс); уважаем prefers-reduced-motion; оверлей не блокирует контент.
 (function(){var el=document.getElementById('sa-splash');if(!el)return;
- var seen;try{seen=sessionStorage.getItem('sa-splash-seen');}catch(e){}
- if(seen){if(el.parentNode)el.parentNode.removeChild(el);return;}
- try{sessionStorage.setItem('sa-splash-seen','1');}catch(e){}
- function done(){el.classList.add('out');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},420);}
+ function done(){el.classList.add('out');setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},600);}
  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- if(reduce){setTimeout(done,260);return;}
- el.classList.add('go');setTimeout(done,1050);})();
+ if(reduce){setTimeout(done,600);return;}
+ el.classList.add('go');setTimeout(done,2500);})();
 """
 
 
