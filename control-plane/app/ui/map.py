@@ -147,28 +147,29 @@ def _sa_css():
         # ── hero-сплэш при входе (играет каждую загрузку обзора; фон = --sa-bg, тема до отрисовки) ──
         ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--sa-bg);transition:opacity .55s ease;}"
         ".sa-splash.out{opacity:0;pointer-events:none;}"
-        ".sa-splash .halo{position:relative;width:200px;height:200px;display:flex;align-items:center;justify-content:center;}"
+        ".sa-splash .halo{position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;}"
         # вращающееся акцентное кольцо вокруг логотипа
-        ".sa-splash .halo::before{content:'';position:absolute;inset:-10px;border-radius:999px;border:2px solid transparent;border-top-color:var(--sa-accent);border-right-color:var(--sa-accent);opacity:.75;animation:saSpin 2.4s linear infinite;}"
-        # пульсирующий золотой ореол
-        ".sa-splash .halo::after{content:'';position:absolute;inset:8px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.34) 0%,rgba(250,204,21,.10) 55%,rgba(250,204,21,0) 100%);animation:saPulse 2.2s ease-in-out infinite;}"
+        ".sa-splash .halo::before{content:'';position:absolute;inset:-12px;border-radius:999px;border:2px solid transparent;border-top-color:var(--sa-accent);border-right-color:var(--sa-accent);opacity:.75;animation:saSpin 2.4s linear infinite;}"
+        # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
+        ".sa-splash .halo::after{content:'';position:absolute;inset:10px;border-radius:999px;background:radial-gradient(circle at 50% 45%,rgba(250,204,21,.32) 0%,rgba(250,204,21,.14) 42%,rgba(250,204,21,.04) 68%,rgba(250,204,21,0) 100%);animation:saGlow 3.6s ease-in-out infinite;}"
         # логотип ОЧЕНЬ неспешно вращается в ПРОТИВОФАЗЕ кольцу (кольцо — по часовой, логотип — против; 80с/оборот)
         ".sa-splash .logospin{position:relative;z-index:1;display:flex;animation:saLogoSpin 80s linear infinite;}"
-        ".sa-splash .logo{width:156px;height:156px;border-radius:999px;box-shadow:0 0 56px rgba(250,204,21,.30);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
+        ".sa-splash .logo{width:202px;height:202px;border-radius:999px;box-shadow:0 0 64px rgba(250,204,21,.28);animation:saSplashIn .7s cubic-bezier(.2,.8,.2,1);}"
         ".sa-splash .t1{font-size:34px;font-weight:700;color:var(--sa-head);letter-spacing:.5px;opacity:0;animation:saRise .6s ease .35s forwards;}"
         ".sa-splash .t2{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--sa-text2);font-weight:600;margin-top:8px;opacity:0;animation:saRise .6s ease .5s forwards;}"
         ".sa-splash .bar{width:248px;height:4px;border-radius:4px;background:var(--sa-line2);overflow:hidden;opacity:0;animation:saRise .5s ease .6s forwards;}"
         ".sa-splash .bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,var(--sa-accent),var(--sa-accent-ink));}"
-        ".sa-splash.go .bar i{animation:saSplashBar 5.6s cubic-bezier(.4,0,.2,1) .6s forwards;}"
+        ".sa-splash.go .bar i{animation:saSplashBar 6.4s cubic-bezier(.4,0,.2,1) .6s forwards;}"
         # «бутлог»: текст этапа под баром сменяется по мере заполнения (JS), плавная подмена
         ".sa-splash .step{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.2px;color:var(--sa-text2);min-height:18px;opacity:0;transition:opacity .25s ease;}"
-        ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;animation:saPulse 1.1s ease-in-out infinite;}"
+        ".sa-splash .step .dot{width:6px;height:6px;border-radius:50%;background:var(--sa-accent);box-shadow:0 0 8px 0 var(--sa-accent);flex:none;animation:saDot 2.4s ease-in-out infinite;}"
         ".sa-splash .step .txt{display:inline-block;will-change:transform,opacity;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
         "@keyframes saSpin{to{transform:rotate(360deg)}}"
         "@keyframes saLogoSpin{to{transform:rotate(-360deg)}}"
-        "@keyframes saPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}"
+        "@keyframes saGlow{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.05);opacity:1}}"
+        "@keyframes saDot{0%,100%{opacity:.4}50%{opacity:1}}"
         "@keyframes saSplashBar{from{width:0}to{width:100%}}"
         "@media(prefers-reduced-motion:reduce){.sa-node.alert,.sa-led,.sa-live .d,.sa-content,.sa-splash .logo,.sa-splash .logospin,.sa-splash .halo::before,.sa-splash .halo::after,.sa-splash .t1,.sa-splash .t2,.sa-splash .bar,.sa-splash.go .bar i,.sa-splash .step .dot{animation:none!important}.sa-splash .t1,.sa-splash .t2,.sa-splash .bar{opacity:1}.sa-splash .bar i{width:100%}}"
         "</style>"
@@ -314,8 +315,9 @@ function saAccentMark(){var cur='';try{cur=localStorage.getItem('sa-accent')||''
    txt.style.transition=TR;txt.style.opacity='0';txt.style.transform='translateY(-14px)';
    setTimeout(enter,340);}
  setTimeout(function(){step.style.opacity='1';show(true);
-   var iv=setInterval(function(){if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show(false);},1300);},800);
- setTimeout(done,6600);})();
+   var iv=setInterval(function(){if(i>=STEPS.length-1){clearInterval(iv);return;} i++; show(false);},1500);},1000);
+ // последний этап встаёт ~7000мс; держим экран до 7900мс — небольшая пауза перед исчезновением
+ setTimeout(done,7900);})();
 """
 
 
