@@ -1,4 +1,4 @@
-"""pytest-bdd: сквозной ЖЦ одной модели (И6) — приём→gate→HITL→деплой→атака→decommission."""
+"""pytest-bdd: сквозной ЖЦ одной модели (И6) — приём→gate→аппрув-гейт→деплой→атака→decommission."""
 import os
 import pickle
 import time
@@ -40,12 +40,12 @@ def lifecycle():
                      json={"dataset_version_id": dv, "code_commit": "abc123", "env_lock": "req.lock",
                            "intended_use": "скоринг", "limitations": "не для физлиц"}, timeout=60).json()["version"]
     httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/sign", headers=tok("MLSecOps"), timeout=60)  # крипто-подпись (SUP-04)
-    # 3) promote без HITL → блок
-    S["promote_no_hitl"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=60).status_code
+    # 3) promote без решения аппрув-гейта → блок
+    S["promote_no_gate"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=60).status_code
     # 4) аппрув другим MLSecOps (reviewer) + promote → прод
     httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/approve",
                headers={"Authorization": "Bearer dev:reviewer:MLSecOps"}, json={"reason": "валидация ок"}, timeout=60)
-    S["promote_hitl"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=60).status_code
+    S["promote_gate"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=60).status_code
     # 5) инференс (уникальный client-id — изоляция от бёрстов по host-IP).
     #    На 503 (глобальный load-shed после флуд-тестов DOS-01) клиент отступает и повторяет.
     for _ in range(15):
@@ -59,11 +59,11 @@ def lifecycle():
     S["promote_retired"] = httpx.post(f"{BASE}/api/models/{mid}/versions/{ver}/promote", headers=tok("MLSecOps"), timeout=60).status_code
 
 
-@then("вредоносный приём заблокирован, а версия проходит HITL и деплоится")
+@then("вредоносный приём заблокирован, а версия проходит аппрув-гейт и деплоится")
 def gates_ok():
     assert S["mal"] == 422, S
-    assert S["promote_no_hitl"] == 422, S
-    assert S["promote_hitl"] == 200, S
+    assert S["promote_no_gate"] == 422, S
+    assert S["promote_gate"] == 200, S
     assert S["predict"] == 200, S
 
 

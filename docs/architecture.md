@@ -49,14 +49,14 @@
 |---|---|---|
 | **Discover** (инвентаризация) | Реестр моделей/датасетов с версиями, гиперпараметрами, lineage, критичностью и чувствительностью; «нет тени» — всё, что в системе, видно. | непрерывный учёт |
 | **Secure supply chain** (целостность на сборке) | Скан кода (SAST), скан артефактов (pickle/keras), скан зависимостей, SBOM/MLBOM, подпись, политика форматов (convert-or-reject), gitleaks, policy-gates на PR. | build-time |
-| **Validate** (симуляция атак / red-team) | Adversarial-тестирование (ART), risk assessment, HITL-валидация критичных моделей перед релизом. | pre-prod |
+| **Validate** (симуляция атак / red-team) | Adversarial-тестирование (ART), risk assessment, ручной аппрув-гейт для критичных моделей перед релизом. | pre-prod |
 | **Protect runtime** (firewall + detect & respond) | AuthN, rate-limit, детект extraction/adversarial/drift на инференсе → сработки в общий таймлайн. | runtime |
 
 ```mermaid
 flowchart LR
     P1[1 Discover] --> L1[Реестр и инвентаризация]
     P2[2 Secure Supply Chain] --> L2[Гейты сборки]
-    P3[3 Validate] --> L3[Red-team и HITL]
+    P3[3 Validate] --> L3[Red-team и аппрув-гейт]
     P4[4 Protect Runtime] --> L4[Рантайм-детект]
     P1 --> X[Сквозные сущности и карта покрытия]
     P2 --> X
@@ -66,7 +66,7 @@ flowchart LR
 
 Связка столпов через **сквозные сущности** `Finding` (сработки) и `AuditEvent` (история) и через **Карту покрытия** (§9).
 
-> **Подпись ≠ безопасность.** Столп Secure (скан + подпись) доказывает подлинность и отсутствие известного зловреда, но не безопасность поведения модели — за это отвечает столп Validate (red-team / HITL). Подпись всегда идёт поверх скана и валидации, не вместо них. Детали подписи и провенанса — [ADR-0006](adr/0006-model-signing-provenance.md).
+> **Подпись ≠ безопасность.** Столп Secure (скан + подпись) доказывает подлинность и отсутствие известного зловреда, но не безопасность поведения модели — за это отвечает столп Validate (red-team / ручной аппрув-гейт). Подпись всегда идёт поверх скана и валидации, не вместо них. Детали подписи и провенанса — [ADR-0006](adr/0006-model-signing-provenance.md).
 
 ---
 
@@ -234,7 +234,7 @@ erDiagram
 flowchart LR
     S1[1 Требования и критичность] --> S2[2 Приём данных] --> G1{Гейт данных}
     G1 --> S3[3 Подготовка фичи] --> S4[4 Обучение] --> S5[5 Упаковка реестр] --> G2{Гейт артефакта}
-    G2 --> S6[6 Валидация red-team] --> G3{HITL для критичных}
+    G2 --> S6[6 Валидация red-team] --> G3{Аппрув-гейт для критичных}
     G3 --> S7[7 Деплой gated PR] --> G4{Admission подписано}
     G4 --> S8[8 Рантайм детект] --> S9[9 Мониторинг] --> S10[10 Вывод из эксплуатации]
     G1 -.->|fail| F[Finding и AuditEvent]
@@ -252,7 +252,7 @@ flowchart LR
 | 3. Подготовка/фичи | 5 Данные | training-serving skew, ПДн в логах | контракты фичей, consistency-тесты, маскирование ПДн | гейты + serving |
 | 4. Обучение | 2 Код, 3 IAM | секреты в коде, нерепродьюсибилити | gitleaks, фикс зависимостей, трекинг гиперпараметров/lineage | Gitea CI + MLflow |
 | 5. Упаковка/реестр | 6 Модели, 7 Supply | вредоносный pickle (RCE), typosquatting, отсутствие подписи | скан артефактов (**modelaudit**, изолир. venv), **автоконвертация pickle→safetensors или запрет небезопасного формата**, SBOM/MLBOM, подпись (**model-signing**), scan зависимостей | гейты + Реестр |
-| 6. Валидация / red-team | 6 Модели, 8 Adversarial | необнаруженный бэкдор (ShadowLogic), хрупкость к adversarial | ART-тесты, risk assessment, **HITL-валидация** критичных | Control Plane (HITL) |
+| 6. Валидация / red-team | 6 Модели, 8 Adversarial | необнаруженный бэкдор (ShadowLogic), хрупкость к adversarial | ART-тесты, risk assessment, **ручной аппрув-гейт** для критичных | Control Plane (ручной аппрув-гейт) |
 | 7. Деплой | 7 Supply, 9 Governance | обход в прод, неподписанный артефакт | **gated PR**, branch protection, «в прод только подписанное и прошедшее гейты» | Gitea + Control Plane |
 | 8. Эксплуатация/рантайм | 4 Сеть, 8 Adversarial | extraction, evasion, DoS, неавторизованный доступ | authN, rate-limit, extraction-detect, adversarial/FGSM-detect, output reduction | Serving |
 | 9. Мониторинг/детект | 10 Мониторинг | concept/data drift, тихая деградация | drift-мониторинг, переоценка метрик, инцидент→Finding, таймлайн | Serving + Control Plane |
@@ -287,7 +287,7 @@ sequenceDiagram
 
 **B. Обучение.** DS обучает → `Run` (гиперпараметры, метрики, lineage) в MLflow, артефакт в MinIO → авто-генерится Model Card / security profile → артефакт **подписывается** (OpenSSF model-signing, офлайн-ключ из Vault), и дальше принимается только подписанным ([ADR-0006](adr/0006-model-signing-provenance.md), [ADR-0010](adr/0010-secrets-vault.md)).
 
-**C. Промоушен через единую точку входа.** PR в `main` → вебхук Gitea (HMAC + anti-replay nonce) → Control Plane (как CI) гоняет гейты `scanners.py` → `commit-status` обратно в PR + синк `Finding` к версии/стадии. Уязвимая зависимость → красный чек → **merge заблокирован**. Чистый PR + (для критичной модели) **HITL-аппрув MLSecOps** → промоушен в прод, артефакт подписан. Обходных путей нет.
+**C. Промоушен через единую точку входа.** PR в `main` → вебхук Gitea (HMAC + anti-replay nonce) → Control Plane (как CI) гоняет гейты `scanners.py` → `commit-status` обратно в PR + синк `Finding` к версии/стадии. Уязвимая зависимость → красный чек → **merge заблокирован**. Чистый PR + (для критичной модели) **ручной аппрув MLSecOps** → промоушен в прод, артефакт подписан. Обходных путей нет.
 
 ```mermaid
 sequenceDiagram
@@ -310,7 +310,7 @@ sequenceDiagram
         SEC-->>CP: pass
         CP->>GT: commit-status = success
         opt критичная модель
-            CP->>MS: запрос HITL-валидации
+            CP->>MS: запрос ручного аппрува
             MS-->>CP: approve
         end
         CP->>SV: деплой (подписано + prod-approved)
@@ -338,7 +338,7 @@ sequenceDiagram
 
 **E. Вывод из эксплуатации.** Модель → retired: endpoint снят, доступы отозваны, lineage заархивирован, всё в `AuditEvent`.
 
-Эти потоки в демо сшиваются в **один конвейер** (датасет→проверки→обучение→проверки→HITL→gated-деплой→рантайм-атака→decommission).
+Эти потоки в демо сшиваются в **один конвейер** (датасет→проверки→обучение→проверки→аппрув-гейт→gated-деплой→рантайм-атака→decommission).
 
 ---
 
@@ -370,7 +370,7 @@ flowchart LR
 | Обучение/регистрация модели | — | ✅ | — | — | — |
 | Запрос промоушена | — | ✅ | — | — | — |
 | Конфиг гейтов/политик, триаж findings | — | — | ✅ | — | — |
-| HITL-валидация / аппрув критичной модели | — | — | ✅ | — | — |
+| Ручной аппрув-гейт критичной модели | — | — | ✅ | — | — |
 | Управление runtime-защитами, decommission | — | — | ✅ | — | — |
 | Бизнес-критичность, чтение реестра | — | — | ✅ | ✅ | — |
 | Исполнительный дашборд (read-only) | — | — | ✅ | ✅ | ✅ |

@@ -1,4 +1,4 @@
-"""HITL-решения по версии модели (approve | reject): единый код для API и UI-инспектора.
+"""Решения ручного аппрув-гейта по версии модели (approve | reject): единый код для API и UI-инспектора.
 
 Запись решения = строка Approval, привязанная к artifact_hash (anti-TOCTOU), + событие
 аудита. Право принимать решение — у роли MLSecOps (rbac PERMISSIONS['model.approve']).
@@ -20,7 +20,7 @@ UI_APPROVERS = ("mlsecops", "reviewer")
 
 
 def record_decision(model_id: int, ver: int, approver: str, decision: str, reason: str = "", role: str = "") -> str:
-    """Зафиксировать HITL-решение MLSecOps по версии. Возвращает artifact_hash, к которому
+    """Зафиксировать решение аппрув-гейта (MLSecOps) по версии. Возвращает artifact_hash, к которому
     привязано решение. 404 — версии нет; 422 — неизвестное решение или reject без обоснования.
     role — роль аппрувера (из Principal.roles): надёжный резолв «кто решал» и в проде."""
     if decision not in DECISIONS:

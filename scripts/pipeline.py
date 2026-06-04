@@ -2,7 +2,7 @@
 """Sirius Argus — сквозной конвейер жизненного цикла ОДНОЙ модели (И6, money-shot #6).
 
 Один прогон по всему ЖЦ: датасет → приём артефакта (скан) → регистрация версии
-(lineage + модель-карта + подпись) → policy-гейт + HITL → деплой → инференс →
+(lineage + модель-карта + подпись) → policy-гейт + ручной аппрув-гейт → деплой → инференс →
 рантайм-атака (детект) → вывод из эксплуатации (decommission) → карта покрытия.
 
 Запуск:  DEV_AUTH=1 make up   &&   make pipeline      (или python3 scripts/pipeline.py)
@@ -91,14 +91,14 @@ def main():
     step(5, "SUP-06 — честный остаток")
     print("    ⚠ сканеры ловят pickle-RCE, небезопасные форматы и CVE, но НЕ логические")
     print("      бэкдоры в весах (ShadowLogic). Поэтому критичная модель ОБЯЗАНА пройти")
-    print("      ручную HITL-валидацию; остаточный риск зафиксирован (без overclaim).")
+    print("      ручной аппрув-гейт; остаточный риск зафиксирован (без overclaim).")
 
     step(6, "Промоушен в прод через policy-матрицу")
     st, _ = req("POST", f"/api/models/{mid}/versions/{ver}/promote", "MLSecOps")
-    blocked(f"без HITL-аппрува: HTTP {st} (нужен ручной аппрув критичной модели)")
+    blocked(f"без ручного аппрува: HTTP {st} (нужен ручной аппрув критичной модели)")
     req("POST", f"/api/models/{mid}/versions/{ver}/approve", "MLSecOps", {"reason": "ручная валидация пройдена"}, sub="reviewer")
     st, _ = req("POST", f"/api/models/{mid}/versions/{ver}/promote", "MLSecOps")
-    ok(f"reviewer одобрил (HITL + separation of duties) → промоушен: HTTP {st} → prod")
+    ok(f"reviewer одобрил (аппрув-гейт + separation of duties) → промоушен: HTTP {st} → prod")
 
     step(7, "Инференс на сервинге (трио НЕ-генеративных моделей задеплоено)")
     sc, mdl = req("GET", "/models", base=SERVING)
@@ -126,7 +126,7 @@ def main():
     ok(f"покрытие {k['coverage']} live · сработок {k['findings_total']} · блокировок {k['blocked_attempts']} · аудит цел: {k['audit_chain_ok']}")
 
     print("\n" + "=" * 70)
-    print("  Конвейер пройден: приём→скан→версия→gate→HITL→деплой→инференс→атака→decommission")
+    print("  Конвейер пройден: приём→скан→версия→gate→аппрув-гейт→деплой→инференс→атака→decommission")
     print(f"  CEO-вью: {BASE}/coverage  ·  дашборд/аудит-таймлайн: {BASE}/")
     print("=" * 70)
 

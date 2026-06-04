@@ -148,7 +148,7 @@ def main():
     _, j = req("POST", "/api/scan/deps", "DS", b"numpy==1.26.4\nfastapi==0.115.6\n")
     line(f"  чистые requirements  →  clean={j['clean']} ✅")
 
-    hr("MONEY-SHOT #3 — критичная модель только после HITL (VIS-03 + policy-матрица)")
+    hr("MONEY-SHOT #3 — критичная модель только после ручного аппрув-гейта (VIS-03 + policy-матрица)")
     _, dvj = req("POST", "/api/datasets", "DE", {"name": "scoring-data", "source": "internal://curated/scoring"})
     _, cmj = req("POST", "/api/models", "DS", {"name": "credit-model", "criticality": "financial"})
     cm = cmj["model_id"]
@@ -158,11 +158,11 @@ def main():
     cv = vj["version"]
     req("POST", f"/api/models/{cm}/versions/{cv}/sign", "MLSecOps")  # крипто-подпись Ed25519 (SUP-04)
     st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
-    line(f"  промоушен критичной модели БЕЗ HITL-аппрува  →  HTTP {st} 🛑")
+    line(f"  промоушен критичной модели БЕЗ ручного аппрува  →  HTTP {st} 🛑")
     req("POST", f"/api/models/{cm}/versions/{cv}/approve", "MLSecOps", {"reason": "ревью пройдено"}, sub="reviewer")
     st, _ = req("POST", f"/api/models/{cm}/versions/{cv}/promote", "MLSecOps")
     line(f"  другой MLSecOps (reviewer) одобрил версию  →  промоушен  →  HTTP {st} ✅ (separation of duties)")
-    # критичная версия, намеренно оставленная НА РУЧНОМ РЕШЕНИИ (HITL) — для инспектора /map:
+    # критичная версия, намеренно оставленная НА РУЧНОМ АППРУВ-ГЕЙТЕ — для инспектора /map:
     # подписана и воспроизводима, но ждёт аппрува/отклонения MLSecOps (кнопки в карточке узла)
     _, fdj = req("POST", "/api/datasets", "DE", {"name": "fraud-data", "source": "internal://curated/fraud"})
     _, fmj = req("POST", "/api/models", "DS", {"name": "fraud-scoring", "criticality": "regulatory"})
@@ -172,7 +172,7 @@ def main():
                   "intended_use": "детект мошеннических транзакций", "limitations": "не для кредитных решений"})
     fv = fvj["version"]
     req("POST", f"/api/models/{fm}/versions/{fv}/sign", "MLSecOps")
-    line(f"  критичная fraud-scoring v{fv} подписана и ОЖИДАЕТ HITL — решение принимается в инспекторе /map ⏳")
+    line(f"  критичная fraud-scoring v{fv} подписана и ОЖИДАЕТ РУЧНОГО АППРУВ-ГЕЙТА — решение в инспекторе /map ⏳")
 
     hr("MONEY-SHOT #4 — рантайм: бёрст extraction → детект + троттлинг (RT-01)")
     sc, mdl = req("GET", "/models", base=SERVING)

@@ -528,7 +528,7 @@ _OV_JS = r"""
 
 
 _RUNSTATE = {"blocked": ("var(--sa-alert)", "BLOCKED"), "failed": ("var(--sa-alert)", "FAILED"),
-             "running": ("var(--sa-blue)", "RUNNING"), "hitl": ("var(--sa-warn)", "HITL"),
+             "running": ("var(--sa-blue)", "RUNNING"), "gate": ("var(--sa-warn)", "GATE"),
              "hold": ("var(--sa-warn)", "HOLD"), "passed": ("var(--sa-ok)", "PASSED"),
              "rejected": ("var(--sa-alert)", "REJECTED"), "retired": ("var(--sa-muted)", "RETIRED")}
 _CRITB = {"regulatory": "var(--sa-alert)", "financial": "#fb923c", "internal": "var(--sa-muted)"}
@@ -544,10 +544,10 @@ def _crit_badge(crit):
     return f"<span class='sa-mono' style='font-size:9.5px;font-weight:700;color:{c};border:1px solid {c};border-radius:5px;padding:1px 5px;opacity:.9'>{_e(crit)}</span>"
 
 
-# JS-обработчик HITL-кнопок: POST решения form-urlencoded → подмена внутренности инспектора.
+# JS-обработчик кнопок аппрув-гейта: POST решения form-urlencoded → подмена внутренности инспектора.
 # Определяется один раз на странице узла; фрагмент рефреша скрипт не несёт (handler уже на странице).
-_HITL_JS = """<script>
-function hitlDecide(run, decision){
+_GATE_JS = """<script>
+function gateDecide(run, decision){
   var box=document.getElementById('sa-inspector'); if(!box) return;
   var ap=box.querySelector('[name=approver]'), rs=box.querySelector('[name=reason]');
   var reason=rs?rs.value:'';
@@ -561,19 +561,19 @@ function hitlDecide(run, decision){
 </script>"""
 
 
-def _hitl_panel(sel_run, detail):
-    """Панель решения HITL для критичной версии: «почему требует внимания» (доказательный
+def _gate_panel(sel_run, detail):
+    """Панель ручного аппрув-гейта для критичной версии: «почему требует внимания» (доказательный
     чеклист гейта promote) + принятые решения + кнопки Аппрув/Отклонить с обоснованием."""
     dec = (detail or {}).get("decision") or {}
     if not dec.get("requires_validation"):
         return ""
-    state = dec.get("state", "hitl")
-    sc, _sl = _RUNSTATE.get(state, _RUNSTATE["hitl"])
+    state = dec.get("state", "gate")
+    sc, _sl = _RUNSTATE.get(state, _RUNSTATE["gate"])
     runid = sel_run["id"]
     items = ""
     for g in dec.get("gate", []):
         ok = g["ok"]
-        pending = (g["key"] == "hitl" and not ok and state != "rejected")
+        pending = (g["key"] == "approval" and not ok and state != "rejected")
         if ok:
             ic, col = "bi-check-circle-fill", "var(--sa-ok)"
         elif pending:
@@ -603,7 +603,7 @@ def _hitl_panel(sel_run, detail):
             f"{rows}")
     else:
         decisions_block = "<div style='font-size:10.5px;color:var(--sa-muted);margin-top:10px'>решения ещё не принимались</div>"
-    if state in ("hitl", "hold", "rejected"):
+    if state in ("gate", "hold", "rejected"):
         opts = "".join(f"<option value='{a}'>{a} · MLSecOps</option>" for a in ("mlsecops", "reviewer"))
         owner = dec.get("owner", "—")
         action = (
@@ -614,10 +614,10 @@ def _hitl_panel(sel_run, detail):
             "<textarea name='reason' rows='2' placeholder='обоснование (обязательно для отклонения)' "
             "style='width:100%;margin-top:7px;background:var(--sa-panel2);color:var(--sa-text);border:1px solid var(--sa-line);border-radius:7px;padding:7px 8px;font-size:11.5px;font-family:inherit;resize:vertical'></textarea>"
             "<div style='display:flex;gap:8px;margin-top:9px'>"
-            f"<button type='button' onclick=\"hitlDecide('{_e(runid)}','approve')\" "
+            f"<button type='button' onclick=\"gateDecide('{_e(runid)}','approve')\" "
             "style='flex:1;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;background:var(--sa-ok);color:#04140d'>"
             "<i class='bi bi-check-lg'></i> Аппрув</button>"
-            f"<button type='button' onclick=\"hitlDecide('{_e(runid)}','reject')\" "
+            f"<button type='button' onclick=\"gateDecide('{_e(runid)}','reject')\" "
             "style='flex:1;border:1px solid var(--sa-alert);border-radius:8px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(239,68,68,.12);color:var(--sa-alert)'>"
             "<i class='bi bi-x-lg'></i> Отклонить</button></div>"
             "<div style='font-size:10px;color:var(--sa-muted);margin-top:8px;line-height:1.45'>"
@@ -632,7 +632,7 @@ def _hitl_panel(sel_run, detail):
         f"<div style='border:1px solid var(--sa-line);border-left:3px solid {sc};border-radius:11px;background:var(--sa-panel);padding:12px 14px;margin-bottom:14px'>"
         "<div style='display:flex;align-items:center;justify-content:space-between;gap:8px'>"
         "<span style='font-size:11px;font-weight:700;color:var(--sa-head);display:flex;align-items:center;gap:6px'>"
-        f"<i class='bi bi-hand-index-thumb' style='color:{sc}'></i> Требует решения (HITL · VIS-03)</span>"
+        f"<i class='bi bi-hand-index-thumb' style='color:{sc}'></i> Требует решения (ручной аппрув-гейт · VIS-03)</span>"
         f"{_rs_badge(state)}</div>"
         f"<div style='font-size:10.5px;color:var(--sa-text2);margin-top:3px'>Критичная модель уходит в прод только после ручного решения MLSecOps. {_e(sub)}.</div>"
         "<div style='font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin:11px 0 2px'>Почему требует внимания</div>"
@@ -640,7 +640,7 @@ def _hitl_panel(sel_run, detail):
 
 
 def _inspector_inner(sel_run, detail):
-    """Внутренность правой колонки инспектора (шапка прогона + HITL-панель + lineage +
+    """Внутренность правой колонки инспектора (шапка прогона + панель аппрув-гейта + lineage +
     сработки + терминальный лог). Выделено, чтобы тем же кодом рендерить HTMX-рефреш."""
     from ..runs import actor_role, role_of
     detail = detail or {}
@@ -700,7 +700,7 @@ def _inspector_inner(sel_run, detail):
         f"<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>{_crit_badge(sel_run['crit'])}"
         f"<span class='sa-chip'>причастен: {_e(acct)} · {_e(role)}</span></div>{timing_line}</div>"
         "<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:12px 16px;min-height:0'>"
-        f"{_hitl_panel(sel_run, detail)}"
+        f"{_gate_panel(sel_run, detail)}"
         "<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Lineage · воспроизводимость (MON-02)</div>"
         f"<div style='border:1px solid var(--sa-line);border-radius:10px;background:var(--sa-panel);overflow:hidden;margin-bottom:14px'>{lin_rows}</div>"
         f"<div style='font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sa-muted);font-weight:600;margin-bottom:7px'>Сработки прогона ({len(dfs)})</div>{fcards}</div>"
@@ -711,7 +711,7 @@ def _inspector_inner(sel_run, detail):
 
 
 def map_inspector_fragment(sel_run, detail):
-    """HTMX/fetch-фрагмент: внутренность инспектора (рефреш после HITL-решения)."""
+    """HTMX/fetch-фрагмент: внутренность инспектора (рефреш после решения аппрув-гейта)."""
     return _inspector_inner(sel_run, detail)
 
 
@@ -793,7 +793,7 @@ def map_inspector_page(node, pipeline, infra, runs, sel_run, detail):
         f"<div class='sa-scroll' style='flex:1;overflow-y:auto;padding:4px 16px 16px'>{cards}</div></div>"
         "<div style='width:384px;flex:none;border-left:1px solid var(--sa-line);background:var(--sa-panel2);display:flex;flex-direction:column;overflow:hidden'>"
         f"<div id='sa-inspector' style='display:flex;flex-direction:column;height:100%;min-height:0'>{inspector}</div></div></div></div>"
-        f"{_HITL_JS}"
+        f"{_GATE_JS}"
     )
     breadcrumb = (
         "<a class='sa-back' href='/map'><i class='bi bi-arrow-left'></i> Обзор</a>"

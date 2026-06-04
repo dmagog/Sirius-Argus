@@ -21,7 +21,7 @@ test:      ## pytest-bdd против поднятого стека
 demo:      ## живой прогон money-shot'ов по поднятому стеку
 	python3 scripts/demo.py
 
-pipeline:  ## сквозной конвейер ЖЦ одной модели (приём→gate→HITL→деплой→атака→decommission)
+pipeline:  ## сквозной конвейер ЖЦ одной модели (приём→gate→аппрув-гейт→деплой→атака→decommission)
 	python3 scripts/pipeline.py
 
 selfscan:  ## догфудинг SAST: bandit по НАШЕМУ коду (control-plane + serving), порог medium+

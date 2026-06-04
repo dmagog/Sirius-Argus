@@ -11,7 +11,7 @@ PIPELINE = [
     ("train", "Обучение", False),
     ("package", "Упаковка / Реестр", False),
     ("gate-artifact", "Гейт артефакта", True),
-    ("validate", "Валидация / HITL", True),
+    ("validate", "Валидация / аппрув-гейт", True),
     ("gate-ci", "CI-гейт", True),
     ("serving", "Сервинг", False),
     ("monitor", "Мониторинг", False),
@@ -49,7 +49,7 @@ PREVENTIVE = {"validate", "keycloak", "vault", "intake", "train", "package", "de
 CONTROLS = {
     "gate-data": ["sensitivity-классификация", "trusted-source", "качество + карантин (DATA-01/02)"],
     "gate-artifact": ["modelaudit/modelscan (SUP-01)", "подпись + провенанс (SUP-04/05)", "SBOM"],
-    "validate": ["HITL-аппрув критичных (VIS-03)", "ART / red-team"],
+    "validate": ["ручной аппрув-гейт критичных (VIS-03)", "ART / red-team"],
     "gate-ci": ["dep-scan CVE (SUP-03)", "gitleaks (ACC-06)", "Semgrep (CODE-01)", "branch protection (GT-1)"],
     "serving": ["rate-limit / extraction (RT-01)", "load-shedding (DOS-01)", "OOD/adversarial (RT-02)",
                 "drift (MON-01)", "output-reduction (RT-03/04)", "сегментация рантайма (RT-06)"],
@@ -100,6 +100,6 @@ def node_of(verdict="", tool="", asset_type="", asset_ref=""):
         return "control-plane"
     if v == "event-integrity":
         return "bus"
-    if v in ("hitl-required", "promotion-blocked"):
+    if v in ("approval-required", "promotion-blocked"):
         return "validate"
     return "control-plane"

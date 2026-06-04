@@ -214,7 +214,7 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
                 audit.append_event(actor=p.sub, action="promote.blocked.open-critical", obj=f"model/{model_id}/v{ver}", was_authorized=False)
                 raise HTTPException(status_code=422, detail=f"{crit} незакрытая(ых) critical-сработка(ок) на версии — закрыть или оформить принятие риска (risk.accept)")
             risk_accepted = True
-        # policy-матрица для критичных моделей (regulatory/financial): модель-карта + подпись + HITL
+        # policy-матрица для критичных моделей (regulatory/financial): модель-карта + подпись + ручной аппрув-гейт
         if mv.requires_validation:
             if not (mv.intended_use and mv.limitations):  # GOV-01: полнота модель-карты
                 audit.append_event(actor=p.sub, action="promote.blocked.modelcard", obj=f"model/{model_id}/v{ver}", was_authorized=False)
@@ -231,16 +231,16 @@ def promote(model_id: int, ver: int, p: Principal = Depends(require("model.promo
                         .order_by(domain.Approval.id.desc()).first())
             if standing is not None and standing.decision == "reject":
                 audit.append_event(actor=p.sub, action="promote.blocked.rejected", obj=f"model/{model_id}/v{ver}", was_authorized=False)
-                raise HTTPException(status_code=422, detail="version rejected by HITL — supersede with a new approval before promotion")
-            # VIS-03 (HITL) + ACC-02 (separation of duties): нужен АППРУВ от ДРУГОГО MLSecOps
+                raise HTTPException(status_code=422, detail="version rejected at the approval gate — supersede with a new approval before promotion")
+            # VIS-03 (ручной аппрув-гейт) + ACC-02 (separation of duties): нужен АППРУВ от ДРУГОГО MLSecOps
             others = s.query(domain.Approval).filter(
                 domain.Approval.model_version_id == mv.id,
                 domain.Approval.approver != p.sub,
                 domain.Approval.decision == "approve",
                 domain.Approval.artifact_hash == (mv.artifact_hash or "")).count()  # решение привязано к hash (anti-TOCTOU)
             if not others:
-                audit.append_event(actor=p.sub, action="promote.blocked.hitl", obj=f"model/{model_id}/v{ver}", was_authorized=False)
-                raise HTTPException(status_code=422, detail="HITL approval by a different MLSecOps, bound to current artifact hash, required (VIS-03/ACC-02)")
+                audit.append_event(actor=p.sub, action="promote.blocked.gate", obj=f"model/{model_id}/v{ver}", was_authorized=False)
+                raise HTTPException(status_code=422, detail="manual approval by a different MLSecOps, bound to current artifact hash, required (VIS-03/ACC-02)")
         mv.stage = "prod"
         mv.promoted_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         # без дубль-деплоя: один активный Deployment на версию (belt-and-suspenders к FOR UPDATE)
@@ -269,14 +269,14 @@ class ApproveIn(BaseModel):
 
 @router.post("/api/models/{model_id}/versions/{ver}/approve")
 def approve_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depends(require("model.approve"))):
-    """VIS-03 HITL: критичную версию вручную одобряет MLSecOps перед промоушеном."""
+    """VIS-03 ручной аппрув-гейт: критичную версию вручную одобряет MLSecOps перед промоушеном."""
     artifact_hash = decisions.record_decision(model_id, ver, p.sub, "approve", body.reason, p.primary_role())
     return {"approved": True, "version": ver, "approver": p.sub, "artifact_hash": artifact_hash}
 
 
 @router.post("/api/models/{model_id}/versions/{ver}/reject")
 def reject_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depends(require("model.approve"))):
-    """VIS-03 HITL: MLSecOps отклоняет критичную версию (с обязательным обоснованием).
+    """VIS-03 ручной аппрув-гейт: MLSecOps отклоняет критичную версию (с обязательным обоснованием).
     Решение фиксируется в аудит и блокирует промоушен, пока его не сменит новый аппрув по
     тому же артефакту (promote.blocked.rejected)."""
     artifact_hash = decisions.record_decision(model_id, ver, p.sub, "reject", body.reason, p.primary_role())
@@ -285,7 +285,7 @@ def reject_version(model_id: int, ver: int, body: ApproveIn, p: Principal = Depe
 
 @router.get("/api/models/{model_id}/versions/{ver}/review")
 def review_bundle(model_id: int, ver: int, p: Principal = Depends(require("finding.read"))):
-    """Evidence-based HITL: всё для информированного решения аппрувера — сработки, модель-карта,
+    """Доказательный аппрув-гейт (evidence-based): всё для информированного решения аппрувера — сработки, модель-карта,
     lineage/воспроизводимость, статус подписи, аппрувы. Не «слепой аппрув», а решение по доказательствам."""
     with SessionLocal() as s:
         mv = s.query(domain.ModelVersion).filter_by(model_id=model_id, version=ver).first()

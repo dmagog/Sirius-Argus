@@ -130,12 +130,12 @@ def _state_of(stage, open_critical, requires_validation, has_approval, rejected=
     if requires_validation:
         if rejected:
             return "rejected"
-        return "hold" if has_approval else "hitl"
+        return "hold" if has_approval else "gate"
     return "running"
 
 
 def _standing_decision(s, mv, owner):
-    """Стоящее HITL-решение по версии: последнее (по id) решение ОТ ДРУГОГО, чем владелец,
+    """Стоящее решение аппрув-гейта по версии: последнее (по id) решение ОТ ДРУГОГО, чем владелец,
     привязанное к текущему артефакту. Совпадает с логикой гейта promote (anti-TOCTOU)."""
     return (s.query(domain.Approval)
             .filter(domain.Approval.model_version_id == mv.id,
@@ -166,7 +166,7 @@ def _enrich(s, idx, last_actor, mv, model):
 
 def run_summary(run_id):
     """Сводка одного прогона (тот же dict, что в очереди узла) — для рефреша инспектора
-    после HITL-действия. Переиспользует _enrich, чтобы state считался единообразно."""
+    после действия аппрув-гейта. Переиспользует _enrich, чтобы state считался единообразно."""
     mvid = _parse_run_id(run_id)
     if mvid is None:
         return None
@@ -271,9 +271,9 @@ def run_detail(run_id):
 
 
 def _decision_block(s, mv, m, f_rows):
-    """Сводка HITL для инспектора: «почему требует внимания» (чеклист гейта promote по
-    доказательствам) + принятые решения + что нужно для действия. Гейт зеркалит promote:
-    модель-карта (GOV-01), воспроизводимость (MON-02), подпись (SUP-04), нет открытых
+    """Сводка ручного аппрув-гейта для инспектора: «почему требует внимания» (чеклист гейта
+    promote по доказательствам) + принятые решения + что нужно для действия. Гейт зеркалит
+    promote: модель-карта (GOV-01), воспроизводимость (MON-02), подпись (SUP-04), нет открытых
     critical (GRC), аппрув другим MLSecOps (VIS-03/ACC-02)."""
     owner = (m.owner if m else "") or ""
     open_critical = sum(1 for f in f_rows if f.status == "open" and f.severity == "critical")
@@ -287,11 +287,11 @@ def _decision_block(s, mv, m, f_rows):
     rejected = bool(standing) and standing.decision == "reject"
     state = _state_of(mv.stage, open_critical, bool(mv.requires_validation), has_approval, rejected)
     if has_approval:
-        hitl_detail = f"одобрено: {standing.approver}"
+        approval_detail = f"одобрено: {standing.approver}"
     elif rejected:
-        hitl_detail = f"отклонено: {standing.approver}"
+        approval_detail = f"отклонено: {standing.approver}"
     else:
-        hitl_detail = "ожидает решения MLSecOps"
+        approval_detail = "ожидает решения MLSecOps"
     gate = [
         {"key": "card", "label": "Модель-карта (GOV-01)", "ok": card_ok,
          "detail": "intended_use + limitations заполнены" if card_ok else "не хватает intended_use / limitations"},
@@ -301,8 +301,8 @@ def _decision_block(s, mv, m, f_rows):
          "detail": (mv.signature or "model-signing") if signed else "версия не подписана"},
         {"key": "crit", "label": "Нет открытых critical (GRC)", "ok": open_critical == 0,
          "detail": "критичных открытых сработок нет" if open_critical == 0 else f"{open_critical} открытая(ых) critical"},
-        {"key": "hitl", "label": "Аппрув другим MLSecOps (VIS-03/ACC-02)", "ok": has_approval,
-         "detail": hitl_detail},
+        {"key": "approval", "label": "Аппрув другим MLSecOps (VIS-03/ACC-02)", "ok": has_approval,
+         "detail": approval_detail},
     ]
     dlist = [{"approver": a.approver, "role": (a.role or actor_role(a.approver)[1]), "ts": _short_t(a.ts),
               "reason": a.reason or "", "decision": (a.decision or "approve")} for a in appr_rows]

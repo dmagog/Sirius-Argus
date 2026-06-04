@@ -1,4 +1,4 @@
-"""pytest-bdd: evidence-based HITL — review-бандл даёт аппруверу доказательства (VIS-03+)."""
+"""pytest-bdd: доказательный аппрув-гейт — review-бандл даёт аппруверу доказательства (VIS-03+)."""
 import os
 import struct
 
@@ -6,7 +6,7 @@ import httpx
 from pytest_bdd import given, scenarios, then, when
 
 BASE = os.environ.get("SIRIUS_BASE_URL", "http://localhost:8080")
-scenarios("hitl.feature")
+scenarios("approval_gate.feature")
 S = {}
 
 
@@ -45,7 +45,7 @@ def bundle_has_evidence():
 @when("MLSecOps отклоняет критичную версию с обоснованием")
 def reject_critical_version():
     # критичная версия с полным гейтом (модель-карта + lineage + подпись) — единственным
-    # незакрытым условием остаётся HITL-решение, чтобы изолировать поведение reject
+    # незакрытым условием остаётся решение аппрув-гейта, чтобы изолировать поведение reject
     dv = httpx.post(f"{BASE}/api/datasets", headers=tok("DE"),
                     json={"name": "reject-data", "source": "internal://curated/reject"}, timeout=60).json()
     mid = httpx.post(f"{BASE}/api/models", headers=tok("DS"),

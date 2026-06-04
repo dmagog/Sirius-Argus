@@ -16,7 +16,7 @@
 | `train` | Обучение | стадия |
 | `package` | Упаковка / Реестр | стадия |
 | `gate-artifact` | Гейт артефакта ◇ | гейт |
-| `validate` | Валидация / HITL ◇ | стадия+гейт |
+| `validate` | Валидация / ручной аппрув-гейт ◇ | стадия+гейт |
 | `gate-ci` | CI-гейт ◇ | гейт |
 | `serving` | Сервинг | стадия |
 | `monitor` | Мониторинг | стадия |
@@ -25,7 +25,7 @@
 **Инфра (нижняя полоса):** `control-plane` · `mlflow` · `minio` · `gitea` · `postgres` (Аудит) · `keycloak` · `vault` · `bus` (шина/observability).
 
 ## 3. Состояния узла
-- `clean` 🟢 — нет open-findings. Для **превентивных** контролей (HITL, output-reduction, сегментация) узел «armed»-зелёный: подтверждается приёмочным тестом, а не сработкой (см. §8).
+- `clean` 🟢 — нет open-findings. Для **превентивных** контролей (ручной аппрув-гейт, output-reduction, сегментация) узел «armed»-зелёный: подтверждается приёмочным тестом, а не сработкой (см. §8).
 - `warn` 🟡 — есть open-findings (не critical).
 - `alert` 🔴 — critical / была блокировка; пульс-анимация. Бейдж = число open.
 
@@ -47,7 +47,7 @@ CSS-классы: `.map-clean` (emerald border/bg), `.map-warn` (amber), `.map-a
 | verdict ∈ {token-misuse, auth-fail} (CRED-01, AUTH-01) | `keycloak` |
 | verdict ∈ {access-denied, idor, privesc} (ACC-01, ESC-01) | `control-plane` |
 | verdict=event-integrity (EVT-01) | `bus` |
-| verdict ∈ {hitl-required, promotion-blocked} (VIS-03) | `validate` |
+| verdict ∈ {approval-required, promotion-blocked} (VIS-03) | `validate` |
 | *fallback* | `control-plane` |
 
 > Реализовать как один dict/список правил в `control-plane/app/` (напр. `mapnodes.py`), чтобы и `/api/map/status`, и drill использовали один источник истины.
@@ -97,7 +97,7 @@ setInterval(refreshMap, 4000); refreshMap();
 Узел → панель `#map-drill` (сбоку/снизу): контроли + сработки + аудит узла → клик по сработке → «инцидент» (таймлайн). Закрытие — крестик / клик вне. Подсветить активный узел рамкой.
 
 ## 8. Превентивные vs детективные (нюанс статуса)
-Зелёный узел может быть зелёным потому, что контроль **превентивный** (HITL, output-reduction RT-03/04, сегментация RT-06, fail-closed authN) — он не порождает сработок, когда работает. Такие узлы помечаем «armed» (подтверждено приёмочным тестом), а не «нет данных». Детективные контроли краснеют от реальных findings. Это та же логика, что в `coverage_page` (детективные vs превентивные).
+Зелёный узел может быть зелёным потому, что контроль **превентивный** (ручной аппрув-гейт, output-reduction RT-03/04, сегментация RT-06, fail-closed authN) — он не порождает сработок, когда работает. Такие узлы помечаем «armed» (подтверждено приёмочным тестом), а не «нет данных». Детективные контроли краснеют от реальных findings. Это та же логика, что в `coverage_page` (детективные vs превентивные).
 
 ## 9. Реюз / новое
 - **Реюз:** `Finding`/`AuditEvent`/`Deployment`, `ui.findings_table`, `ui.audit_fragment`, `audit.recent`.

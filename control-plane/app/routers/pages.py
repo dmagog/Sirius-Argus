@@ -202,7 +202,7 @@ def map_node_view(node_id: str, run: str = ""):
 
 @router.post("/ui/map/run/{run}/{decision}", response_class=HTMLResponse)
 def ui_map_run_decision(run: str, decision: str, approver: str = Form(""), reason: str = Form("")):
-    """UI-действие HITL из инспектора прогона: зафиксировать решение (approve|reject) и
+    """UI-действие аппрув-гейта из инспектора прогона: зафиксировать решение (approve|reject) и
     вернуть обновлённую внутренность инспектора. У control-plane UI нет отдельного логина
     (SSO — у ops-консолей), поэтому аппрувер выбирается из MLSecOps-учёток; запись идёт
     общим кодом decisions.record_decision (Approval + аудит). Реальный separation of duties
@@ -300,7 +300,7 @@ COVERAGE = [
     {"id": "ACC-06", "threat": "утёкший секрет в коде", "control": "скан секретов", "match": ("verdict", "secret-exposed")},
     {"id": "VIS-02", "threat": "расхождение вердиктов / фолз", "control": "триаж сработок", "match": ("verdict", "suspicious")},
     {"id": "RT-01", "threat": "extraction модели в рантайме", "control": "rate-limit + детект", "match": ("verdict", "extraction")},
-    {"id": "VIS-03/GOV-01/SUP-04", "threat": "небезопасный промоушен критичной модели", "control": "gated promotion (карта+подпись+HITL)", "match": ("prefix", "promote.blocked")},
+    {"id": "VIS-03/GOV-01/SUP-04", "threat": "небезопасный промоушен критичной модели", "control": "gated promotion (карта+подпись+ручной аппрув-гейт)", "match": ("prefix", "promote.blocked")},
     {"id": "ACC-01/ESC-01", "threat": "действие вне роли / IDOR", "control": "zero-trust RBAC + object-level", "match": ("prefix", "authz.deny")},
     {"id": "CRED-01/AUTH-01", "threat": "невалидный/поддельный токен", "control": "OIDC fail-closed", "match": ("exact", "access.denied")},
     {"id": "EXF-01", "threat": "инсайдерская эксфильтрация", "control": "детект объёма выгрузок", "match": ("verdict", "bulk-exfiltration")},
