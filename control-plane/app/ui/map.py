@@ -176,9 +176,9 @@ def _sa_css():
         # комета (SVG-путь): ширина плавно СУЖАЕТСЯ к хвосту (до точки) + градиент #cometg затухает
         # по прозрачности. Голова движется ТОЛЬКО вращением SVG (saComet linear) → постоянная скорость.
         # stop-color через CSS-свойство (не SVG-атрибут) → резолвит var() и уважает выбранный акцент.
-        # вращаем ОБЁРТКУ-span (не SVG): обычный блок крутится строго вокруг центра → орбита ровно
-        # по кругу; inset −20 выносит комету наружу (с запасом от свечения, орбита крупнее).
-        ".sa-splash .ring{position:absolute;inset:-20px;transform-origin:50% 50%;animation:saComet 4.5s linear infinite;}"
+        # вращение кометы — SMIL rotate вокруг (50,50) внутри SVG (см. splash): строго вокруг центра
+        # круга, без CSS-transform-origin неоднозначностей. inset −20 выносит орбиту наружу.
+        ".sa-splash .ring{position:absolute;inset:-20px;}"
         ".sa-splash .ring svg{width:100%;height:100%;display:block;}"
         ".sa-splash .ring stop{stop-color:var(--sa-accent);}"
         # мягкое золотое сияние — плавный градиент-falloff, медленное спокойное дыхание
@@ -197,7 +197,6 @@ def _sa_css():
         ".sa-splash .step .txt{display:inline-block;will-change:transform,opacity;}"
         "@keyframes saSplashIn{from{opacity:0;transform:scale(.78)}to{opacity:1;transform:none}}"
         "@keyframes saRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
-        "@keyframes saComet{to{transform:rotate(360deg)}}"
         "@keyframes saLogoSpin{to{transform:rotate(-360deg)}}"
         "@keyframes saGlow{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.05);opacity:1}}"
         "@keyframes saSplashBar{0%{width:0}60%{width:84%}100%{width:100%}}"
@@ -264,15 +263,18 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     )
 
     # hero-сплэш — только на стартовом экране (обзор); играет при каждой загрузке
-    _cmin, _cmax = _comet_path(span=120), _comet_path(span=195)  # короткая/длинная для дыхания длины
+    _comet = _comet_path(span=175)  # ФИКСИРОВАННАЯ геометрия на круге (не морфим → ничего не проваливается)
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
         "<div class='halo'><span class='ring'><svg viewBox='0 0 100 100'>"
-        "<defs><linearGradient id='cometg' x1='92' y1='50' x2='10' y2='35' gradientUnits='userSpaceOnUse'>"
-        "<stop offset='0' stop-opacity='.95'/><stop offset='1' stop-opacity='0'/></linearGradient></defs>"
-        f"<path class='comet' fill='url(#cometg)' d='{_cmin}'>"
-        f"<animate attributeName='d' dur='4.5s' repeatCount='indefinite' calcMode='spline' "
-        f"keyTimes='0;0.5;1' keySplines='.4 0 .2 1;.4 0 .2 1' values='{_cmin};{_cmax};{_cmin}'/></path></svg></span>"
+        # длину видимой части «дышим» через анимацию стоп-офсета градиента (геометрия неподвижна → круг)
+        "<defs><linearGradient id='cometg' x1='92' y1='50' x2='8' y2='50' gradientUnits='userSpaceOnUse'>"
+        "<stop offset='0' stop-opacity='.95'/>"
+        "<stop offset='.6' stop-opacity='0'><animate attributeName='offset' dur='4.5s' repeatCount='indefinite' "
+        "calcMode='spline' keyTimes='0;0.5;1' keySplines='.4 0 .2 1;.4 0 .2 1' values='.5;.92;.5'/></stop></linearGradient></defs>"
+        # вращение через SMIL rotate вокруг (50,50) = точный центр круга в координатах SVG → строго по кругу
+        "<g><animateTransform attributeName='transform' type='rotate' from='0 50 50' to='360 50 50' dur='4.5s' repeatCount='indefinite'/>"
+        f"<path class='comet' fill='url(#cometg)' d='{_comet}'/></g></svg></span>"
         "<span class='logospin'><img class='logo' src='/static/avatar.png' alt='Sirius Argus'></span></div>"
         "<div style='text-align:center'><div class='t1'>Sirius Argus</div><div class='t2'>MLSecOps Platform</div></div>"
         "<div style='display:flex;flex-direction:column;align-items:center;gap:11px'>"
