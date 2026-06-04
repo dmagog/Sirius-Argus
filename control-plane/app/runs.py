@@ -60,6 +60,18 @@ def role_of(item):
     return actor_role(item)
 
 
+def asset_href(asset_ref):
+    """URL карточки сущности по asset_ref, иначе None — для кликабельных активов в журнале/инциденте.
+    model/<id>[/v<n>] → карточка модели; dataset/<id> → карточка датасета. Прочее
+    (endpoint/code/ci/deps/actor/dataset/scan) карточки не имеет → None (остаётся текстом)."""
+    parts = (asset_ref or "").split("/")
+    if len(parts) >= 2 and parts[0] == "model" and parts[1].isdigit():
+        return f"/registry/model/{parts[1]}"
+    if len(parts) == 2 and parts[0] == "dataset" and parts[1].isdigit():
+        return f"/data/dataset/{parts[1]}"
+    return None
+
+
 def _crit(criticality):
     return criticality if criticality in ("regulatory", "financial") else "internal"
 

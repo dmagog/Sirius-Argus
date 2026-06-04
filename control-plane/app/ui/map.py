@@ -628,7 +628,7 @@ def _gate_panel(sel_run, detail):
 def _inspector_inner(sel_run, detail):
     """Внутренность правой колонки инспектора (шапка прогона + панель аппрув-гейта + lineage +
     сработки + терминальный лог). Выделено, чтобы тем же кодом рендерить HTMX-рефреш."""
-    from ..runs import actor_role, role_of
+    from ..runs import actor_role, asset_href, role_of
     detail = detail or {}
     if not sel_run:
         return "<div style='padding:18px;color:var(--sa-muted);font-size:13px'>выберите прогон слева</div>"
@@ -646,12 +646,15 @@ def _inspector_inner(sel_run, detail):
         for f in dfs:
             fa, fr = role_of(f)
             sc = _SEVC.get(f["severity"], "var(--sa-muted)")
+            _href = asset_href(f.get("asset"))
+            _asset = (f"<a href='{_href}' style='color:var(--sa-blue);text-decoration:none'>{_e(f['asset'])} "
+                      f"<i class='bi bi-box-arrow-up-right' style='font-size:8px'></i></a>" if _href else _e(f.get("asset", "")))
             fcards += (
                 f"<div class='sa-fcard'><div style='display:flex;align-items:center;gap:7px;flex-wrap:wrap'>"
                 f"<span class='sa-badge sa-mono' style='color:{sc};background:rgba(148,163,184,.12)'>{_e(f['severity'])}</span>"
                 f"<span class='sa-mono' style='font-size:11.5px;font-weight:600;color:{sc}'>{_e(f['verdict'])}</span>"
                 f"<span style='flex:1'></span><span class='sa-badge sa-mono' style='color:var(--sa-text2);border:1px solid var(--sa-line)'>{_e(f['status'])}</span></div>"
-                f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:5px'>{_e(f['tool'])} · {_e(f['asset'])}</div>"
+                f"<div class='sa-mono' style='font-size:10px;color:var(--sa-muted);margin-top:5px'>{_e(f['tool'])} · {_asset}</div>"
                 f"<div style='font-size:11.5px;color:var(--sa-text2);margin-top:5px;line-height:1.45'>{_e(f['detail'])}</div>"
                 f"<div class='sa-mono' style='font-size:10px;color:var(--sa-text2);margin-top:6px'>причастен: {_e(fa)} "
                 f"<span style='color:var(--sa-accent-ink);font-weight:600'>{_e(fr)}</span></div></div>")
@@ -826,9 +829,13 @@ def map_incident_fragment(finding, audit_rows):
     f = finding
     head = (f"<div class='flex items-center gap-2 mb-2'><span class='px-2 py-0.5 rounded text-xs {_SEV.get(f['severity'], 'bg-slate-100')}'>{_e(f['severity'])}</span>"
             f"<b>{_e(f['verdict'])}</b><span class='text-slate-400 text-xs'>· {_e(f['tool'])} · {_e(f['ts'])}</span></div>")
-    from ..runs import role_of
+    from ..runs import asset_href, role_of
     acct, role = role_of(f)
-    meta = (f"<div class='text-sm text-slate-600 mb-1'>Актив: <span class='font-mono text-xs'>{_e(f['asset'])}</span></div>"
+    _href = asset_href(f.get("asset"))
+    _asset = (f"<a href='{_href}' class='font-mono text-xs' style='color:var(--sa-blue);text-decoration:none'>"
+              f"{_e(f['asset'])} <i class='bi bi-box-arrow-up-right' style='font-size:9px'></i></a>"
+              if _href else f"<span class='font-mono text-xs'>{_e(f['asset'])}</span>")
+    meta = (f"<div class='text-sm text-slate-600 mb-1'>Актив: {_asset}</div>"
             f"<div class='text-sm text-slate-600 mb-1'>Причастен: <b>{_e(acct)}</b> "
             f"<span class='font-mono text-xs text-amber-600'>{_e(role)}</span></div>"
             f"<div class='text-sm text-slate-600 mb-3'>Что произошло: {_e(f['detail'])}</div>")
