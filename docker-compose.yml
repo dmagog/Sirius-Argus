@@ -57,7 +57,7 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
       AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
       ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-sirius-quarantine}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}  # 25 МиБ: лимит тела (resource-exhaustion guard)
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-0}  # 0 = лимит тела снят (по запросу); для прода задать через env (resource-exhaustion guard)
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}  # секреты из Vault по AppRole (фолбэк на env выше)
     volumes:
       - vault_creds:/vault-creds:ro  # AppRole role_id/secret_id от vault-init
