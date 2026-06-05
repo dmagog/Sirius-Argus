@@ -44,3 +44,5 @@
 | ✅ | 12 | **Сработки** | Единый список findings с кликабельными актив/причастный | `/findings` | `13-findings.png` | overview |
 | ✅ | 13 | **Live-дашборд** | Поток сработок + таймлайн аудита в реальном времени | `/dashboard` | `14-dashboard.png` | overview, testing |
 | ✅ | 14 | **Матрица ролей (RBAC)** | Роль → действие из единого источника (zero-trust) | `/roles` | `15-roles.png` | architecture §10 |
+| ✅ | 16 | **Grafana — дашборд безопасности** | observability: метрики (сработки/аудит/HTTP-rate) + логи Loki; тёмная+светлая | `localhost:3000` → `/d/sirius-sec` (admin) | `16-grafana.png` | architecture §5 |
+| ✅ | 17 | **Prometheus — targets** | сбор метрик с control-plane (`/metrics`, scrape up) | Prometheus `/targets` (internal :9090) | `17-prometheus.png` | architecture §5 |

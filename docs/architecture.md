@@ -126,6 +126,19 @@ flowchart TB
 
 **Взаимодействие и логирование.** Прямые чтения (control-plane → MLflow/MinIO/Gitea) — синхронный HTTP; долгие сканы и все значимые события — через **шину Redis** ([ADR-0008](adr/0008-message-broker.md)), а не API-меш. Логи разведены: **аудит** (security, tamper-evident) — Postgres + hash-chain; **операционные логи и метрики** — отдельный лог-стор (Loki/Grafana/Prometheus, [ADR-0009](adr/0009-observability-logstore.md)). Каждое действие → событие → и в аудит, и в лог-стор.
 
+**Наблюдаемость в деле.** Grafana-дашборд «Sirius Argus — Security»: метрики (счётчик сработок, целостность аудита `1=ок`, rate HTTP-запросов control-plane по статусам) и поток логов из Loki — слева тёмная тема, справа светлая:
+
+<table><tr>
+<td><img src="_assets/img/16-grafana.png" alt="Grafana — дашборд безопасности, тёмная"></td>
+<td><img src="_assets/img/light/16-grafana.png" alt="Grafana — дашборд безопасности, светлая"></td>
+</tr></table>
+
+Prometheus собирает метрики с control-plane (`/metrics`) — targets up:
+
+<img src="_assets/img/17-prometheus.png" alt="Prometheus — scrape targets">
+
+Метрики и логи отделены от аудита: дашборды — про оперативное состояние, а авторитетный tamper-evident аудит живёт в Postgres ([ADR-0009](adr/0009-observability-logstore.md)).
+
 ### 5.2 Поверхность видимости: реестры и карточки
 
 Read-only витрины поверх той же доменной модели (§6), под единым каркасом (sidebar + топбар). Разделы: пайплайн (`/map`), дашборд, **реестры** — моделей (`/registry`), данных (`/data`), решений аппрув-гейта и принятий риска (`/decisions`), пользователей/акторов (`/users`); сработки (`/findings`), карта покрытия (`/coverage`), сервинг и матрица ролей (RBAC). Витрины ничего не дублируют — читают сквозные `Finding`/`AuditEvent`/`Approval`.
