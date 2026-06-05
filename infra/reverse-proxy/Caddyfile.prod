@@ -1,0 +1,24 @@
+# Публичный периметр демо-стенда. Авто-TLS (Let's Encrypt) для {$PUBLIC_HOST}.
+# UI control-plane намеренно БЕЗ собственного логина. Периметр ОТКРЫТ — форму входа убрали для демо,
+# чтобы зритель сразу попадал в контур и получал впечатление. /api заперт DEV_AUTH=0; /metrics не отдаём.
+# Внимание: единственное login-less пишущее действие — аппрув-гейт (/ui/map/run/...); его теперь
+# может нажать любой, кто знает URL (промоушен в прод всё равно недоступен — это /api).
+{$PUBLIC_HOST} {
+	encode zstd gzip
+
+	# периметр: жёсткий потолок тела — оверсайз режется на входе
+	request_body {
+		max_size 50MB
+	}
+
+	route {
+		# внутренние Prometheus-метрики наружу не светим
+		respond /metrics 404
+
+		# Keycloak под /auth — префикс НЕ срезаем: его редиректы остаются валидными
+		reverse_proxy /auth/* keycloak:8080
+
+		# всё остальное → control-plane (дашборд, /map, /coverage, /api за DEV_AUTH=0)
+		reverse_proxy control-plane:8000
+	}
+}

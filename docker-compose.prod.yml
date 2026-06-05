@@ -1,0 +1,60 @@
+# Prod-оверрайд публичного демо-стенда (накатывается ПОВЕРХ docker-compose.yml).
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Отличия от локального профиля:
+#   - наружу торчит ТОЛЬКО Caddy (80/443, авто-TLS Let's Encrypt) за HTTP Basic Auth периметра;
+#   - прямые host-порты serving/MinIO сняты с 0.0.0.0 → только 127.0.0.1 (доступ через SSH-туннель);
+#   - Keycloak знает свой внешний https-URL (issuer/redirect за прокси);
+#   - на долгоживущих сервисах restart: unless-stopped.
+# Секреты и DEV_AUTH — в .env.prod (НЕ коммитим). DEV_AUTH=0 на публичном контуре обязателен.
+# Требует Docker Compose v2.24+ (тег !override для замены порт-маппингов базового файла).
+
+services:
+  reverse-proxy:
+    volumes:
+      - ./infra/reverse-proxy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # сертификаты ACME переживают рестарт контейнера
+      - caddy_config:/config
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?задай PUBLIC_HOST в .env.prod}
+      DEMO_USER: ${DEMO_USER:-demo}
+      DEMO_PASS_HASH: ${DEMO_PASS_HASH:?сгенерируй через scripts/deploy_netangels.sh}
+    ports: !override
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+  keycloak:
+    environment:
+      KC_HOSTNAME: https://${PUBLIC_HOST}/auth   # внешний frontend-URL за Caddy (вместо localhost)
+    restart: unless-stopped
+
+  control-plane:
+    restart: unless-stopped
+
+  serving:
+    ports: !override
+      - "127.0.0.1:8001:8000"   # только локально (сид-прогон demo.py на боксе), не в интернет
+    restart: unless-stopped
+
+  minio:
+    ports: !override
+      - "127.0.0.1:9001:9001"   # веб-консоль только через SSH-туннель
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+  keycloak-db:
+    restart: unless-stopped
+  mlflow-db:
+    restart: unless-stopped
+  mlflow:
+    restart: unless-stopped
+  redis:
+    restart: unless-stopped
+  vault:
+    restart: unless-stopped
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}

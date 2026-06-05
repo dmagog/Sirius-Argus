@@ -1,0 +1,115 @@
+# ============================================================================
+#  PRODUCTION OVERLAY — ЧЕРНОВИК (DRAFT). Накатывается поверх docker-compose.yml.
+#    docker compose -f docker-compose.yml -f docker-compose.production.yml --profile full up -d
+#
+#  Это каркас боевого режима, описанный в docs/runbooks/deploy-production.md.
+#  НЕ go-live-ready: помеченные ниже секции (Vault prod, oauth2-proxy, Keycloak)
+#  требуют доработки и тестирования + один code-change (AppRole-логин в control-plane).
+#  Базовый docker-compose.yml этим файлом не меняется — это отдельный слой.
+#  Секреты — в .env.production (НЕ коммитить), без дефолтов. См. .env.production.example.
+# ============================================================================
+
+services:
+
+  # --- Идентичность: Keycloak в prod-режиме ---------------------------------
+  keycloak:
+    # start (не start-dev). Без --optimized стартует с авто-build (медленнее, но без
+    # отдельного build-шага). TODO: собрать образ с `kc.sh build` и включить --optimized.
+    # TODO: realm для прода БЕЗ демо-персон (ds/de/mlsecops/product/ceo/bruteme).
+    command: ["start", "--import-realm"]
+    environment:
+      KC_HOSTNAME: https://${PUBLIC_HOST:?задай PUBLIC_HOST}/auth
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"          # TLS терминирует Caddy; внутри HTTP за прокси
+      KC_DB: postgres
+      KC_FEATURES: ""                  # включить нужные фичи явно
+      # brute-force detection включается в realm-настройках (не env) — см. рунбук
+    restart: unless-stopped
+
+  # --- Секреты: Vault в prod-режиме (raft + unseal) -------------------------
+  vault:
+    # DRAFT: prod-сервер вместо `server -dev`. Требует unseal после старта
+    # (auto-unseal через KMS в vault.prod.hcl, либо manual unseal-ключами).
+    command: ["server", "-config=/vault/config/vault.prod.hcl"]
+    environment:
+      VAULT_ADDR: https://127.0.0.1:8200
+      # никаких VAULT_DEV_* и фикс. root-токена
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - ./infra/vault/vault.prod.hcl:/vault/config/vault.prod.hcl:ro
+      - vault_data:/vault/data           # raft storage — персистентно
+    restart: unless-stopped
+
+  vault-init:
+    # В проде init Vault — операторский шаг ПОСЛЕ unseal (политики + AppRole),
+    # а не авто-сид под root. См. infra/vault/vault-init-prod.sh.
+    entrypoint: ["sh", "-c", "echo 'prod: Vault init выполняется вручную после unseal — infra/vault/vault-init-prod.sh' && exit 0"]
+
+  # --- control-plane: доступ к Vault по AppRole, без root --------------------
+  control-plane:
+    environment:
+      DEV_AUTH: "0"                      # в проде всегда 0
+      # DRAFT: control-plane должен логиниться в Vault по AppRole (а не VAULT_TOKEN=root).
+      # Требует code-change в control-plane/app/vault.py (AppRole login → short-lived token).
+      VAULT_ROLE_ID: ${VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${VAULT_SECRET_ID:-}
+      SIGNING_SEED: ${SIGNING_SEED:?задай постоянный SIGNING_SEED из секрет-стора}
+      SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:?задай стойкий SIRIUS_SERVICE_TOKEN}
+      CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:?задай CI_WEBHOOK_SECRET}
+    restart: unless-stopped
+
+  # --- AuthN периметра UI: oauth2-proxy + Keycloak (закрывает login-less UI) -
+  # DRAFT: до control-plane UI доходят только аутентифицированные в Keycloak.
+  # Требует: Keycloak-клиент `sirius-ui` (confidential, redirect /oauth2/callback),
+  # стойкий OAUTH2_PROXY_COOKIE_SECRET (32 байта base64), тест форвард-аутх с Caddy.
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    environment:
+      OAUTH2_PROXY_PROVIDER: keycloak-oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://${PUBLIC_HOST}/auth/realms/sirius
+      OAUTH2_PROXY_CLIENT_ID: ${UI_OIDC_CLIENT_ID:-sirius-ui}
+      OAUTH2_PROXY_CLIENT_SECRET: ${UI_OIDC_CLIENT_SECRET:?задай секрет клиента sirius-ui}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?задай 32-байтный cookie-secret}
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_UPSTREAMS: http://control-plane:8000
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+    networks: [internal]
+    depends_on: [keycloak]
+    restart: unless-stopped
+
+  # --- Периметр: Caddy с HSTS/заголовками, forward_auth для UI --------------
+  reverse-proxy:
+    volumes:
+      - ./infra/reverse-proxy/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?задай PUBLIC_HOST}
+    ports: !override
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+  # --- ops/данные: наружу не публикуем (доступ через SSO/VPN/STS) -----------
+  serving:
+    ports: !override []
+    restart: unless-stopped
+  minio:
+    ports: !override []                 # объекты — через S3/STS, не веб-консоль наружу
+    restart: unless-stopped
+
+  postgres:     { restart: unless-stopped }
+  keycloak-db:  { restart: unless-stopped }
+  mlflow-db:    { restart: unless-stopped }
+  mlflow:       { restart: unless-stopped }
+  redis:        { restart: unless-stopped }
+
+volumes:
+  vault_data: {}
+  caddy_data: {}
+  caddy_config: {}

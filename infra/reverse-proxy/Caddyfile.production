@@ -1,0 +1,49 @@
+# PRODUCTION Caddy — DRAFT. TLS + HSTS/security-заголовки + OIDC-вход для UI.
+#   /auth/*  → Keycloak (issuer/redirect)
+#   /api/*   → control-plane напрямую (Bearer-токены + RBAC, DEV_AUTH=0; cookie-аутх не нужен)
+#   /oauth2/* → oauth2-proxy (sign-in/callback)
+#   прочее (UI) → forward_auth oauth2-proxy → только аутентифицированные в Keycloak
+# /metrics наружу не отдаём. Проверить forward_auth-редирект и заголовки до go-live.
+{$PUBLIC_HOST} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	request_body {
+		max_size 50MB
+	}
+
+	respond /metrics 404
+
+	handle /auth/* {
+		reverse_proxy keycloak:8080
+	}
+
+	handle /api/* {
+		reverse_proxy control-plane:8000
+	}
+
+	handle /oauth2/* {
+		reverse_proxy oauth2-proxy:4180
+	}
+
+	handle {
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			copy_headers X-Auth-Request-User X-Auth-Request-Email
+			@unauth status 401
+			handle_response @unauth {
+				redir * /oauth2/sign_in?rd={http.request.uri}
+			}
+		}
+		reverse_proxy control-plane:8000
+	}
+}
