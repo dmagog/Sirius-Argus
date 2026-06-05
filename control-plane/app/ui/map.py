@@ -121,6 +121,20 @@ def _sa_css():
         # ── правая колонка ──
         ".sa-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;}"
         ".sa-top{flex:none;height:60px;padding:0 22px;border-bottom:1px solid var(--sa-line);background:var(--sa-panel2);display:flex;align-items:center;justify-content:space-between;gap:1rem;}"
+        # ── сворачиваемый рейл: гамбургер + десктоп-collapse + мобайл-выдвижка ──
+        ".sa-burger{width:32px;height:30px;border:1px solid var(--sa-line);border-radius:8px;background:transparent;color:var(--sa-text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:17px;flex:none;}"
+        ".sa-burger:hover{border-color:var(--sa-accent);color:var(--sa-accent);}"
+        ".sa-bcwrap{display:flex;align-items:center;gap:10px;min-width:0;}"
+        ".sa-rail{transition:width .2s ease,transform .2s ease;}"
+        ".sa-backdrop{display:none;}"
+        "@media(min-width:901px){html.nav-hidden .sa-rail{width:0;min-width:0;overflow:hidden;border-right:0;}}"
+        "@media(max-width:900px){"
+        ".sa-rail{position:fixed;top:0;left:0;height:100vh;z-index:60;transform:translateX(-100%);box-shadow:0 10px 40px rgba(0,0,0,.55);}"
+        "html.nav-show .sa-rail{transform:none;}"
+        ".sa-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;}"
+        "html.nav-show .sa-backdrop{display:block;}"
+        ".sa-top{padding:0 12px;}.sa-kpi .k{display:none;}.sa-live{display:none;}"
+        "}"
         ".sa-bc{display:flex;align-items:center;gap:10px;min-width:0;}"
         ".sa-bc .h{font-size:15px;font-weight:700;color:var(--sa-head);}.sa-bc .s{font-size:10.5px;color:var(--sa-muted);}"
         ".sa-back{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--sa-text2);background:var(--sa-panel);border:1px solid var(--sa-line);border-radius:8px;padding:6px 11px;cursor:pointer;text-decoration:none;}"
@@ -285,7 +299,10 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     gates_col = "var(--sa-alert)" if gates_ok < len(gates) else "var(--sa-ok)"
     topbar = (
         "<header class='sa-top'>"
+        "<div class='sa-bcwrap'>"
+        "<button class='sa-burger' onclick='saNav()' aria-label='Меню' title='Свернуть / показать меню'><i class='bi bi-list'></i></button>"
         f"<div class='sa-bc'>{breadcrumb}</div>"
+        "</div>"
         "<div class='sa-kpis'>"
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:var(--sa-head)'>{nnodes}</span><span class='k'>узлов</span></div>"
         f"<div class='sa-kpi'><span class='v sa-mono' style='color:var(--sa-warn)'>{open_total}</span><span class='k'>сработок</span></div>"
@@ -295,7 +312,8 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
     )
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
-        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);}catch(e){}</script>"
+        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);"
+        "if(localStorage.getItem('sa-nav')==='hidden'&&window.matchMedia('(min-width:901px)').matches)document.documentElement.classList.add('nav-hidden');}catch(e){}</script>"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         f"<title>{_e(title)}</title><link rel=icon type=image/png href='/static/avatar.png'>"
         "<link rel=preconnect href='https://fonts.googleapis.com'><link rel=preconnect href='https://fonts.gstatic.com' crossorigin>"
@@ -303,13 +321,16 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         "<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css' rel=stylesheet>"
         '<script src="https://unpkg.com/htmx.org@2.0.3"></script>'
         f"{_sa_css()}</head><body>{splash}"
-        f"<div class='sa-app'>{rail}<div class='sa-main'>{topbar}"
+        f"<div class='sa-app'>{rail}<div class='sa-backdrop' onclick='saNavClose()'></div><div class='sa-main'>{topbar}"
         f"<div class='sa-content sa-scroll'>{content}</div></div></div>"
         f"<script>{_SHELL_JS}{body_js}</script></body></html>"
     )
 
 
 _SHELL_JS = r"""
+function saNav(){var m=window.matchMedia('(max-width:900px)').matches,d=document.documentElement;
+ if(m){d.classList.toggle('nav-show');}else{var h=d.classList.toggle('nav-hidden');try{localStorage.setItem('sa-nav',h?'hidden':'shown');}catch(e){}}}
+function saNavClose(){document.documentElement.classList.remove('nav-show');}
 function saFilter(q){q=(q||'').toLowerCase();
   document.querySelectorAll('.sa-stage,.sa-infra').forEach(function(el){
     el.style.display=(!q||(el.getAttribute('data-f')||'').indexOf(q)>=0)?'':'none';});}

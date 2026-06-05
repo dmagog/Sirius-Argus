@@ -114,6 +114,15 @@ saThemeIcon();
 </script>"""
 
 
+# Сворачивание/выдвижка сайдбара: десктоп — collapse (запоминается), мобайл — off-canvas.
+_NAV_TOGGLE_JS = """<script>
+function saNav(){var m=window.matchMedia('(max-width:900px)').matches,d=document.documentElement;
+ if(m){d.classList.toggle('nav-show');}
+ else{var h=d.classList.toggle('nav-hidden');try{localStorage.setItem('sa-nav',h?'hidden':'shown');}catch(e){}}}
+function saNavClose(){document.documentElement.classList.remove('nav-show');}
+</script>"""
+
+
 # Тёмная SOC-консоль: палитра-токены + сайдбар + re-skin Tailwind-утилит через CSS-слой
 # (тёмные карточки/таблицы/бейджи без правки каждой страницы). Акцент — золото под лого.
 _THEME = """<style>
@@ -223,6 +232,21 @@ a:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visibl
 .sb-top .crumb a.crumb-sec:hover{color:var(--head);text-decoration:underline;}
 .sb-top .crumb .crumb-sep{color:var(--muted);font-weight:400;}
 .sb-top .crumb .crumb-cur{color:var(--head);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+/* сворачиваемый сайдбар: гамбургер + десктоп-collapse + мобайл-выдвижка */
+.sb-burger{width:32px;height:30px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:17px;flex:none;}
+.sb-burger:hover{border-color:var(--accent);color:var(--accent);}
+.sb-top-l{display:flex;align-items:center;gap:10px;min-width:0;}
+.sb{transition:width .2s ease,transform .2s ease;}
+.nav-backdrop{display:none;}
+@media(min-width:901px){html.nav-hidden .sb{width:0;min-width:0;overflow:hidden;border-right:0;}}
+@media(max-width:900px){
+.sb{position:fixed;top:0;left:0;z-index:60;transform:translateX(-100%);box-shadow:0 10px 40px rgba(0,0,0,.55);}
+html.nav-show .sb{transform:none;}
+.nav-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;}
+html.nav-show .nav-backdrop{display:block;}
+.app-main{padding:18px 16px;}
+.sb-top{padding:0 14px;}
+}
 </style>"""
 
 
@@ -308,7 +332,8 @@ def _page(title, body, nav="dashboard", crumb=None):
         crumb_html = f"<span class='crumb'><i class='bi {sec_icon}'></i>{_e(sec_label)}</span>"
     return (
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
-        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);}catch(e){}</script>"
+        "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);"
+        "if(localStorage.getItem('sa-nav')==='hidden'&&window.matchMedia('(min-width:901px)').matches)document.documentElement.classList.add('nav-hidden');}catch(e){}</script>"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         f"<title>{_e(title)}</title>"
         "<link rel=icon type=image/png href='/static/avatar.png'>"
@@ -326,15 +351,18 @@ def _page(title, body, nav="dashboard", crumb=None):
         f"<nav class='sb-nav'>{nav_html}</nav>"
         "<div class='sb-foot'><span class='env-chip'>local · dev</span></div>"
         "</aside>"
+        "<div class='nav-backdrop' onclick='saNavClose()'></div>"
         "<div class='app-col'>"
-        f"<header class='sb-top'>{crumb_html}"
+        "<header class='sb-top'><span class='sb-top-l'>"
+        "<button class='sb-burger' onclick='saNav()' aria-label='Меню' title='Свернуть / показать меню'><i class='bi bi-list'></i></button>"
+        f"{crumb_html}</span>"
         "<span class='sb-tools'>"
         "<button class='sb-theme' onclick='saTheme()' aria-label='Переключить тему' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button>"
         "</span></header>"
         f"<main class='app-main'>{body}</main>"
         "</div>"
         "</div>"
-        f"{_SORT_JS}{_FILTER_JS}{_NAV_JS}{_THEME_JS}</body></html>"
+        f"{_SORT_JS}{_FILTER_JS}{_NAV_JS}{_THEME_JS}{_NAV_TOGGLE_JS}</body></html>"
     )
 
 
