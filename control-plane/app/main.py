@@ -41,7 +41,7 @@ _FINDINGS_G = Gauge("sirius_findings_total", "Всего сработок (Findi
 _AUDIT_OK_G = Gauge("sirius_audit_chain_ok", "Целостность аудита: 1=ок, 0=нарушена")
 
 # Защита от resource-exhaustion: тело запроса больше лимита → 413 (не читаем в память).
-MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", "0"))  # 0 = лимит снят (по запросу); env MAX_UPLOAD_BYTES переопределяет
 
 
 @app.on_event("startup")
@@ -57,7 +57,7 @@ async def observe_and_audit(request: Request, call_next):
     if request.url.path not in ("/metrics", "/health"):
         logger.info("req %s %s auth=%s", request.method, request.url.path, request.headers.get("authorization", "-"))
     cl = request.headers.get("content-length")
-    if cl and cl.isdigit() and int(cl) > MAX_UPLOAD_BYTES:  # resource-exhaustion guard: не читаем огромное тело
+    if MAX_UPLOAD_BYTES and cl and cl.isdigit() and int(cl) > MAX_UPLOAD_BYTES:  # 0 = без лимита; иначе resource-exhaustion guard
         try:
             with SessionLocal() as s:
                 s.add(domain.Finding(ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
