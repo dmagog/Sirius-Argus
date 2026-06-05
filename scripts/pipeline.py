@@ -88,10 +88,10 @@ def main():
     req("POST", f"/api/models/{mid}/versions/{ver}/sign", "MLSecOps")  # крипто-подпись Ed25519 (SUP-04)
     ok(f"версия v{ver} (stage=dev), синхронизирована в MLflow={v['backend_synced']}")
 
-    step(5, "SUP-06 — честный остаток")
+    step(5, "SUP-06 — остаток")
     print("    ⚠ сканеры ловят pickle-RCE, небезопасные форматы и CVE, но НЕ логические")
     print("      бэкдоры в весах (ShadowLogic). Поэтому критичная модель ОБЯЗАНА пройти")
-    print("      ручной аппрув-гейт; остаточный риск зафиксирован (без overclaim).")
+    print("      ручной аппрув-гейт; остаточный риск зафиксирован.")
 
     step(6, "Промоушен в прод через policy-матрицу")
     st, _ = req("POST", f"/api/models/{mid}/versions/{ver}/promote", "MLSecOps")
