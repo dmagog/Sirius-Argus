@@ -133,9 +133,9 @@ flowchart TB
 <td><img src="_assets/img/light/16-grafana.png" alt="Grafana — дашборд безопасности, светлая"></td>
 </tr></table>
 
-Prometheus собирает метрики с control-plane (`/metrics`) — targets up:
+Prometheus собирает метрики с control-plane по `/metrics` — rate HTTP-запросов по статусам (`sirius_http_requests_total`), видно всплески нагрузки и долю ошибочных ответов:
 
-<img src="_assets/img/17-prometheus.png" alt="Prometheus — scrape targets">
+<img src="_assets/img/17-prometheus.png" alt="Prometheus — rate запросов control-plane по статусам">
 
 Метрики и логи отделены от аудита: дашборды — про оперативное состояние, а авторитетный tamper-evident аудит живёт в Postgres ([ADR-0009](adr/0009-observability-logstore.md)).
 
