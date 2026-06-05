@@ -22,6 +22,7 @@ import os
 import pickle
 import struct
 import subprocess
+import time
 import urllib.error
 import urllib.request
 
@@ -39,17 +40,22 @@ def req(method, path, role=None, body=None, sub=None, base=None, extra_headers=N
     elif body is not None:
         data, headers["Content-Type"] = json.dumps(body).encode(), "application/json"
     r = urllib.request.Request((base or BASE) + path, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(r, timeout=20) as resp:
-            return resp.status, json.loads(resp.read() or "null")
-    except urllib.error.HTTPError as e:
+    for attempt in range(4):
         try:
-            return e.code, json.loads(e.read() or "null")
-        except Exception:
-            return e.code, None
-    except (urllib.error.URLError, OSError):
-        # соединение оборвано: напр. сервер отверг оверсайз (413), не читая огромное тело — это и есть защита
-        return 0, None
+            with urllib.request.urlopen(r, timeout=20) as resp:
+                return resp.status, json.loads(resp.read() or "null")
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 3:
+                time.sleep(1.5 * (attempt + 1))   # rate-limit: бэк-офф и повтор, демо не должно падать от лимита
+                continue
+            try:
+                return e.code, json.loads(e.read() or "null")
+            except Exception:
+                return e.code, None
+        except (urllib.error.URLError, OSError):
+            # соединение оборвано: напр. сервер отверг оверсайз (413), не читая тело — это и есть защита
+            return 0, None
+    return 429, None
 
 
 def hr(title):
@@ -300,5 +306,17 @@ def main():
     line("каждое действие и каждый блок — в аудите; цепочка целостна (audit_chain_ok).")
 
 
+def _fatal(e):
+    print(f"\n  ⚠ демо прервалось: неожиданный ответ от стека ({type(e).__name__}: {e}).")
+    print("    Вероятно стек ещё поднимается или под нагрузкой (rate-limit).")
+    print("    Подожди ~10–20 c и повтори `make demo`. Стенд должен быть поднят с DEV_AUTH=1.")
+    raise SystemExit(1)
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        raise SystemExit(130)
+    except Exception as e:
+        _fatal(e)

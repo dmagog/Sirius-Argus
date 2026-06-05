@@ -13,6 +13,7 @@ import json
 import os
 import pickle
 import struct
+import time
 import urllib.error
 import urllib.request
 
@@ -30,14 +31,21 @@ def req(method, path, role=None, body=None, sub=None, base=None):
     elif body is not None:
         data, headers["Content-Type"] = json.dumps(body).encode(), "application/json"
     r = urllib.request.Request((base or BASE) + path, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(r, timeout=20) as resp:
-            return resp.status, json.loads(resp.read() or "null")
-    except urllib.error.HTTPError as e:
+    for attempt in range(4):
         try:
-            return e.code, json.loads(e.read() or "null")
-        except Exception:
-            return e.code, None
+            with urllib.request.urlopen(r, timeout=20) as resp:
+                return resp.status, json.loads(resp.read() or "null")
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 3:
+                time.sleep(1.5 * (attempt + 1))   # rate-limit: бэк-офф и повтор
+                continue
+            try:
+                return e.code, json.loads(e.read() or "null")
+            except Exception:
+                return e.code, None
+        except (urllib.error.URLError, OSError):
+            return 0, None
+    return 429, None
 
 
 def step(n, t):
@@ -131,5 +139,17 @@ def main():
     print("=" * 70)
 
 
+def _fatal(e):
+    print(f"\n  ⚠ конвейер прервался: неожиданный ответ от стека ({type(e).__name__}: {e}).")
+    print("    Вероятно стек ещё поднимается или под нагрузкой (rate-limit).")
+    print("    Подожди ~10–20 c и повтори `make pipeline`. Стенд должен быть поднят с DEV_AUTH=1.")
+    raise SystemExit(1)
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        raise SystemExit(130)
+    except Exception as e:
+        _fatal(e)
