@@ -236,9 +236,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visibl
 .sb-burger{width:32px;height:30px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:17px;flex:none;}
 .sb-burger:hover{border-color:var(--accent);color:var(--accent);}
 .sb-top-l{display:flex;align-items:center;gap:10px;min-width:0;}
+.sb-hlogo{display:none;align-items:center;flex:none;text-decoration:none;}
+.sb-hlogo img{width:26px;height:26px;border-radius:6px;display:block;}
 .sb{transition:width .2s ease,transform .2s ease;}
 .nav-backdrop{display:none;}
-@media(min-width:901px){html.nav-hidden .sb{width:0;min-width:0;overflow:hidden;border-right:0;}}
+@media(min-width:901px){html.nav-hidden .sb{width:0;min-width:0;overflow:hidden;border-right:0;}html.nav-hidden .sb-hlogo{display:flex;}}
 @media(max-width:900px){
 .sb{position:fixed;top:0;left:0;z-index:60;transform:translateX(-100%);box-shadow:0 10px 40px rgba(0,0,0,.55);}
 html.nav-show .sb{transform:none;}
@@ -246,6 +248,7 @@ html.nav-show .sb{transform:none;}
 html.nav-show .nav-backdrop{display:block;}
 .app-main{padding:18px 16px;}
 .sb-top{padding:0 14px;}
+.sb-hlogo{display:flex;}
 }
 </style>"""
 
@@ -355,6 +358,7 @@ def _page(title, body, nav="dashboard", crumb=None):
         "<div class='app-col'>"
         "<header class='sb-top'><span class='sb-top-l'>"
         "<button class='sb-burger' onclick='saNav()' aria-label='Меню' title='Свернуть / показать меню'><i class='bi bi-list'></i></button>"
+        "<a href='/map' class='sb-hlogo' title='Sirius Argus'><img src='/static/avatar.png' alt='Sirius Argus'></a>"
         f"{crumb_html}</span>"
         "<span class='sb-tools'>"
         "<button class='sb-theme' onclick='saTheme()' aria-label='Переключить тему' title='Светлая / тёмная тема'><i id='sa-theme-ic' class='bi bi-moon-stars'></i></button>"

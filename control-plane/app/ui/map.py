@@ -125,15 +125,26 @@ def _sa_css():
         ".sa-burger{width:32px;height:30px;border:1px solid var(--sa-line);border-radius:8px;background:transparent;color:var(--sa-text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:17px;flex:none;}"
         ".sa-burger:hover{border-color:var(--sa-accent);color:var(--sa-accent);}"
         ".sa-bcwrap{display:flex;align-items:center;gap:10px;min-width:0;}"
+        ".sa-hlogo{display:none;align-items:center;flex:none;text-decoration:none;}"
+        ".sa-hlogo img{width:26px;height:26px;border-radius:6px;display:block;}"
+        ".sa-sevcell{text-decoration:none;cursor:pointer;transition:border-color .15s;}"
+        ".sa-sevcell:hover{border-color:var(--sa-accent);}"
         ".sa-rail{transition:width .2s ease,transform .2s ease;}"
         ".sa-backdrop{display:none;}"
-        "@media(min-width:901px){html.nav-hidden .sa-rail{width:0;min-width:0;overflow:hidden;border-right:0;}}"
+        "@media(min-width:901px){html.nav-hidden .sa-rail{width:0;min-width:0;overflow:hidden;border-right:0;}html.nav-hidden .sa-hlogo{display:flex;}}"
         "@media(max-width:900px){"
         ".sa-rail{position:fixed;top:0;left:0;height:100vh;z-index:60;transform:translateX(-100%);box-shadow:0 10px 40px rgba(0,0,0,.55);}"
         "html.nav-show .sa-rail{transform:none;}"
         ".sa-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;}"
         "html.nav-show .sa-backdrop{display:block;}"
-        ".sa-top{padding:0 12px;}.sa-kpi .k{display:none;}.sa-live{display:none;}"
+        ".sa-top{padding:0 10px;height:auto;min-height:54px;gap:8px;}"
+        ".sa-bc .s{display:none;}.sa-bc .h{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
+        ".sa-kpi .k{display:none;}.sa-live{display:none;}.sa-kpis{gap:12px;}.sa-kpi .v{font-size:15px;}"
+        ".sa-hlogo{display:flex;}"
+        ".sa-glabel,.sa-ghint{display:none;}"
+        ".sa-graph{overflow-x:auto;overflow-y:hidden;}"
+        ".sa-bottom{grid-template-columns:1fr;height:auto;gap:12px;}"
+        ".sa-sum{min-height:auto;}.sa-plist{max-height:240px;}.sa-term{min-height:300px;}"
         "}"
         ".sa-bc{display:flex;align-items:center;gap:10px;min-width:0;}"
         ".sa-bc .h{font-size:15px;font-weight:700;color:var(--sa-head);}.sa-bc .s{font-size:10.5px;color:var(--sa-muted);}"
@@ -149,7 +160,7 @@ def _sa_css():
         ".sa-eye::before{content:'';width:14px;height:2px;background:var(--sa-accent);border-radius:2px;}"
         # ── граф ──
         ".sa-graph{position:relative;border:1px solid var(--sa-line);border-radius:16px;background:var(--sa-track-grad);box-shadow:0 1px 2px rgba(0,0,0,.5);height:392px;overflow:hidden;}"
-        ".sa-scaled-wrap{position:absolute;inset:0;}.sa-scaled{position:absolute;top:0;left:0;transform-origin:top left;}"
+        ".sa-scaled-wrap{position:absolute;top:0;left:0;}.sa-scaled{position:absolute;top:0;left:0;transform-origin:top left;}"
         ".sa-node{position:absolute;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 10px;cursor:pointer;text-decoration:none;"
         "border:1px solid var(--sa-line);border-radius:10px;background:var(--sa-card-grad);transition:box-shadow .15s,border-color .15s,background .15s;}"
         ".sa-node:hover{border-color:var(--sa-accent);box-shadow:0 0 0 3px rgba(250,204,21,.18);background:var(--sa-panel3);}"
@@ -301,6 +312,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         "<header class='sa-top'>"
         "<div class='sa-bcwrap'>"
         "<button class='sa-burger' onclick='saNav()' aria-label='Меню' title='Свернуть / показать меню'><i class='bi bi-list'></i></button>"
+        "<a href='/map' class='sa-hlogo' title='Sirius Argus'><img src='/static/avatar.png' alt='Sirius Argus'></a>"
         f"<div class='sa-bc'>{breadcrumb}</div>"
         "</div>"
         "<div class='sa-kpis'>"
@@ -473,9 +485,9 @@ def map_page(pipeline, infra, endpoints=None, feed=None, sev_counts=None):
     sev_meta = [("critical", "крит.", "var(--sa-alert)"), ("high", "высок.", "#fb923c"),
                 ("medium", "сред.", "var(--sa-warn)"), ("low", "низк.", "var(--sa-muted)")]
     sev_html = "".join(
-        f"<div class='sa-sevcell'><span style='width:8px;height:8px;border-radius:2px;flex:none;background:{col};box-shadow:0 0 7px 0 {col}'></span>"
+        f"<a class='sa-sevcell' href='/findings?severity={k}' title='Сработки: {ru}'><span style='width:8px;height:8px;border-radius:2px;flex:none;background:{col};box-shadow:0 0 7px 0 {col}'></span>"
         f"<span class='sa-mono' style='font-size:17px;font-weight:700;color:var(--sa-head)'>{sev_counts.get(k,0)}</span>"
-        f"<span style='font-size:10.5px;color:var(--sa-muted);margin-left:auto'>{ru}</span></div>" for k, ru, col in sev_meta)
+        f"<span style='font-size:10.5px;color:var(--sa-muted);margin-left:auto'>{ru}</span></a>" for k, ru, col in sev_meta)
     problems = sorted([n for n in (list(pipeline) + list(infra)) if (n.get("open") or 0) > 0],
                       key=lambda n: ((n.get("status") == "alert"), n.get("open") or 0), reverse=True)
     prob_html = "".join(
@@ -508,8 +520,12 @@ _OV_JS = r"""
   // масштаб слоя по ширине + высота бокса следует за масштабом (иначе на не-1432 ширинах
   // контент короче фикс-бокса → пустота снизу; на широких — обрезался). Идемпотентно.
   function fit(){var wrap=document.querySelector('.sa-scaled-wrap'),s=document.getElementById('ov-scaled'),g=document.querySelector('.sa-graph');
-    if(!wrap||!s||!wrap.clientWidth)return; var sc=wrap.clientWidth/1432; s.style.transform='scale('+sc+')';
-    if(g){var hpx=Math.round(392*sc)+'px'; if(g.style.height!==hpx)g.style.height=hpx;}}
+    if(!wrap||!s||!g||!g.clientWidth)return;
+    var mobile=window.matchMedia('(max-width:900px)').matches;
+    var sc=g.clientWidth/1432; if(mobile)sc=Math.max(sc,0.6);
+    s.style.transform='scale('+sc+')';
+    var w=Math.round(1432*sc),h=Math.round(392*sc);
+    wrap.style.width=w+'px'; wrap.style.height=h+'px'; g.style.height=h+'px';}
   if(window.ResizeObserver){var wr=document.querySelector('.sa-scaled-wrap');if(wr)new ResizeObserver(fit).observe(wr);}
   window.addEventListener('resize',fit); setTimeout(fit,0); fit();
   var hov=null, cursor=Math.min(16,OV_FEED.length);
