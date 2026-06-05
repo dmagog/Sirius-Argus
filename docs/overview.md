@@ -132,6 +132,20 @@ Sirius Argus — слой безопасности и видимости пов�
 <td><img src="_assets/img/light/03-coverage.png" alt="Карта покрытия — светлая"></td>
 </tr></table>
 
+Сработки (Finding) — единый список с кликабельными активом и причастным:
+
+<table><tr>
+<td><img src="_assets/img/13-findings.png" alt="Сработки — тёмная"></td>
+<td><img src="_assets/img/light/13-findings.png" alt="Сработки — светлая"></td>
+</tr></table>
+
+Карточка датасета в карантине — недоверенный источник → карантин (DATA-01):
+
+<table><tr>
+<td><img src="_assets/img/07-dataset-card.png" alt="Карточка датасета — тёмная"></td>
+<td><img src="_assets/img/light/07-dataset-card.png" alt="Карточка датасета — светлая"></td>
+</tr></table>
+
 ## Честный остаток
 
 - **SUP-06** (граф-бэкдоры в весах, ShadowLogic) — статический скан не ловит по своей природе. Компенсация: обязательный ручной аппрув-гейт для критичных моделей + red-team. Это предел инструмента, зафиксированный явно.
@@ -156,6 +170,7 @@ Sirius Argus — слой безопасности и видимости пов�
 | Документ | О чём |
 |---|---|
 | [architecture.md](architecture.md) | Компоненты, ER-модель, потоки, схемы Mermaid |
+| [integration.md](integration.md) | Встраивание в контур заказчика: интеграции, инварианты, параметры, онбординг |
 | [threat-model/bdd-catalog.md](threat-model/bdd-catalog.md) | 53 сценария: угроза + тест + шаг демо + строка карты |
 | [threat-model/risk-register.md](threat-model/risk-register.md) | Статус контролей: реализовано vs честный остаток |
 | [threat-model/personas.md](threat-model/personas.md) | Атакующие и защитники |

@@ -144,6 +144,13 @@ Read-only витрины поверх той же доменной модели 
 <td><img src="_assets/img/light/04-registry.png" alt="Реестр моделей — светлая"></td>
 </tr></table>
 
+Реестр данных — чувствительность, карантин (DATA-01), PII и панель scoped-сканов (DATA-02/03/05):
+
+<table><tr>
+<td><img src="_assets/img/06-data.png" alt="Реестр данных — тёмная"></td>
+<td><img src="_assets/img/light/06-data.png" alt="Реестр данных — светлая"></td>
+</tr></table>
+
 Карточка модели — алерт-бар, проблемы вверху, версии (lineage), решения гейта, таймлайн:
 
 <table><tr>
@@ -170,6 +177,13 @@ Read-only витрины поверх той же доменной модели 
 <table><tr>
 <td><img src="_assets/img/09-user-card.png" alt="Карточка актора — тёмная"></td>
 <td><img src="_assets/img/light/09-user-card.png" alt="Карточка актора — светлая"></td>
+</tr></table>
+
+Реестр пользователей — люди и сервис-аккаунты с ролью, активностью и инцидентами:
+
+<table><tr>
+<td><img src="_assets/img/10-users.png" alt="Реестр пользователей — тёмная"></td>
+<td><img src="_assets/img/light/10-users.png" alt="Реестр пользователей — светлая"></td>
 </tr></table>
 
 ---
@@ -420,6 +434,13 @@ flowchart LR
 | Управление runtime-защитами, decommission | — | — | ✅ | — | — |
 | Бизнес-критичность, чтение реестра | — | — | ✅ | ✅ | — |
 | Исполнительный дашборд (read-only) | — | — | ✅ | ✅ | ✅ |
+
+Эта матрица энфорсится живьём — раздел «Роли (RBAC)» в UI показывает «действие → роль» из единого источника (слева — тёмная тема, справа — светлая):
+
+<table><tr>
+<td><img src="_assets/img/15-roles.png" alt="Матрица ролей RBAC — тёмная"></td>
+<td><img src="_assets/img/light/15-roles.png" alt="Матрица ролей RBAC — светлая"></td>
+</tr></table>
 
 Отдельный **сервисный (CI) актор** — неинтерактивный, со scoped-токеном: запускает гейты и пишет findings, не имеет прав человека.
 

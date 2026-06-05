@@ -100,6 +100,55 @@
 <td><img src="docs/_assets/img/light/14-dashboard.png" alt="Дашборд — светлая"></td>
 </tr></table>
 
+**Реестр данных** — чувствительность, карантин (DATA-01), PII, панель scoped-сканов (DATA-02/03/05).
+
+<table><tr>
+<td><img src="docs/_assets/img/06-data.png" alt="Реестр данных — тёмная"></td>
+<td><img src="docs/_assets/img/light/06-data.png" alt="Реестр данных — светлая"></td>
+</tr></table>
+
+**Карточка датасета (карантин)** — недоверенный источник → карантин (DATA-01) + потребители (lineage).
+
+<table><tr>
+<td><img src="docs/_assets/img/07-dataset-card.png" alt="Карточка датасета — тёмная"></td>
+<td><img src="docs/_assets/img/light/07-dataset-card.png" alt="Карточка датасета — светлая"></td>
+</tr></table>
+
+**Реестр пользователей** — люди и сервис-аккаунты с ролью, активностью, инцидентами.
+
+<table><tr>
+<td><img src="docs/_assets/img/10-users.png" alt="Реестр пользователей — тёмная"></td>
+<td><img src="docs/_assets/img/light/10-users.png" alt="Реестр пользователей — светлая"></td>
+</tr></table>
+
+**Сработки** — единый список Finding с кликабельными активом и причастным.
+
+<table><tr>
+<td><img src="docs/_assets/img/13-findings.png" alt="Сработки — тёмная"></td>
+<td><img src="docs/_assets/img/light/13-findings.png" alt="Сработки — светлая"></td>
+</tr></table>
+
+**Матрица ролей (RBAC)** — роль → действие из единого источника (zero-trust).
+
+<table><tr>
+<td><img src="docs/_assets/img/15-roles.png" alt="Матрица ролей — тёмная"></td>
+<td><img src="docs/_assets/img/light/15-roles.png" alt="Матрица ролей — светлая"></td>
+</tr></table>
+
+**Инспектор прогона** — lineage (MON-02), сработки прогона и терминальный лог.
+
+<table><tr>
+<td><img src="docs/_assets/img/11-inspector.png" alt="Инспектор прогона — тёмная"></td>
+<td><img src="docs/_assets/img/light/11-inspector.png" alt="Инспектор прогона — светлая"></td>
+</tr></table>
+
+**Сплэш-заставка** — экран загрузки с бутлогом этапов.
+
+<table><tr>
+<td><img src="docs/_assets/img/00-splash.png" alt="Заставка — тёмная"></td>
+<td><img src="docs/_assets/img/light/00-splash.png" alt="Заставка — светлая"></td>
+</tr></table>
+
 </details>
 
 ## Запуск
@@ -127,11 +176,35 @@ AuthN — через Keycloak; для локали без Keycloak можно `D
 
 В разработке, итерации [И0–И6](docs/roadmap.md) — всё обязательное к сдаче готово, money-shot'ы гоняются одной командой (`make demo` / `make pipeline`). **73 pytest-функции green** (53 из 54 сценариев каталога; 1 честный остаток — ShadowLogic как предел статического анализа, см. [risk-register](docs/threat-model/risk-register.md)). Документация идёт впереди кода намеренно: модель угроз и поведения (BDD) задают, что строим.
 
+## Как датасеты и модели попадают в систему
+
+Единственный путь — через control-plane по фиксированному контракту (handshake), а не прямым пушем в реестр:
+
+1. **Датасет** регистрируется с источником и схемой; недоверенный источник → карантин (`DATA-01`). Тренеру отдаётся только admitted-версия (не карантинная), с PII-маскированием по допуску (`DATA-04`), и `dataset_version_id` как handle происхождения.
+2. **Обучение** идёт снаружи (CI / Kubeflow / SageMaker), но обязано зафиксировать lineage: `code_commit`, `env_lock`, `dataset_version_id`.
+3. **Артефакт модели** заводится через ingest-гейт: скан байтов в карантине без десериализации (`SUP-01`); вредоносный → блок, в реестр не попадает.
+4. **Версия + lineage** регистрируется (критичные → `requires_validation`), затем подпись (`SUP-04`) и промоушен через policy-гейт с ручным аппрувом для критичных.
+
+Запуск моделей (serving) идёт за рантайм-защитами и отчитывается о детектах обратно в control-plane (петля runtime → control-plane). Тренер и serving работают под сервис-аккаунтами без права `promote` — миновать гейт нельзя.
+
+Пошаговый контракт с эндпоинтами и правами — в [docs/integration.md](docs/integration.md#контракт-интеграции-обучения-handshake); потоки жизненного цикла со схемами — в [architecture §8](docs/architecture.md#8-ключевые-потоки).
+
+## Интеграция в контур заказчика
+
+Sirius Argus — контур контроля, а не замена вашему стеку. Он встаёт в заданные точки и делает control-plane единственным путём в прод:
+
+- **IdP (OIDC)** даёт роли из токена; **Git / CI** интегрируется вебхуком с HMAC; **тренер** (CI / Kubeflow / SageMaker / Vertex) ходит через REST-handshake под сервис-аккаунтом без права `promote`.
+- **Реестр (MLflow), S3-хранилище, Postgres-аудит, Redis, Vault** — за единой точкой входа; компонент можно подменить на ваш (brownfield).
+- Обязательно: единая точка входа, сетевая сегментация (serving не достаёт хранилище), OIDC с ролями, append-only аудит, ключ подписи офлайн.
+
+Полный контракт интеграции, параметры (env) и чек-лист онбординга — в [docs/integration.md](docs/integration.md).
+
 ## Документация
 
 | Документ | О чём |
 |---|---|
 | [docs/overview.md](docs/overview.md) | Пакет к сдаче: обзор всех узлов и защит на одной странице — читать первым |
+| [docs/integration.md](docs/integration.md) | Встраивание в контур заказчика: что с чем, обязательные условия, параметры, чек-лист онбординга |
 | [docs/roadmap.md](docs/roadmap.md) | Итеративный план реализации (И0–И6), привязка к приоритетам куратора и сценариям |
 | [docs/architecture.md](docs/architecture.md) | Архитектура: компоненты, ER-модель, жизненный цикл, потоки, карта покрытия (схемы Mermaid) |
 | [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A22) и защитников (D1–D10), с кодовыми именами |

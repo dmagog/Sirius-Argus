@@ -14,6 +14,13 @@
 
 `Detect → Triage → Contain → Eradicate → Recover → Post-mortem`
 
+Инцидент в инспекторе прогона — сработки, lineage (MON-02) и терминальный лог одного прогона в одном месте (Detect → Triage; слева — тёмная тема, справа — светлая):
+
+<table><tr>
+<td><img src="../_assets/img/11-inspector.png" alt="Инспектор прогона — тёмная"></td>
+<td><img src="../_assets/img/light/11-inspector.png" alt="Инспектор прогона — светлая"></td>
+</tr></table>
+
 1. **Detect** — автодетект (CI-гейт / runtime-детектор) порождает `Finding` + запись в таймлайн.
 2. **Triage** — роль IR/MLSecOps подтверждает TP/FP (риск VIS-04: смена статуса — только с правами и в аудит).
 3. **Contain** — изоляция: блок промоушена, отзыв токена, снятие endpoint, карантин артефакта/датасета.
