@@ -3,7 +3,7 @@
 > Принцип: **test-first в BDD-стиле** (outside-in). Поведение — угроза и ответ системы — описывается сценарием **до кода**; код итерации делает сценарий зелёным. Сценарий = спека + приёмочный тест + шаг демо + строка карты покрытия ([ADR-0004](adr/0004-bdd-methodology.md)).
 
 ## Что значит «test-first» у нас
-- 54 BDD-сценария ([bdd-catalog](threat-model/bdd-catalog.md)) написаны раньше кода; код итераций И0–И6 + защита энфорсера перевёл **53 из них в `green`** (73 pytest-функции, включая интеграционные serving/pipeline и доп. контроли сверх каталога — Vault, risk-acceptance, оверсайз, сервис-аккаунт, evidence-аппрув, append-only аудит, атомарный промоушен, ре-верификация прода, Keycloak brute-force), остаётся 1 — `spec`/честный остаток (`SUP-06` ShadowLogic — предел статического анализа, закрывается ручным аппрув-гейтом) ([risk-register](threat-model/risk-register.md) §«Статус контролей»).
+- 54 BDD-сценария ([bdd-catalog](threat-model/bdd-catalog.md)) написаны раньше кода; код итераций И0–И6 + защита энфорсера перевёл **53 из них в `green`** (73 pytest-функции, включая интеграционные serving/pipeline и доп. контроли сверх каталога — Vault, risk-acceptance, оверсайз, сервис-аккаунт, evidence-аппрув, append-only аудит, атомарный промоушен, ре-верификация прода, Keycloak brute-force), остаётся 1 — `spec` (`SUP-06` ShadowLogic — предел статического анализа, закрывается ручным аппрув-гейтом) ([risk-register](threat-model/risk-register.md) §«Статус контролей»).
 - Код каждой итерации переводит свой набор `spec` → `green`.
 - «Зелёный» = проходящий `pytest-bdd` против **живой системы** (`docker compose up`), не моки.
 - Зелёная колонка в [roadmap](roadmap.md) — это Definition of Done итерации.

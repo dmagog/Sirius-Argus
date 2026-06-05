@@ -182,7 +182,7 @@ flowchart TB
 
 ## Зона роста
 
-Честно о том, что сегодня готовый контракт, а что — паттерн под реализацию (без overclaim):
+Что сегодня готовый контракт, а что — паттерн под реализацию:
 
 - **Адаптеры реестра.** Реализован write-through в MLflow; SageMaker / Vertex / Azure ML / W&B подключаются тем же интерфейсом — в плане, не из коробки.
 - **Адаптеры секретов.** Реализован Vault (AppRole + политика + revoke); AWS KMS / Azure Key Vault / GCP Secret Manager / HSM — по тому же контракту «ключ офлайн + выдача по политике» — в плане.
@@ -191,7 +191,7 @@ flowchart TB
 - **Развёртывание в Kubernetes.** Сейчас `docker compose` (пилот / greenfield); Helm-чарт и манифесты с сетевыми политиками сегментации — в плане.
 - **Прод-харденинг Vault.** file / raft-storage + auto-unseal вместо dev-режима.
 
-Более широкий честный остаток по контролям (SBOM, авто-rollback, deep-модели) — в [risk-register](threat-model/risk-register.md) и [improvements](improvements.md).
+Остальные пробелы по контролям (SBOM, авто-rollback, deep-модели) — в [risk-register](threat-model/risk-register.md) и [improvements](improvements.md).
 
 ---
 
