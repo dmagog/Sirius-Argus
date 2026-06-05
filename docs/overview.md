@@ -171,6 +171,7 @@ Sirius Argus — слой безопасности и видимости пов�
 |---|---|
 | [architecture.md](architecture.md) | Компоненты, ER-модель, потоки, схемы Mermaid |
 | [integration.md](integration.md) | Встраивание в контур заказчика: интеграции, инварианты, параметры, онбординг |
+| [evaluation.md](evaluation.md) | Проверяющему: запуск и что потыкать, прогон сценариев |
 | [threat-model/bdd-catalog.md](threat-model/bdd-catalog.md) | 53 сценария: угроза + тест + шаг демо + строка карты |
 | [threat-model/risk-register.md](threat-model/risk-register.md) | Статус контролей: реализовано vs остаток |
 | [threat-model/personas.md](threat-model/personas.md) | Атакующие и защитники |

@@ -172,6 +172,8 @@ cd tests && pip install -r requirements.txt && pytest -q   # BDD против ж
 
 AuthN — через Keycloak; для локали без Keycloak можно `DEV_AUTH=1` и токены `Bearer dev:<user>:<role>` (иначе dev-токены отклоняются — fail-closed). Профили `core`/`full` — см. [roadmap](docs/roadmap.md).
 
+> **Проверяющему:** пошаговый гайд «запуск и что потыкать» (UI, прогон сценариев, что попробовать «сломать») — [docs/evaluation.md](docs/evaluation.md).
+
 ## Статус
 
 В разработке, итерации [И0–И6](docs/roadmap.md) — всё обязательное к сдаче готово, money-shot'ы гоняются одной командой (`make demo` / `make pipeline`). **73 pytest-функции green** (53 из 54 сценариев каталога; остаётся 1 — ShadowLogic, предел статического анализа, см. [risk-register](docs/threat-model/risk-register.md)). Документация идёт впереди кода намеренно: модель угроз и поведения (BDD) задают, что строим.
@@ -205,6 +207,7 @@ Sirius Argus — контур контроля, а не замена вашем�
 |---|---|
 | [docs/overview.md](docs/overview.md) | Пакет к сдаче: обзор всех узлов и защит на одной странице — читать первым |
 | [docs/integration.md](docs/integration.md) | Встраивание в контур заказчика: что с чем, обязательные условия, параметры, чек-лист онбординга |
+| [docs/evaluation.md](docs/evaluation.md) | Проверяющему: запуск, что потыкать в UI, прогон сценариев, попробовать «сломать» |
 | [docs/roadmap.md](docs/roadmap.md) | Итеративный план реализации (И0–И6), привязка к приоритетам куратора и сценариям |
 | [docs/architecture.md](docs/architecture.md) | Архитектура: компоненты, ER-модель, жизненный цикл, потоки, карта покрытия (схемы Mermaid) |
 | [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A22) и защитников (D1–D10), с кодовыми именами |
