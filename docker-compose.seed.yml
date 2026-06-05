@@ -1,0 +1,11 @@
+# Сид-оверрайд: ТОЛЬКО на время засева демоданных на боксе.
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.seed.yml up -d --build
+#
+# Включает DEV_AUTH=1, чтобы scripts/demo.py мог засеять данные dev-токенами.
+# Засев идёт контейнером ВНУТРИ docker-сети (control-plane:8000 по имени сервиса),
+# host-порт наружу не публикуется. После засева стек поднимается БЕЗ этого файла →
+# control-plane пересоздаётся с DEV_AUTH=0, /api запирается.
+services:
+  control-plane:
+    environment:
+      DEV_AUTH: "1"
