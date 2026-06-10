@@ -9,6 +9,9 @@ up-full:   ## core + observability (Loki/Grafana/Prometheus) + Gitea
 up-test:   ## тест-стек: как core, но малый лимит загрузки (25 МиБ) для сценария DOS-02
 	docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
 
+up-prod:   ## БОЕВОЙ путь: production.yml (oauth2-proxy + Vault prod). Нужны .env.production, TLS-серт Vault, unseal — см. docs/runbooks/deploy-production.md
+	docker compose -f docker-compose.yml -f docker-compose.production.yml --profile full up -d --build
+
 dev:       ## hot-reload control-plane (правки .py без пересборки; НЕ для прод/демо)
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 

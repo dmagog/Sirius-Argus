@@ -254,6 +254,11 @@ def ui_map_run_decision(run: str, decision: str, request: Request, approver: str
     # В dev (заголовка нет) — прежнее поведение: approver из формы из списка MLSecOps-учёток.
     fwd_user = request.headers.get("X-Auth-Request-User") or request.headers.get("X-Auth-Request-Email")
     if fwd_user:
+        # AUD-03: за oauth2-proxy роль приходит в X-Auth-Request-Groups (claim "roles") —
+        # аппрув разрешён ТОЛЬКО носителю роли MLSecOps, а не любому аутентифицированному.
+        groups = [g.strip() for g in request.headers.get("X-Auth-Request-Groups", "").split(",")]
+        if "MLSecOps" not in groups:
+            raise HTTPException(status_code=403, detail="approval requires MLSecOps role")
         approver = fwd_user
     if decision not in decisions.DECISIONS:
         raise HTTPException(status_code=422, detail="decision must be approve|reject")

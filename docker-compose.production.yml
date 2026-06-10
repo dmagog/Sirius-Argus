@@ -42,6 +42,7 @@ services:
       - IPC_LOCK
     volumes:
       - ./infra/vault/vault.prod.hcl:/vault/config/vault.prod.hcl:ro
+      - ./infra/vault/tls:/vault/tls:ro  # tls.crt/tls.key (генерит оператор, НЕ в репозитории — см. рунбук)
       - vault_data:/vault/data           # raft storage — персистентно
     restart: unless-stopped
 
@@ -54,17 +55,20 @@ services:
   control-plane:
     environment:
       DEV_AUTH: "0"                      # в проде всегда 0
-      # DRAFT: control-plane должен логиниться в Vault по AppRole (а не VAULT_TOKEN=root).
-      # Требует code-change в control-plane/app/vault.py (AppRole login → short-lived token).
+      # AppRole-логин в Vault по env-кредам (vault.py: env-приоритет, фолбэк на файл-том).
+      # role_id/secret_id выдаёт vault-init-prod.sh после unseal → в .env.production.
       VAULT_ROLE_ID: ${VAULT_ROLE_ID:-}
       VAULT_SECRET_ID: ${VAULT_SECRET_ID:-}
+      VAULT_ADDR: https://vault:8200    # prod-Vault слушает HTTPS (vault.prod.hcl)
+      VAULT_KV_MOUNT: secret             # как сеет vault-init-prod.sh (secret/sirius/*)
+      VAULT_SKIP_VERIFY: "1"             # внутренний self-signed TLS Vault; в идеале — VAULT_CACERT с CA (рунбук)
       SIGNING_SEED: ${SIGNING_SEED:?задай постоянный SIGNING_SEED из секрет-стора}
       SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:?задай стойкий SIRIUS_SERVICE_TOKEN}
       CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:?задай CI_WEBHOOK_SECRET}
-      # AUD-05: проверка audience/issuer OIDC-токена. Задать ПОСЛЕ сверки, что токены клиента
-      # control-plane реально несут эти aud/iss (иначе все токены будут отвергнуты). Пусто = выкл.
+      # AUD-05: issuer известен из PUBLIC_HOST — включаем безопасно (свои токены не отвергаются).
+      # OIDC_AUDIENCE — только после сверки aud (иначе все токены отвергнутся), потому опционален.
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://${PUBLIC_HOST}/auth/realms/sirius}
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
-      OIDC_ISSUER: ${OIDC_ISSUER:-}
     restart: unless-stopped
 
   # --- AuthN периметра UI: oauth2-proxy + Keycloak (закрывает login-less UI) -
@@ -85,9 +89,20 @@ services:
       OAUTH2_PROXY_REVERSE_PROXY: "true"
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      # AUD-03: запрашиваем claim ролей и маппим в groups → control-plane получит
+      # X-Auth-Request-Groups и пустит к аппруву только MLSecOps (pages.ui_map_run_decision).
+      OAUTH2_PROXY_SCOPE: "openid email profile roles"
+      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: roles
     networks: [internal]
     depends_on: [keycloak]
     restart: unless-stopped
+
+  # keycloak-init на prod-пути: заводит клиент sirius-ui (oauth2-proxy) с redirect по PUBLIC_HOST.
+  keycloak-init:
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?задай PUBLIC_HOST}
+      UI_OIDC_CLIENT_ID: ${UI_OIDC_CLIENT_ID:-sirius-ui}
+      UI_OIDC_CLIENT_SECRET: ${UI_OIDC_CLIENT_SECRET:?задай секрет клиента sirius-ui}
 
   # --- Периметр: Caddy с HSTS/заголовками, forward_auth для UI --------------
   reverse-proxy:
