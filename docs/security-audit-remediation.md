@@ -36,13 +36,13 @@
 |---|:--:|---|
 | AUD-01 | ✅ | `infra/keycloak-prod/realm-sirius-prod.json` без демо-персон и с выключенным ROPC; монтируется в `prod.yml` и `production.yml` |
 | AUD-02 | ✅ | `basic_auth` в `Caddyfile.prod` (использует уже пробрасываемые `DEMO_USER`/`DEMO_PASS_HASH`) |
-| AUD-03 | 🟡 | UI-аппрув берёт личность из forward_auth (`X-Auth-Request-User`), не из формы (код); смягчено Basic Auth; полный энфорс роли — oauth2-proxy путь ([рунбук](runbooks/security-hardening-ops.md)) |
+| AUD-03 | ✅ (prod-путь) | На `production.yml`+oauth2-proxy UI-аппрув пускает только роль **MLSecOps** (`X-Auth-Request-Groups`); identity-заголовки стрипаются на периметре. На `prod.yml`-пути — смягчено Basic Auth |
 | AUD-04 | 🟡 | `/versions` больше не доверяет клиентскому ярлыку `signature` (код); политика «гейт и для internal-моделей» — решение + [рунбук](runbooks/security-hardening-ops.md) |
 | AUD-05 | ✅ | `auth.py`: проверка `aud`/`iss` при заданных `OIDC_AUDIENCE`/`OIDC_ISSUER` (в проде — opt-in) |
 | AUD-06 | ✅ | `main.py`: в лог идёт только тип схемы, не значение токена |
-| AUD-07 | 🟡 | Смягчено Basic Auth (нет анонимного доступа); по-ролевое маскирование в UI — остаток |
+| AUD-07 | 🟡→✅ (prod-путь) | `production.yml`+oauth2-proxy убирает анонимный доступ к UI; PII в карточке маскируется по умолчанию; полный per-role unmask (по роли из forward_auth) — остаток |
 | AUD-08 | 📝 | Триггер append-only на месте (тест зелёный); non-owner роль БД — операционный остаток |
-| AUD-09 | ⏳ | Прод-оверлей Vault существует; unseal — ручной операционный шаг; внешний доступ закрыт Basic Auth |
+| AUD-09 | ✅ (код) / ⏳ (оператор) | `vault.py` AppRole-логин из env (code-change TODO закрыт) + `production.yml` Vault prod (HTTPS+raft) + `vault-init-prod.sh` согласован; unseal/TLS-серт/auto-unseal — операторские шаги ([рунбук](runbooks/deploy-production.md)) |
 | AUD-10 | ✅ | `signing.py`: fail-fast в проде (нет ключа/seed → отказ); dev-фолбэк сохранён |
 | AUD-11 | ✅ | `storage.py`: версионирование бакета карантина (перезапись не уничтожает одобренные байты); WORM — операционно |
 | AUD-12 | ✅ | `auth.py`+`bus.py`: durable-отзыв доступа через Redis (in-memory как кэш/фолбэк) |
