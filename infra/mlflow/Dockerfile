@@ -6,3 +6,8 @@ FROM ghcr.io/mlflow/mlflow:v2.18.0
 # резолв botocore в окружении образа mlflow (boto3==1.35.99 → botocore «from versions: none»).
 # Для воспроизводимого пина boto3/botocore — отдельный constraints-файл (pip-tools), не inline.
 RUN pip install --no-cache-dir --retries 5 --timeout 120 psycopg2-binary==2.9.10 boto3
+
+# basic-auth: реестр под аутентификацией (mlflow server --app-name basic-auth), креды из env
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
