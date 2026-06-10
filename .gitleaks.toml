@@ -1,0 +1,36 @@
+# Конфиг gitleaks для CI-гейта (.github/workflows/security.yml).
+# Расширяет дефолтный набор правил и добавляет allowlist для ДОКУМЕНТИРОВАННЫХ
+# дев/пример-плейсхолдеров — не реальных секретов. Реальные секреты (настоящие
+# AWS-ключи, PEM, высокоэнтропийные токены) по-прежнему ловятся.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Документация, .example-файлы, дев-realm и заведомо дев-дефолты/плейсхолдеры"
+# Пути, где секрето-подобные строки — это примеры/объяснения, а не реальные секреты:
+paths = [
+  '''docs/.*''',                              # пояснения аудита (в т.ч. цитаты find'ов сканеров)
+  '''.*\.example$''',                         # .env*.example — шаблоны
+  '''infra/keycloak/realm-sirius\.json''',    # dev-realm: демо-персоны намеренны (для тестов)
+  '''infra/keycloak-prod/.*''',               # прод-realm без секретов (пояснения)
+  '''\.gitleaks\.toml''',
+]
+# Заведомые дев-дефолты/плейсхолдеры (в base compose / CI-стабах):
+regexes = [
+  '''change-me-[a-z-]+''',
+  '''[a-z]+-oidc-dev''',
+  '''placeholder''',
+  '''5e1f17a0''',
+  '''svc-serving-local-dev''',
+  '''sirius-root-dev''',
+  '''sirius-(redis|minio)''',
+  '''Ed25519PrivateKey''',
+]
+# Старые коммиты с дев-паролями БД в docker-compose.yml (до перехода на ${VAR:-default}) —
+# ложняки/дев-дефолты, не реальные секреты (для чистоты full-history-скана):
+commits = [
+  "8d023e255a49a07d1ca0208cd986998545e241e4",
+  "dd1a43172db3b5109c1ccce064a080e0d93db05b",
+  "e730599c9f99d19c6bec71e68012e6f0672ed81b",
+  "6487bd6850fc05adc8a6ac9213933883b0751052",
+]
