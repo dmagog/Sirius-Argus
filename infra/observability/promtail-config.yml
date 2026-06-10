@@ -18,3 +18,25 @@ scrape_configs:
       - source_labels: ['__meta_docker_container_name']
         regex: '/(.*)'
         target_label: container
+    # Редакция секретов из stdout ВСЕХ контейнеров ДО отправки в Loki. App-фильтр
+    # (control-plane/app/logging_setup.RedactingFilter) маскирует только Python-логи control-plane,
+    # а сюда стекается и Vault, и Keycloak/MinIO. ВАЖНО (поведение promtail): replace заменяет
+    # ЗАХВАЧЕННУЮ ГРУППУ на литерал (capture-ссылки $1 НЕ разворачиваются) — поэтому в каждом
+    # выражении ровно одна группа вокруг ЗНАЧЕНИЯ секрета, префикс (вне группы) сохраняется.
+    pipeline_stages:
+      # Authorization: Bearer <token>
+      - replace:
+          expression: '(?i)bearer\s+([A-Za-z0-9._\-]{6,})'
+          replace: '[REDACTED]'
+      # Vault service-токены (hvs.<...>)
+      - replace:
+          expression: 'hvs\.([A-Za-z0-9._\-]{6,})'
+          replace: '[REDACTED]'
+      # Vault root-токен / unseal-ключ / secret_id / role_id
+      - replace:
+          expression: '(?i)(?:root[ _]?token|unseal[ _]?key|secret[ _]?id|role[ _]?id)\s*[:=]\s*(\S+)'
+          replace: '[REDACTED]'
+      # key=value / key: "value" для секрето-несущих ключей
+      - replace:
+          expression: '(?i)(?:password|secret|token|seed|api[_-]?key|x-amz-signature)["'']?\s*[:=]\s*["'']?([^\s"'',&]{4,})'
+          replace: '[REDACTED]'
