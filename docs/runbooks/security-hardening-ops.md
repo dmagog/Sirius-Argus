@@ -108,11 +108,12 @@ to pass → выбрать `static-security` и `compose-validate`; Require PR b
   деплой идёт через `prod.yml` БЕЗ observability-оверрайдов. Продублировать (ports `!override []`,
   `ALLOW_SIGN_UP=false`, `GRAFANA_PASSWORD:?`, `DISABLE_REGISTRATION`) в `prod.yml`, либо перейти на
   `production.yml`. В base: Grafana биндить на `127.0.0.1:3000` и убрать из сети `edge`.
-- **Loki/Promtail.** Loki без ретеншна и без тома (логи теряются на рестарте) — смонтировать
-  `loki-config.yml` (retention) + named volume. Promtail отгружает stdout ВСЕХ контейнеров, а
-  redact-фильтр секретов живёт только в Python-логгере control-plane → Vault dev печатает root-токен в
-  stdout → Loki. Добавить в promtail `pipeline_stages` с regex-replace (Bearer/secret/token/X-Amz-*),
-  либо исключить vault/keycloak/minio из скрейпа, либо поднять их log-level.
+- **Loki/Promtail.** ✅ Сделано: `infra/observability/loki-config.yml` (filesystem-storage +
+  retention 7д) + named volume `loki_data` (раньше логи терялись на рестарте); в promtail добавлены
+  `pipeline_stages` redact (Bearer / hvs.* / root-token+unseal / key=value-секреты) — секреты из stdout
+  ВСЕХ контейнеров маскируются ДО отправки в Loki (раньше app-фильтр покрывал только control-plane).
+  Проверено end-to-end: инъецированный секрет приходит в Loki как `[REDACTED]`.
+  Остаток: для критичного аудита Vault лучше отдельный файловый sink, а не stdout→Loki (ниже).
 - **MLflow без auth.** Реестр-backend MLflow не аутентифицирован — «единственная дверь» держится только
   на сетевой изоляции; теги (stage/criticality/signature) подделываемы изнутри сети. Включить
   `mlflow server --app-name basic-auth` с кредами из Vault; control-plane не доверять MLflow как

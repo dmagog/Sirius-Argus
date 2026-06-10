@@ -20,6 +20,7 @@ volumes:
   minio_data: {}
   redis_data: {}
   grafana_data: {}
+  loki_data: {}
   mlflow_pg_data: {}
   vault_creds: {}  # AppRole role_id/secret_id: vault-init пишет, control-plane читает
 
@@ -252,6 +253,10 @@ services:
   # ---------- full: observability + git ----------
   loki:
     image: grafana/loki:3.2.0
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./infra/observability/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki     # персистентность логов + ретеншн (раньше тома не было)
     networks: [internal]
     profiles: [full]
 
