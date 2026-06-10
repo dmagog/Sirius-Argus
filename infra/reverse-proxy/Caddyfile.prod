@@ -1,14 +1,40 @@
 # Публичный периметр демо-стенда. Авто-TLS (Let's Encrypt) для {$PUBLIC_HOST}.
-# UI control-plane намеренно БЕЗ собственного логина. Периметр ОТКРЫТ — форму входа убрали для демо,
-# чтобы зритель сразу попадал в контур и получал впечатление. /api заперт DEV_AUTH=0; /metrics не отдаём.
-# Внимание: единственное login-less пишущее действие — аппрув-гейт (/ui/map/run/...); его теперь
-# может нажать любой, кто знает URL (промоушен в прод всё равно недоступен — это /api).
+# UI control-plane намеренно БЕЗ собственного логина — поэтому ВЕСЬ периметр закрыт
+# HTTP Basic Auth (логин/хэш генерит scripts/deploy_netangels.sh: DEMO_USER/DEMO_PASS_HASH).
+# Это закрывает AUD-02 (открытый периметр), AUD-03/07/29 (login-less пишущий аппрув-гейт и
+# UI-страницы анонимно) и слой к AUD-01 (ROPC к Keycloak теперь только из-за Basic Auth).
+# /api заперт DEV_AUTH=0; /metrics не отдаём. Security-заголовки — как в Caddyfile.production (AUD-15).
 {$PUBLIC_HOST} {
 	encode zstd gzip
 
-	# периметр: жёсткий потолок тела — оверсайз режется на входе
+	# AUD-02: весь периметр за Basic Auth (включая /auth — чтобы ROPC к Keycloak был недоступен анонимно).
+	# Хэш — bcrypt из `caddy hash-password` (генерится в deploy_netangels.sh). Внутренний JWKS-фетч
+	# control-plane идёт мимо Caddy (http://keycloak:8080), поэтому Basic Auth его не ломает.
+	basic_auth {
+		{$DEMO_USER} {$DEMO_PASS_HASH}
+	}
+
+	# AUD-15: security-заголовки на боевом периметре (были только в неиспользуемом Caddyfile.production)
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	# AUD-03: на этом контуре нет oauth2-proxy — клиент НЕ должен наделять себя identity-заголовками.
+	# Стрипаем входящие X-Auth-Request-* до проксирования, иначе UI-аппрув можно подделать
+	# (pages.py доверяет X-Auth-Request-User). Без oauth2-proxy ветка forward_auth просто не активна.
+	request_header -X-Auth-Request-User
+	request_header -X-Auth-Request-Email
+
+	# периметр: потолок тела — оверсайз режется на входе. Выше app-лимита MAX_UPLOAD_BYTES (2 ГиБ),
+	# чтобы реальные модели проходили; связывающий guard — на app-уровне (AUD-20).
 	request_body {
-		max_size 2GB
+		max_size 3GB
 	}
 
 	route {

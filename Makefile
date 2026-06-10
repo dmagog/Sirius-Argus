@@ -1,10 +1,16 @@
-.PHONY: up up-full dev down config test demo pipeline selfscan logs ps
+.PHONY: up up-full up-test dev down config test demo pipeline selfscan logs ps
 
-up:        ## core: поднять MVP-стек
+up:        ## core: поднять MVP-стек (лимит загрузки 2 ГиБ — реальные модели проходят)
 	docker compose up -d --build
 
 up-full:   ## core + observability (Loki/Grafana/Prometheus) + Gitea
 	docker compose --profile full up -d --build
+
+up-test:   ## тест-стек: как core, но малый лимит загрузки (25 МиБ) для сценария DOS-02
+	docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+
+up-prod:   ## БОЕВОЙ путь: production.yml (oauth2-proxy + Vault prod). Нужны .env.production, TLS-серт Vault, unseal — см. docs/runbooks/deploy-production.md
+	docker compose -f docker-compose.yml -f docker-compose.production.yml --profile full up -d --build
 
 dev:       ## hot-reload control-plane (правки .py без пересборки; НЕ для прод/демо)
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
@@ -15,7 +21,7 @@ down:      ## остановить и убрать контейнеры
 config:    ## валидация compose-конфига
 	docker compose config -q && echo "compose: OK"
 
-test:      ## pytest-bdd против поднятого стека
+test:      ## pytest-bdd против поднятого стека (для полного набора с DOS-02: сначала `make up-test`)
 	cd tests && python -m pytest -q
 
 demo:      ## живой прогон money-shot'ов по поднятому стеку

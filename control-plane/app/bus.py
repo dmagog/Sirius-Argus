@@ -32,7 +32,9 @@ def publish(event_type: str, payload: dict) -> bool:
     if not c:
         return False
     try:
-        fields = {"type": event_type, **{k: str(v) for k, v in payload.items()}}
+        # служебный "type" не перетираем payload'ом; значения ограничиваем по длине
+        fields = {"type": str(event_type)}
+        fields.update({str(k): str(v)[:512] for k, v in payload.items() if k != "type"})
         c.xadd(STREAM, fields, maxlen=10000, approximate=True)
         return True
     except Exception:
@@ -91,3 +93,27 @@ def key_count(key: str) -> int:
         return int(c.zcard(key)) if c else 0
     except Exception:
         return 0
+
+
+def flag(key: str) -> bool:
+    """Поставить устойчивый флаг (без TTL) — для durable-состояния, общего всем воркерам
+    (напр. отзыв доступа, ACC-03/AUD-12). True — записано, False — Redis недоступен (fail-soft)."""
+    c = _conn()
+    if not c:
+        return False
+    try:
+        c.set(key, "1")
+        return True
+    except Exception:
+        return False
+
+
+def flagged(key: str) -> bool:
+    """Проверить устойчивый флаг. False, если нет или Redis недоступен (fail-soft)."""
+    c = _conn()
+    if not c:
+        return False
+    try:
+        return bool(c.exists(key))
+    except Exception:
+        return False

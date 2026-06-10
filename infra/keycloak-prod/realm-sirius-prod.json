@@ -1,0 +1,37 @@
+{
+  "_comment": "ПРОД-realm Sirius (AUD-01). В отличие от ../keycloak/realm-sirius.json (dev/тесты): НЕТ демо-персон с паролем=логину и клиент `sirius` НЕ позволяет ROPC. Имя realm то же (`sirius`) — JWKS-URL control-plane не меняется. Пользователи/IdP заводятся отдельно (oauth2-proxy + клиент sirius-ui, см. docker-compose.production.yml), здесь их намеренно нет: на core-стенде UI закрыт Basic Auth, а вход через realm не используется.",
+  "realm": "sirius",
+  "enabled": true,
+  "displayName": "Sirius Argus",
+  "sslRequired": "external",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "roles": {
+    "realm": [
+      { "name": "DS", "description": "Data Scientist" },
+      { "name": "DE", "description": "Data Engineer" },
+      { "name": "MLSecOps", "description": "Security authority" },
+      { "name": "Product", "description": "Product / model owner" },
+      { "name": "CEO", "description": "Executive read-only" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "sirius",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "users": []
+}

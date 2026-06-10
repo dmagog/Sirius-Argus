@@ -14,7 +14,7 @@ from collections import defaultdict, deque
 import numpy as np
 import requests
 from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sklearn.datasets import load_iris
 from sklearn.ensemble import GradientBoostingClassifier, IsolationForest
 from sklearn.linear_model import LogisticRegression
@@ -77,7 +77,8 @@ def _startup():
 
 
 class PredictIn(BaseModel):
-    features: list[float]
+    # ограничение длины: оверсайз-вектор отвергается валидацией ДО np.array (memory-DoS вне rate-limit)
+    features: list[float] = Field(max_length=64)
 
 
 def _client(req: Request) -> str:

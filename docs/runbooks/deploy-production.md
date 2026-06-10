@@ -151,13 +151,49 @@ Vault и Keycloak в production-режиме, управляемые секре�
 - `infra/reverse-proxy/Caddyfile.production` — HSTS + security-заголовки + `forward_auth` для UI.
 - `.env.production.example` — шаблон секретов без дефолтов.
 
-**Осталось довести и протестировать:**
-- **code-change:** `control-plane/app/vault.py` — логин по AppRole (role_id/secret_id), а не статичный root-токен.
-- Keycloak: prod-realm БЕЗ демо-персон; образ с `kc.sh build` для `--optimized`; brute-force в realm-настройках.
-- Vault: реальный TLS-сертификат и выбранный auto-unseal (KMS); операторский `init` + unseal.
-- oauth2-proxy: клиент `sirius-ui` в Keycloak + cookie-secret; проверить `forward_auth`-редирект с Caddy.
-- CI-пайплайн деплоя (Gitea/GitHub Actions → деплой-скрипт на узле) как единый вход в прод.
-- Прогон всего каркаса на стейджинге + чек-лист go-live.
+**Сделано в коде/конфиге (статически провалидировано, требует прогона на стейджинге):**
+- ✅ **code-change** `control-plane/app/vault.py` — AppRole-логин из env (`VAULT_ROLE_ID`/`VAULT_SECRET_ID`, приоритет над файл-томом) + настраиваемый TLS (`VAULT_SKIP_VERIFY`/`VAULT_CACERT`).
+- ✅ `infra/keycloak-prod/realm-sirius-prod.json` — prod-realm без демо-персон и без ROPC (монтируется в `production.yml`).
+- ✅ `clients-init.sh` — заводит клиент `sirius-ui` (oauth2-proxy) с redirect по `PUBLIC_HOST` + маппер ролей.
+- ✅ `vault-init-prod.sh` — посев секретов (`secret/sirius/*`), политика, AppRole — согласовано с `vault.py`.
+- ✅ `production.yml` — oauth2-proxy запрашивает claim `roles` → `X-Auth-Request-Groups`; Caddyfile.production его прокидывает; UI-аппрув (`pages.ui_map_run_decision`) пускает только роль MLSecOps; control-plane ходит в Vault по HTTPS+AppRole; `OIDC_ISSUER` авто из `PUBLIC_HOST`.
+- ✅ `make up-prod` — подъём боевого пути (`production.yml --profile full`).
+
+**Осталось операторски (на боевом узле, не из репозитория):**
+- TLS-серт prod-Vault (`infra/vault/tls/tls.{crt,key}` — генерация в [tls/README](../../infra/vault/tls/README.md)) и выбранный auto-unseal (KMS) либо ручной unseal с раздачей ключей хранителям.
+- Keycloak: образ с `kc.sh build` для `--optimized` (сейчас `start --import-realm` без оптимизации); реальные учётки через федерацию (LDAP/AD/IdP).
+- Реальный домен + Let's Encrypt (Caddy выпустит при открытых 80/443 и A-записи); браузерный прогон OIDC-входа через oauth2-proxy.
+- `.env.production`: заполнить все `:?`-секреты (вкл. `UI_OIDC_CLIENT_SECRET`, `OAUTH2_PROXY_COOKIE_SECRET=$(openssl rand -base64 32)`, `VAULT_ROLE_ID`/`VAULT_SECRET_ID` из `vault-init-prod.sh`).
+- CI-пайплайн деплоя как единый вход в прод; прогон всего каркаса на стейджинге + чек-лист go-live.
+
+## Запуск боевого пути (последовательность)
+
+```sh
+# 0. .env.production (из .env.production.example), все секреты из стора; TLS-серт Vault:
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+  -keyout infra/vault/tls/tls.key -out infra/vault/tls/tls.crt -days 825 \
+  -subj "/CN=vault" -addext "subjectAltName=DNS:vault,DNS:localhost,IP:127.0.0.1"
+
+# 1. Поднять стек (Vault стартует ЗАпечатанным):
+set -a; . ./.env.production; set +a
+make up-prod
+
+# 2. Операторский init+unseal Vault (ключи — хранителям, не на узле):
+docker compose -f docker-compose.yml -f docker-compose.production.yml exec vault vault operator init   # сохранить unseal-ключи + root offline
+docker compose ... exec vault vault operator unseal   # ×3 порогом
+
+# 3. Завести политику/AppRole/секреты (под операторским VAULT_TOKEN):
+docker compose ... exec -e VAULT_TOKEN=<operator> -e SIGNING_SEED=<...> -e SIRIUS_SERVICE_TOKEN=<...> \
+  vault sh -c 'sh /vault/init/vault-init-prod.sh'   # выдаст VAULT_ROLE_ID / VAULT_SECRET_ID
+# впиши role_id/secret_id в .env.production → пересоздай control-plane:
+make up-prod
+
+# 4. Префлайт: /api с dev-токеном → 401; UI требует OIDC; health.vault.secrets_source=vault.
+```
+
+> Vault во внутренней сети, наружу не публикуется; `VAULT_SKIP_VERIFY=1` допустим для self-signed,
+> но предпочтительно положить CA и задать `VAULT_CACERT`. `vault-init-prod.sh` смонтировать в
+> контейнер vault (или запускать с хоста с `VAULT_ADDR` на узел).
 
 ---
 

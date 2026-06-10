@@ -245,15 +245,24 @@ def map_node_view(node_id: str, run: str = ""):
 
 
 @router.post("/ui/map/run/{run}/{decision}", response_class=HTMLResponse)
-def ui_map_run_decision(run: str, decision: str, approver: str = Form(""), reason: str = Form("")):
+def ui_map_run_decision(run: str, decision: str, request: Request, approver: str = Form(""), reason: str = Form("")):
     """UI-действие аппрув-гейта из инспектора прогона: зафиксировать решение (approve|reject) и
-    вернуть обновлённую внутренность инспектора. У control-plane UI нет отдельного логина
-    (SSO — у ops-консолей), поэтому аппрувер выбирается из MLSecOps-учёток; запись идёт
-    общим кодом decisions.record_decision (Approval + аудит). Реальный separation of duties
-    (аппрувер ≠ владелец, аппрувер ≠ промоутер, привязка к hash) энфорсится на промоушене."""
+    вернуть обновлённую внутренность инспектора. Реальный separation of duties (аппрувер ≠
+    владелец, аппрувер ≠ промоутер, привязка к hash) энфорсится на промоушене."""
+    # AUD-03: за периметром с oauth2-proxy (forward_auth) реальная личность приходит заголовком
+    # X-Auth-Request-User/Email — используем ЕЁ как аппрувера, а не самозаявленное поле формы.
+    # В dev (заголовка нет) — прежнее поведение: approver из формы из списка MLSecOps-учёток.
+    fwd_user = request.headers.get("X-Auth-Request-User") or request.headers.get("X-Auth-Request-Email")
+    if fwd_user:
+        # AUD-03: за oauth2-proxy роль приходит в X-Auth-Request-Groups (claim "roles") —
+        # аппрув разрешён ТОЛЬКО носителю роли MLSecOps, а не любому аутентифицированному.
+        groups = [g.strip() for g in request.headers.get("X-Auth-Request-Groups", "").split(",")]
+        if "MLSecOps" not in groups:
+            raise HTTPException(status_code=403, detail="approval requires MLSecOps role")
+        approver = fwd_user
     if decision not in decisions.DECISIONS:
         raise HTTPException(status_code=422, detail="decision must be approve|reject")
-    if approver not in decisions.UI_APPROVERS:
+    if not fwd_user and approver not in decisions.UI_APPROVERS:
         raise HTTPException(status_code=403, detail="approver must be an MLSecOps account")
     mvid = runs._parse_run_id(run)
     if mvid is None:

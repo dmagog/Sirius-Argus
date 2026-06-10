@@ -1,13 +1,14 @@
 # Обязательное ревью на чувствительные изменения (separation of duties, риск ACC-02/GT-1).
-# Владелец — РОЛЬ (группа-мейнтейнеров), не конкретная личность.
-# TODO: заменить плейсхолдер на реальную GitLab-группу проекта.
+# Канон — GitHub (dmagog/Sirius-Argus). Владелец-ревьюер задан реальным аккаунтом/командой;
+# для группового ревью завести GitHub team (напр. @dmagog/sirius-maintainers) и заменить здесь.
 
-* @secure-mlops-maintainers
+* @dmagog
 
 # Контур безопасности требует ревью владельца:
-/ci/                     @secure-mlops-maintainers
-/.pre-commit-config.yaml @secure-mlops-maintainers
-/SECURITY.md             @secure-mlops-maintainers
-/CODEOWNERS              @secure-mlops-maintainers
-/docs/threat-model/      @secure-mlops-maintainers
-/docs/adr/               @secure-mlops-maintainers
+/ci/                     @dmagog
+/.github/                @dmagog
+/.pre-commit-config.yaml @dmagog
+/SECURITY.md             @dmagog
+/CODEOWNERS              @dmagog
+/docs/threat-model/      @dmagog
+/docs/adr/               @dmagog

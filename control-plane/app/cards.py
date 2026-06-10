@@ -191,7 +191,10 @@ def dataset_card(dataset_id):
             "id": d.id, "name": d.name, "sensitivity": d.sensitivity, "source": d.source or "—",
             "owner": d.owner or "—", "trusted": trusted, "status": status,
             "versions": [{"id": dv.id, "hash": dv.hash or "—"} for dv in versions],
-            "columns": [{"name": c.name, "pii": bool(c.is_pii), "sample": c.sample or "—"} for c in columns],
+            # AUD-07: UI-карточка без идентичности — PII-сэмплы маскируем по умолчанию (как заявляет note
+            # в ui/cards.py). Снятие маски для допущенных ролей — на пути с forward_auth (см. рунбук).
+            "columns": [{"name": c.name, "pii": bool(c.is_pii),
+                         "sample": ("***" if c.is_pii else (c.sample or "—"))} for c in columns],
             "findings": findings, "consumers": consumers, "timeline": timeline,
             "open": sum(1 for f in f_rows if f.status == "open"),
         }

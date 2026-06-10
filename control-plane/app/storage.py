@@ -40,6 +40,14 @@ def _s3():
                 _client.create_bucket(Bucket=_BUCKET)
             except Exception as e:
                 logger.warning("MinIO bucket %s недоступен: %s", _BUCKET, e)
+        # AUD-11: версионирование бакета — перезапись объекта НЕ уничтожает прежние (одобренные)
+        # байты, а заводит новую версию. В связке с MON-05 (verify-on-prod) подмена и обнаружима,
+        # и обратима. Полный WORM (Object-Lock) требует создания бакета с lock — см. рунбук.
+        try:
+            _client.put_bucket_versioning(Bucket=_BUCKET,
+                                          VersioningConfiguration={"Status": "Enabled"})
+        except Exception as e:
+            logger.warning("MinIO versioning на %s не включено (AUD-11): %s", _BUCKET, e)
     return _client
 
 

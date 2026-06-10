@@ -1,0 +1,12 @@
+# Тест-оверлей: только для прогона pytest-bdd.
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build   (= make up-test)
+#
+# Зачем отдельно: сценарий DOS-02 (tests/test_limits.py) шлёт 26 МиБ и ждёт 413, т.е. требует
+# МАЛЕНЬКОГО лимита загрузки. В обычном стеке (make up) лимит — 2 ГиБ (AUD-20), чтобы проходили
+# реальные модели. Здесь control-plane переопределяется на 25 МиБ только на время тестов — так
+# DOS-02 остаётся зелёным, не ограничивая боевой/демо-стек.
+services:
+  control-plane:
+    environment:
+      DEV_AUTH: "1"                 # тесты ходят dev-токенами и ROPC по дев-realm
+      MAX_UPLOAD_BYTES: "26214400"  # 25 МиБ — порог для DOS-02 (test_limits шлёт 26 МиБ → 413)

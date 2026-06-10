@@ -11,22 +11,36 @@ import jwt
 from fastapi import Header, HTTPException
 from jwt import PyJWKClient
 
+from . import bus
+
 DEV_AUTH = os.environ.get("DEV_AUTH", "0") == "1"
 JWKS_URL = os.environ.get("KEYCLOAK_JWKS_URL", "")
+# AUD-05: ожидаемые audience/issuer OIDC-токена. Если заданы — токен, выпущенный для другого
+# клиента/realm (grafana/gitea/minio), отвергается. Пусто → проверка выключена (dev/тесты, где
+# токен берут ROPC-ом у клиента `sirius`). В проде задаём через env (см. .env.production.example).
+OIDC_AUDIENCE = os.environ.get("OIDC_AUDIENCE", "")
+OIDC_ISSUER = os.environ.get("OIDC_ISSUER", "")
 ROLES = {"DS", "DE", "MLSecOps", "Product", "CEO"}
 # Сервис-аккаунт (service-to-service): pre-shared токен для serving→control-plane.
 # Не human-роль, а системный актор Service с узким правом (runtime.event). Независим от DEV_AUTH.
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
 SERVICE_SUB = os.environ.get("SERVICE_SUB", "svc:serving")
 _REVOKED = set()  # ACC-03: отозванные (offboarded) субъекты — доступ закрывается немедленно
+_REVOKE_PREFIX = "sirius:revoked:"  # AUD-12: durable-отзыв в Redis (переживает рестарт, виден всем воркерам)
 
 
 def revoke(sub: str):
     _REVOKED.add(sub)
+    bus.flag(_REVOKE_PREFIX + sub)  # fail-soft: если Redis недоступен — остаётся in-memory
 
 
 def is_revoked(sub: str) -> bool:
-    return sub in _REVOKED
+    if sub in _REVOKED:
+        return True
+    if bus.flagged(_REVOKE_PREFIX + sub):  # durable-источник (другой воркер/после рестарта)
+        _REVOKED.add(sub)  # подтянуть в локальный кэш
+        return True
+    return False
 
 
 _jwks_client = None
@@ -78,7 +92,7 @@ def get_principal(authorization: str = Header(default="")) -> "Principal":
         parts = token.split(":", 2)
         if len(parts) != 3 or parts[2] not in ROLES:
             raise HTTPException(status_code=401, detail="bad dev token")
-        if parts[1] in _REVOKED:
+        if is_revoked(parts[1]):  # AUD-12: durable-отзыв (Redis), симметрично OIDC-пути (а не только in-memory)
             raise HTTPException(status_code=401, detail="access revoked (offboarded)")
         return Principal(parts[1], [parts[2]])
 
@@ -88,11 +102,18 @@ def get_principal(authorization: str = Header(default="")) -> "Principal":
         raise HTTPException(status_code=401, detail="auth backend unavailable")
     try:
         signing_key = client.get_signing_key_from_jwt(token)
-        claims = jwt.decode(token, signing_key.key, algorithms=["RS256"], options={"verify_aud": False})
+        # AUD-05: aud/iss проверяем, только если заданы (иначе — прежнее поведение для dev/тестов)
+        opts = {"verify_aud": bool(OIDC_AUDIENCE)}
+        kw = {}
+        if OIDC_AUDIENCE:
+            kw["audience"] = OIDC_AUDIENCE
+        if OIDC_ISSUER:
+            kw["issuer"] = OIDC_ISSUER
+        claims = jwt.decode(token, signing_key.key, algorithms=["RS256"], options=opts, **kw)
     except Exception:
         raise HTTPException(status_code=401, detail="invalid token")
     roles = (claims.get("realm_access") or {}).get("roles", [])
     sub = claims.get("sub", "unknown")
-    if sub in _REVOKED:
+    if is_revoked(sub):  # AUD-12: durable-отзыв (Redis), а не только in-memory
         raise HTTPException(status_code=401, detail="access revoked (offboarded)")
     return Principal(sub, [r for r in roles if r in ROLES])

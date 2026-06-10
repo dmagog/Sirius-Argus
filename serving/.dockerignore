@@ -1,0 +1,8 @@
+# AUD-27: не тащить в build-контекст/слои образа лишнее и секреты
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.env
+.env.*
+.git/
+.gitignore

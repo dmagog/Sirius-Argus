@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
@@ -76,14 +77,25 @@ def ci_scan(body: CiScanIn, p: Principal = Depends(require("ci.scan"))):
     return {"passed": passed, "ref": body.ref, "findings": findings}
 
 
+# AUD-23: repo/path приходят из payload вебхука — валидируем перед подстановкой в URL Gitea
+# (защита от SSRF/path-traversal к другим эндпоинтам/репозиториям).
+_REPO_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+
+
+def _safe_path(p: str) -> bool:
+    return bool(p) and ".." not in p and not p.startswith("/") and "\x00" not in p
+
+
 def _fetch_changed_files(repo, sha, payload):
-    if not (repo and sha and GITEA_TOKEN):
+    if not (repo and sha and GITEA_TOKEN) or not _REPO_RE.match(repo):
         return []
     paths = set()
     for c in payload.get("commits", []):
         paths.update((c.get("added") or []) + (c.get("modified") or []))
     files = []
     for path in list(paths)[:20]:
+        if not _safe_path(path):  # AUD-23: пропускаем traversal/абсолютные пути
+            continue
         try:
             r = requests.get(f"{GITEA_URL}/api/v1/repos/{repo}/raw/{path}", params={"ref": sha},
                              headers={"Authorization": f"token {GITEA_TOKEN}"}, timeout=4)
@@ -112,17 +124,20 @@ async def ci_webhook(request: Request):
     Подпись HMAC обязательна (поддельный вебхук отвергается, CI-01). Изменённые файлы
     тянутся из Gitea API, гоняются через _ci_gate; статус ставится обратно (best-effort)."""
     body = await request.body()
-    if CI_WEBHOOK_SECRET:
-        expected = hmac.new(CI_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(request.headers.get("X-Gitea-Signature", ""), expected):
-            audit.append_event(actor="gitea-webhook", action="ci.webhook.rejected", obj="ci", was_authorized=False)
-            raise HTTPException(status_code=401, detail="invalid webhook signature")
-        # anti-replay: вебхук одноразовый. Nonce — X-Gitea-Delivery (или сама подпись) — кладётся в
-        # Redis с TTL; повтор того же подписанного запроса отбивается (HMAC сам по себе от replay не спасает).
-        nonce = request.headers.get("X-Gitea-Delivery") or expected
-        if bus.once(f"ci:webhook:nonce:{nonce}", 600) is False:  # False=уже видели; None=Redis недоступен (не блокируем)
-            audit.append_event(actor="gitea-webhook", action="ci.webhook.replay", obj="ci", was_authorized=False)
-            raise HTTPException(status_code=401, detail="webhook replay rejected (nonce already seen)")
+    # AUD-13: без секрета вебхук нельзя аутентифицировать → отклоняем (fail-closed), не принимаем вслепую.
+    if not CI_WEBHOOK_SECRET:
+        audit.append_event(actor="gitea-webhook", action="ci.webhook.no-secret", obj="ci", was_authorized=False)
+        raise HTTPException(status_code=503, detail="CI webhook secret not configured (fail-closed)")
+    expected = hmac.new(CI_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(request.headers.get("X-Gitea-Signature", ""), expected):
+        audit.append_event(actor="gitea-webhook", action="ci.webhook.rejected", obj="ci", was_authorized=False)
+        raise HTTPException(status_code=401, detail="invalid webhook signature")
+    # anti-replay: вебхук одноразовый. Nonce — X-Gitea-Delivery (или сама подпись) — кладётся в
+    # Redis с TTL; повтор того же подписанного запроса отбивается (HMAC сам по себе от replay не спасает).
+    nonce = request.headers.get("X-Gitea-Delivery") or expected
+    if bus.once(f"ci:webhook:nonce:{nonce}", 600) is False:  # False=уже видели; None=Redis недоступен (не блокируем)
+        audit.append_event(actor="gitea-webhook", action="ci.webhook.replay", obj="ci", was_authorized=False)
+        raise HTTPException(status_code=401, detail="webhook replay rejected (nonce already seen)")
     try:
         payload = json.loads(body or b"{}")
     except Exception:

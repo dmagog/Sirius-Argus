@@ -41,6 +41,7 @@ services:
 
   control-plane:
     build: ./control-plane
+    security_opt: ["no-new-privileges:true"]   # AUD-16: запрет повышения привилегий (образ уже non-root)
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-sirius}:${POSTGRES_PASSWORD:-sirius}@postgres:5432/sirius
       KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/certs  # /auth — Keycloak под relative-path
@@ -57,7 +58,7 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
       AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
       ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-sirius-quarantine}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-0}  # 0 = лимит тела снят (по запросу); для прода задать через env (resource-exhaustion guard)
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}  # AUD-20: 2 ГиБ по умолчанию (не 0/без лимита) — guard от resource-exhaustion, но реальные модели проходят. Малый лимит для DOS-02-теста — в docker-compose.test.yml
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}  # секреты из Vault по AppRole (фолбэк на env выше)
     volumes:
       - vault_creds:/vault-creds:ro  # AppRole role_id/secret_id от vault-init
@@ -153,7 +154,7 @@ services:
       MINIO_IDENTITY_OPENID_DISPLAY_NAME: Keycloak
     volumes: [minio_data:/data]
     ports:
-      - "9001:9001"   # веб-консоль MinIO наружу (ops-доступ; вход root — console-SSO недоступен, ADR-0012)
+      - "127.0.0.1:9001:9001"   # AUD-17: веб-консоль MinIO только на loopback (вход root; доступ — SSH-туннель, ADR-0012)
     networks: [internal, edge-minio]   # edge-minio — публикация консоли на хост; НЕ общий edge с serving (RT-06)
 
   mlflow-db:
@@ -197,6 +198,7 @@ services:
 
   serving:
     build: ./serving   # 3 НЕ-генеративные модели (sklearn, CPU) за рантайм-защитами
+    security_opt: ["no-new-privileges:true"]   # AUD-16: запрет повышения привилегий (образ уже non-root)
     environment:
       CONTROL_PLANE_URL: http://control-plane:8000
       SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:-svc-serving-local-dev-7f3a9c}  # тот же сервис-токен, что валидирует control-plane
@@ -285,7 +287,7 @@ services:
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/token
       GF_AUTH_GENERIC_OAUTH_API_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/userinfo
       GF_AUTH_GENERIC_OAUTH_USE_PKCE: "true"
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'MLSecOps') && 'Admin' || contains(roles[*], 'CEO') && 'Viewer' || 'Editor'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'MLSecOps') && 'Admin' || contains(roles[*], 'CEO') && 'Viewer' || 'Viewer'"  # фолбэк = Viewer (read-only), не Editor — иначе любой realm-юзер мог править
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "false"
       GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
     volumes:

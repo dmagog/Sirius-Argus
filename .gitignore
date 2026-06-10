@@ -126,7 +126,12 @@ celerybeat.pid
 .env
 .env.prod
 .env.production
+
+# TLS-материал prod-Vault (генерит оператор, не коммитим)
+infra/vault/tls/tls.crt
+infra/vault/tls/tls.key
 .venv
+.venv-test/
 env/
 venv/
 ENV/

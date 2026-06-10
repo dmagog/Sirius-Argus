@@ -89,4 +89,15 @@ ensure_roles_mapper gitea
 ensure_client minio "$MINIO_OIDC_SECRET" "http://localhost:9001/oauth_callback" "http://localhost:9001"
 ensure_minio_policy_mapper minio
 
-echo "keycloak-init: OIDC-клиенты готовы (grafana, gitea, minio)"
+# UI SSO периметра (AUD-03/07): confidential-клиент sirius-ui для oauth2-proxy.
+# Создаётся только на prod-пути (когда задан UI_OIDC_CLIENT_SECRET). Redirect — по PUBLIC_HOST;
+# маппер ролей нужен, чтобы oauth2-proxy получил claim "roles" → заголовок X-Auth-Request-Groups.
+if [ -n "${UI_OIDC_CLIENT_SECRET:-}" ]; then
+  UI_BASE="http://localhost"
+  [ -n "${PUBLIC_HOST:-}" ] && UI_BASE="https://${PUBLIC_HOST}"
+  ensure_client sirius-ui "$UI_OIDC_CLIENT_SECRET" "$UI_BASE/oauth2/callback" "$UI_BASE"
+  ensure_roles_mapper sirius-ui
+  echo "keycloak-init: клиент sirius-ui (oauth2-proxy) готов → $UI_BASE/oauth2/callback"
+fi
+
+echo "keycloak-init: OIDC-клиенты готовы (grafana, gitea, minio$([ -n "${UI_OIDC_CLIENT_SECRET:-}" ] && echo ', sirius-ui'))"
