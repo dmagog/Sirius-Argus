@@ -36,8 +36,8 @@
 |---|:--:|---|
 | AUD-01 | ✅ | `infra/keycloak-prod/realm-sirius-prod.json` без демо-персон и с выключенным ROPC; монтируется в `prod.yml` и `production.yml` |
 | AUD-02 | ✅ | `basic_auth` в `Caddyfile.prod` (использует уже пробрасываемые `DEMO_USER`/`DEMO_PASS_HASH`) |
-| AUD-03 | 🟡 | Смягчено Basic Auth периметра; полный фикс (идентичность аппрувера) — путь oauth2-proxy, см. остаток |
-| AUD-04 | 📝 | Не менял в коде (риск без живых тестов); точечный патч описан в остатках |
+| AUD-03 | 🟡 | UI-аппрув берёт личность из forward_auth (`X-Auth-Request-User`), не из формы (код); смягчено Basic Auth; полный энфорс роли — oauth2-proxy путь ([рунбук](runbooks/security-hardening-ops.md)) |
+| AUD-04 | 🟡 | `/versions` больше не доверяет клиентскому ярлыку `signature` (код); политика «гейт и для internal-моделей» — решение + [рунбук](runbooks/security-hardening-ops.md) |
 | AUD-05 | ✅ | `auth.py`: проверка `aud`/`iss` при заданных `OIDC_AUDIENCE`/`OIDC_ISSUER` (в проде — opt-in) |
 | AUD-06 | ✅ | `main.py`: в лог идёт только тип схемы, не значение токена |
 | AUD-07 | 🟡 | Смягчено Basic Auth (нет анонимного доступа); по-ролевое маскирование в UI — остаток |
@@ -49,7 +49,7 @@
 | AUD-13 | ✅ | `ci_scans_api.py`: вебхук без секрета → 503 (fail-closed) |
 | AUD-14 | 🟡 | Окно засева теперь за Basic Auth; перенос публикации портов после засева — рекоменд. в остатках |
 | AUD-15 | ✅ | Security-заголовки (HSTS/CSP-набор) в `Caddyfile.prod` |
-| AUD-16 | 🟡 | `restart` в оверлеях; лимиты ресурсов + `no-new-privileges`/`cap_drop` — рекоменд. (без живого теста не навешивал на base) |
+| AUD-16 | 🟡 | `no-new-privileges:true` на control-plane/serving (проверено — стек зелёный); лимиты ресурсов — [рунбук](runbooks/security-hardening-ops.md) |
 | AUD-17 | ✅ | Консоль MinIO в base — только `127.0.0.1:9001` |
 | AUD-18 | ⏳ | promtail (profile full) — операционный фикс (docker-socket-proxy/journald), описан в остатках |
 | AUD-19 | 🟡 | Прод требует секреты через `:?`/примеры; dev-дефолты оставлены намеренно (нужны тестам) |
@@ -70,7 +70,7 @@
 
 - **AUD-04** (промоушен-гейт): предложенный патч — для **любой** модели в `promote` верифицировать артефакт по сохранённым в карантине байтам (как ingest-путь) и запретить понижение `criticality`. Не применял вслепую: затрагивает `test_promote_atomic`/`test_approval_gate`/`test_integrity` (создают версии через `/versions` без сохранённых байтов). Применить после `make up && make test`.
 - **AUD-03/07** (идентичность и по-ролевое маскирование в UI): полностью закрываются переходом боевого стенда на `Caddyfile.production` + oauth2-proxy (forward_auth даёт `X-Auth-Request-User`); до этого Basic Auth убирает анонимный доступ.
-- **AUD-08** (non-owner роль БД), **AUD-09** (Vault unseal), **AUD-18** (docker-socket-proxy), **AUD-21** (branch protection), **AUD-16** (лимиты ресурсов) — операционные шаги для рунбука.
+- **AUD-08** (non-owner роль БД), **AUD-09** (Vault unseal), **AUD-18** (docker-socket-proxy), **AUD-21** (branch protection), **AUD-16** (лимиты ресурсов) — конкретные шаги в [рунбуке хардненинга](runbooks/security-hardening-ops.md).
 
 > Перед публичным показом: на машине с Docker — `make config`; боевой/демо-режим и реальные модели (лимит 2 ГиБ) — `make up` (+ `make demo`); полный pytest-набор (с DOS-02, лимит 25 МиБ) — `make up-test`, затем `cd tests && python -m pytest -q`; для боевого стенда — `deploy_netangels.sh` (теперь Basic Auth реально включается, импортируется прод-realm).
 

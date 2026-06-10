@@ -142,7 +142,8 @@ def create_version(model_id: int, body: VersionIn, p: Principal = Depends(requir
         mv = domain.ModelVersion(
             model_id=model_id, version=n, stage="dev",
             dataset_version_id=body.dataset_version_id, code_commit=body.code_commit,
-            env_lock=body.env_lock, artifact_hash=body.artifact_hash, signature=body.signature,
+            env_lock=body.env_lock, artifact_hash=body.artifact_hash,
+            signature="",  # AUD-04: НЕ доверяем клиентскому ярлыку подписи — реальная подпись ставится только /sign (криптобандл)
             intended_use=body.intended_use, limitations=body.limitations,
             requires_validation=(m.criticality in ("regulatory", "financial")),
             created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -158,7 +159,7 @@ def create_version(model_id: int, body: VersionIn, p: Principal = Depends(requir
             mlflow_ver = registry.create_model_version(name, source=f"s3://mlflow/{name}", tags={
                 "cp_version": n, "stage": "dev", "code_commit": body.code_commit,
                 "dataset_version_id": body.dataset_version_id, "env_lock": body.env_lock,
-                "artifact_hash": body.artifact_hash, "signature": body.signature,
+                "artifact_hash": body.artifact_hash, "signature": "",  # AUD-04: подпись — только из /sign
                 "criticality": m.criticality, "requires_validation": requires_validation})
         except registry.RegistryError as e:
             synced = False

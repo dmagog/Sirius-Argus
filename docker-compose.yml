@@ -41,6 +41,7 @@ services:
 
   control-plane:
     build: ./control-plane
+    security_opt: ["no-new-privileges:true"]   # AUD-16: запрет повышения привилегий (образ уже non-root)
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-sirius}:${POSTGRES_PASSWORD:-sirius}@postgres:5432/sirius
       KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/certs  # /auth — Keycloak под relative-path
@@ -197,6 +198,7 @@ services:
 
   serving:
     build: ./serving   # 3 НЕ-генеративные модели (sklearn, CPU) за рантайм-защитами
+    security_opt: ["no-new-privileges:true"]   # AUD-16: запрет повышения привилегий (образ уже non-root)
     environment:
       CONTROL_PLANE_URL: http://control-plane:8000
       SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:-svc-serving-local-dev-7f3a9c}  # тот же сервис-токен, что валидирует control-plane
