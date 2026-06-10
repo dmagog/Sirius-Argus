@@ -15,7 +15,6 @@ services:
   keycloak:
     # start (не start-dev). Без --optimized стартует с авто-build (медленнее, но без
     # отдельного build-шага). TODO: собрать образ с `kc.sh build` и включить --optimized.
-    # TODO: realm для прода БЕЗ демо-персон (ds/de/mlsecops/product/ceo/bruteme).
     command: ["start", "--import-realm"]
     environment:
       KC_HOSTNAME: https://${PUBLIC_HOST:?задай PUBLIC_HOST}/auth
@@ -25,6 +24,10 @@ services:
       KC_DB: postgres
       KC_FEATURES: ""                  # включить нужные фичи явно
       # brute-force detection включается в realm-настройках (не env) — см. рунбук
+    # AUD-01: импортируем ПРОД-realm без демо-персон и без ROPC (infra/keycloak-prod),
+    # а не dev-realm с паролем=логину. !override заменяет том импорта целиком.
+    volumes: !override
+      - ./infra/keycloak-prod:/opt/keycloak/data/import:ro
     restart: unless-stopped
 
   # --- Секреты: Vault в prod-режиме (raft + unseal) -------------------------
@@ -58,6 +61,10 @@ services:
       SIGNING_SEED: ${SIGNING_SEED:?задай постоянный SIGNING_SEED из секрет-стора}
       SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:?задай стойкий SIRIUS_SERVICE_TOKEN}
       CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:?задай CI_WEBHOOK_SECRET}
+      # AUD-05: проверка audience/issuer OIDC-токена. Задать ПОСЛЕ сверки, что токены клиента
+      # control-plane реально несут эти aud/iss (иначе все токены будут отвергнуты). Пусто = выкл.
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
     restart: unless-stopped
 
   # --- AuthN периметра UI: oauth2-proxy + Keycloak (закрывает login-less UI) -
@@ -101,6 +108,20 @@ services:
     restart: unless-stopped
   minio:
     ports: !override []                 # объекты — через S3/STS, не веб-консоль наружу
+    restart: unless-stopped
+
+  # AUD-24: ops-консоли в full-профиле НЕ публикуем наружу (доступ через SSO/VPN/SSH-туннель);
+  # Grafana — стойкий пароль (не admin/admin), Gitea — закрытая самостоятельная регистрация.
+  grafana:
+    ports: !override []
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?задай GRAFANA_PASSWORD}
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "false"
+    restart: unless-stopped
+  gitea:
+    ports: !override []
+    environment:
+      GITEA__service__DISABLE_REGISTRATION: "true"
     restart: unless-stopped
 
   postgres:     { restart: unless-stopped }

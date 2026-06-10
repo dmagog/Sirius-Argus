@@ -55,7 +55,11 @@ def _startup():
 @app.middleware("http")
 async def observe_and_audit(request: Request, call_next):
     if request.url.path not in ("/metrics", "/health"):
-        logger.info("req %s %s auth=%s", request.method, request.url.path, request.headers.get("authorization", "-"))
+        # LOG-01 (AUD-06): логируем только ТИП схемы авторизации, не значение токена —
+        # иначе Bearer/сервис-токен утекает в stdout → Loki/Promtail.
+        _authz = request.headers.get("authorization", "")
+        _scheme = _authz.split(" ", 1)[0].lower() if _authz else "-"
+        logger.info("req %s %s auth=%s", request.method, request.url.path, _scheme)
     cl = request.headers.get("content-length")
     if MAX_UPLOAD_BYTES and cl and cl.isdigit() and int(cl) > MAX_UPLOAD_BYTES:  # 0 = без лимита; иначе resource-exhaustion guard
         try:

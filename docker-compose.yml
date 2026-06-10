@@ -57,7 +57,7 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
       AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
       ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-sirius-quarantine}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-0}  # 0 = лимит тела снят (по запросу); для прода задать через env (resource-exhaustion guard)
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}  # AUD-20: 2 ГиБ по умолчанию (не 0/без лимита) — guard от resource-exhaustion, но реальные модели проходят. Малый лимит для DOS-02-теста — в docker-compose.test.yml
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}  # секреты из Vault по AppRole (фолбэк на env выше)
     volumes:
       - vault_creds:/vault-creds:ro  # AppRole role_id/secret_id от vault-init
@@ -153,7 +153,7 @@ services:
       MINIO_IDENTITY_OPENID_DISPLAY_NAME: Keycloak
     volumes: [minio_data:/data]
     ports:
-      - "9001:9001"   # веб-консоль MinIO наружу (ops-доступ; вход root — console-SSO недоступен, ADR-0012)
+      - "127.0.0.1:9001:9001"   # AUD-17: веб-консоль MinIO только на loopback (вход root; доступ — SSH-туннель, ADR-0012)
     networks: [internal, edge-minio]   # edge-minio — публикация консоли на хост; НЕ общий edge с serving (RT-06)
 
   mlflow-db:

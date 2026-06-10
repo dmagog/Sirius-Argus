@@ -1,0 +1,75 @@
+# AUD-21: активный CI-гейт безопасности. «Только зелёное в прод» больше не держится
+# только на opt-in pre-commit — эти проверки обязательны на PR/push в main.
+# Живой pytest-bdd (нужен поднятый стек) запускается отдельно против эфемерного стека.
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Жёсткие гейты по НАШЕМУ коду: bandit (их же догфудинг из `make selfscan`) + pip-audit + gitleaks.
+      - name: bandit (SAST по нашему коду, medium+)
+        run: |
+          pip install bandit==1.8.0
+          bandit -r -ll control-plane/app serving/app
+
+      - name: pip-audit (известные CVE в зависимостях)
+        run: |
+          pip install pip-audit==2.7.3
+          pip-audit -r control-plane/requirements.txt
+          pip-audit -r serving/requirements.txt
+          pip-audit -r tests/requirements.txt
+
+      # semgrep — ИНФОРМАЦИОННО (не блокирует): правила control-plane/app/semgrep_rules.yml
+      # написаны для скана ПРИСЫЛАЕМОГО кода (ловят subprocess/eval), поэтому на нашем
+      # собственном коде (scanners.py легитимно вызывает CLI) дают ожидаемые срабатывания —
+      # это не повод валить CI. Хард-гейт по нашему коду — bandit выше.
+      - name: semgrep (информационно)
+        continue-on-error: true
+        run: |
+          pip install semgrep==1.95.0
+          semgrep scan --config p/python --config p/secrets \
+                       --metrics=off --disable-version-check . || true
+
+      - name: gitleaks (секреты в коде/истории)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  compose-validate:
+    runs-on: ubuntu-latest
+    # заглушки для обязательных ${VAR:?} в прод-оверлеях — только чтобы `config` отвалидировал YAML
+    env:
+      PUBLIC_HOST: example.org
+      DEMO_PASS_HASH: $2a$14$placeholderplaceholderplaceholderplaceholderplaceholde
+      SIGNING_SEED: ci-placeholder
+      SIRIUS_SERVICE_TOKEN: ci-placeholder
+      CI_WEBHOOK_SECRET: ci-placeholder
+      GRAFANA_PASSWORD: ci-placeholder
+      UI_OIDC_CLIENT_SECRET: ci-placeholder
+      OAUTH2_PROXY_COOKIE_SECRET: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config (валидация всех оверлеев)
+        run: |
+          cp .env.example .env
+          docker compose config -q
+          docker compose -f docker-compose.yml -f docker-compose.test.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.production.yml config -q
+          echo "compose: OK"

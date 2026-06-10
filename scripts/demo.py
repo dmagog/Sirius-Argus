@@ -275,7 +275,8 @@ def main():
     )
     try:
         _repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        _out = subprocess.run(["docker", "compose", "exec", "-T", "-e", "VAULT_TOKEN=sirius-root-dev", "vault", "sh", "-c", _vscript],
+        _vtok = os.environ.get("VAULT_ROOT_TOKEN", "sirius-root-dev")  # AUD-28: из env, не хардкод
+        _out = subprocess.run(["docker", "compose", "exec", "-T", "-e", f"VAULT_TOKEN={_vtok}", "vault", "sh", "-c", _vscript],
                               cwd=_repo, capture_output=True, text=True, timeout=40).stdout
         line(f"  свой секрет по политике: {'выдан ✅' if 'ALLOWED_OK' in _out else '—'} · "
              f"чужой путь: {'403 ✅' if 'DENIED_OK' in _out else '—'} · "

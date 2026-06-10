@@ -25,7 +25,14 @@ def _load_key():
     pem = os.environ.get("SIGNING_KEY_PEM")
     if pem:
         return serialization.load_pem_private_key(pem.encode(), password=None)
-    seed = (os.environ.get("SIGNING_SEED") or "5e1f17a0").encode()
+    seed_env = os.environ.get("SIGNING_SEED")
+    # AUD-10: в проде (DEV_AUTH!=1) ключ подписи нельзя выводить из публичного дефолтного seed —
+    # это обнулило бы SUP-04 (любой воспроизводит ключ из репозитория). Без ключа/seed — fail-fast.
+    # В dev/тестах (DEV_AUTH=1) сохраняем демо-фолбэк, иначе стек не поднимется (SIGNING_SEED пуст).
+    if not seed_env and os.environ.get("DEV_AUTH", "0") != "1":
+        raise RuntimeError("AUD-10: задайте SIGNING_SEED или SIGNING_KEY_PEM из секрет-стора/KMS "
+                           "(в проде ключ подписи не выводится из публичного дефолта)")
+    seed = (seed_env or "5e1f17a0").encode()
     secret = (int.from_bytes(hashlib.sha256(seed).digest(), "big") % (2 ** 256 - 2)) + 1
     return ec.derive_private_key(secret, ec.SECP256R1())
 

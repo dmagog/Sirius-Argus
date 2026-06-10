@@ -27,6 +27,11 @@ services:
   keycloak:
     environment:
       KC_HOSTNAME: https://${PUBLIC_HOST}/auth   # внешний frontend-URL за Caddy (вместо localhost)
+    # AUD-01: на боевом стенде импортируем ПРОД-realm без демо-персон и без ROPC
+    # (infra/keycloak-prod), а не dev-realm с паролем=логину. !override заменяет том,
+    # а не монтирует оба каталога в одну точку импорта.
+    volumes: !override
+      - ./infra/keycloak-prod:/opt/keycloak/data/import:ro
     restart: unless-stopped
 
   control-plane:

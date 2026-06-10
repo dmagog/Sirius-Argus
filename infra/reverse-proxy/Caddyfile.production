@@ -18,7 +18,7 @@
 	}
 
 	request_body {
-		max_size 2GB
+		max_size 3GB
 	}
 
 	respond /metrics 404
