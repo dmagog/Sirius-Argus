@@ -17,6 +17,11 @@
 		-Server
 	}
 
+	# AUD-03: входящие identity-заголовки от клиента стрипаем — их выставляет ТОЛЬКО oauth2-proxy
+	# (forward_auth → copy_headers ниже). Иначе клиент подделает X-Auth-Request-User и аппрув.
+	request_header -X-Auth-Request-User
+	request_header -X-Auth-Request-Email
+
 	request_body {
 		max_size 3GB
 	}

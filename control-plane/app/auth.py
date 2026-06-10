@@ -92,7 +92,7 @@ def get_principal(authorization: str = Header(default="")) -> "Principal":
         parts = token.split(":", 2)
         if len(parts) != 3 or parts[2] not in ROLES:
             raise HTTPException(status_code=401, detail="bad dev token")
-        if parts[1] in _REVOKED:
+        if is_revoked(parts[1]):  # AUD-12: durable-отзыв (Redis), симметрично OIDC-пути (а не только in-memory)
             raise HTTPException(status_code=401, detail="access revoked (offboarded)")
         return Principal(parts[1], [parts[2]])
 

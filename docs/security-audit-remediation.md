@@ -74,6 +74,36 @@
 
 > Перед публичным показом: на машине с Docker — `make config`; боевой/демо-режим и реальные модели (лимит 2 ГиБ) — `make up` (+ `make demo`); полный pytest-набор (с DOS-02, лимит 25 МиБ) — `make up-test`, затем `cd tests && python -m pytest -q`; для боевого стенда — `deploy_netangels.sh` (теперь Basic Auth реально включается, импортируется прод-realm).
 
+## Второй заход — исследование «что упустили» (2026-06-10)
+
+Повторный широкий разбор (7 зон недоохвата + адверсариальная верификация) и **реальные прогоны сканеров** на живом стеке. Нашлось 45 подтверждённых пробелов, в т.ч. два неполных/регрессивных места в фиксах первого захода.
+
+**Прогоны сканеров (живьём):**
+- **bandit** — реальных проблем нет: `B105 'var(--sa-alert)'` — ложняк на CSS-переменную; `subprocess` в `scanners.py` легитимны (list-args, `shutil.which`); `B310` в demo.py — мелочь.
+- **pip-audit** — **их собственные зависимости имеют CVE**: `requests==2.32.3` (CVE-2024-47081), `starlette==0.41.3` (CVE-2025-54121/62727, PYSEC-2026-161), `pytest==8.3.4` (CVE-2025-71176). Офлайн-база их же SUP-03-сканера эти CVE не знает (DEPS_AUDIT_ONLINE=0).
+- **gitleaks** (286 коммитов) — 5 «находок», **все ложняки/дев-дефолты**: `cripto/app/ca.py:27` это `_root_key: Ed25519PrivateKey | None = None` (тип-аннотация, не ключ; каталога нет в HEAD), остальные 4 — дев-пароли БД в старых compose-коммитах. **Реального секрета в истории нет** — исходный вывод «история чистая» подтверждён.
+
+### Исправлено в этом заходе (проверено: pytest 71/2)
+| Что | Где |
+|---|---|
+| **AUD-03 регресс**: UI-аппрув доверял спуфабельному `X-Auth-Request-User` → стрип входящих identity-заголовков на периметре | `Caddyfile`, `Caddyfile.prod`, `Caddyfile.production` |
+| **AUD-12 dev-путь**: durable-отзыв теперь и для dev-токена (`is_revoked(parts[1])`) | `auth.py:95` |
+| **AUD-07**: PII-сэмплы в карточке датасета маскируются по умолчанию (ложный note стал правдой) | `cards.py:194` |
+| Grafana фолбэк-роль Editor → **Viewer** (любой realm-юзер получал Editor) | `docker-compose.yml` |
+| serving: `PredictIn.features` ≤ 64 (memory-DoS одним запросом до rate-limit) | `serving/app/main.py` |
+| bus.py: payload не перетирает служебный `type`, лимит длины значений | `bus.py:35` |
+| `requests` 2.32.3 → **2.32.4** (CVE-2024-47081) | `control-plane/requirements.txt`, `serving/requirements.txt` |
+| CI gitleaks: `fetch-depth: 0` (полная история); CODEOWNERS → `@dmagog` (была несуществующая GitLab-группа) | `.github/workflows/security.yml`, `CODEOWNERS` |
+
+### Вынесено в [рунбук](runbooks/security-hardening-ops.md) (операционное/развёртывание)
+AUD-01 повторный деплой (realm импортируется только на пустой kc-БД → форсить чистый старт `keycloak-db`); AUD-05 задать `OIDC_ISSUER` из `PUBLIC_HOST` на пути prod.yml; AUD-08 проверка активности триггера + non-owner роль; AUD-11 Object-Lock (не только versioning) + scoped MinIO-политика; `prod.yml` не гейтит секреты `:?` (+ убрать публичный seed из `init.sh`); хардненинг Grafana/observability продублировать в `prod.yml` (или перейти на `production.yml`); Loki без ретеншна/тома; promtail маскирует только логи control-plane (добавить redact-stage для всех потоков); Grafana на `edge` + `0.0.0.0:3000` в base → loopback; **MLflow без аутентификации** (теги реестра подделываемы изнутри сети) → basic-auth + scoped MinIO-юзер; Vault audit в stdout→Loki; `infra/gitea-data` (живые секреты Gitea) в дереве репо → в named volume; согласованный бамп `starlette`/`fastapi` и `pytest` (CVE); branch protection + Code Owners review.
+
+### В risk-register (осознанные остатки)
+- **serving rate-limit RT-01/EXF-01/DOW-01** висят на спуфабельных `X-Client-Id`/`X-Tenant-Id` без inbound-auth → это best-effort телеметрия против дружелюбного клиента, **не контроль против адверсария** (ротация заголовка обходит).
+- **serving не из реестра** (AUD-22): promote/sign/admission и MON-05 верифицируют контур реестра, а не то, что реально обслуживается — не заявлять end-to-end admission.
+- disclosure постуры: `/health` (внутр. топология), `/users/{actor}` (профиль активности + внутр. коды), `/metrics` — закрывается периметром, но зафиксировать.
+- **AUD-04** (гейтить ли internal-модели как критичные) — политическое решение.
+
 ## Сводка находок (после перепроверки)
 
 | ID | Серьёзность | Область | Где | Среда | Суть |

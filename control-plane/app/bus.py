@@ -32,7 +32,9 @@ def publish(event_type: str, payload: dict) -> bool:
     if not c:
         return False
     try:
-        fields = {"type": event_type, **{k: str(v) for k, v in payload.items()}}
+        # служебный "type" не перетираем payload'ом; значения ограничиваем по длине
+        fields = {"type": str(event_type)}
+        fields.update({str(k): str(v)[:512] for k, v in payload.items() if k != "type"})
         c.xadd(STREAM, fields, maxlen=10000, approximate=True)
         return True
     except Exception:

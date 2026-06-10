@@ -287,7 +287,7 @@ services:
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/token
       GF_AUTH_GENERIC_OAUTH_API_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/userinfo
       GF_AUTH_GENERIC_OAUTH_USE_PKCE: "true"
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'MLSecOps') && 'Admin' || contains(roles[*], 'CEO') && 'Viewer' || 'Editor'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'MLSecOps') && 'Admin' || contains(roles[*], 'CEO') && 'Viewer' || 'Viewer'"  # фолбэк = Viewer (read-only), не Editor — иначе любой realm-юзер мог править
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "false"
       GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
     volumes:

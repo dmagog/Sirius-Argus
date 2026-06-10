@@ -25,6 +25,12 @@
 		-Server
 	}
 
+	# AUD-03: на этом контуре нет oauth2-proxy — клиент НЕ должен наделять себя identity-заголовками.
+	# Стрипаем входящие X-Auth-Request-* до проксирования, иначе UI-аппрув можно подделать
+	# (pages.py доверяет X-Auth-Request-User). Без oauth2-proxy ветка forward_auth просто не активна.
+	request_header -X-Auth-Request-User
+	request_header -X-Auth-Request-Email
+
 	# периметр: потолок тела — оверсайз режется на входе. Выше app-лимита MAX_UPLOAD_BYTES (2 ГиБ),
 	# чтобы реальные модели проходили; связывающий guard — на app-уровне (AUD-20).
 	request_body {

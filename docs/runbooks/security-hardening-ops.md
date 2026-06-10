@@ -87,6 +87,44 @@ CI-гейт (`.github/workflows/security.yml`) добавлен; включит�
 (`dmagog/Sirius-Argus`, ветка `main`): Settings → Branches → Protection rule → Require status checks
 to pass → выбрать `static-security` и `compose-validate`; Require PR before merge.
 
+## Второй заход (исследование «что упустили»)
+
+- **AUD-01 повторный деплой.** `--import-realm` импортирует realm только в ПУСТУЮ БД Keycloak. При
+  повторном `deploy_netangels.sh` на существующем томе `kc_pg_data` (где уже dev-realm) прод-realm НЕ
+  переимпортируется → тихий регресс. Лечение: на первом прод-запуске форсить чистый старт
+  (`docker compose ... rm -sf keycloak keycloak-db && docker volume rm <proj>_kc_pg_data`) или сделать
+  импорт идемпотентным (kc admin import при старте). До этого — проверять realm после деплоя.
+- **AUD-05 issuer.** `OIDC_ISSUER` известен из `PUBLIC_HOST` — задавать его в `deploy_netangels.sh`
+  (`OIDC_ISSUER=https://$PUBLIC_HOST/auth/realms/sirius`) и пробрасывать в control-plane: безопасно
+  включает проверку issuer (свои токены не отвергаются). `OIDC_AUDIENCE` — только после сверки `aud`.
+- **AUD-11 Object-Lock.** Версионирование (уже включено) спасает от перезаписи, но НЕ от удаления.
+  Для неизменяемости — создавать бакет карантина с Object-Lock (COMPLIANCE retention) при первом
+  создании; control-plane выдать узкую S3-политику (PutObject/GetObject на префикс), не root MinIO.
+- **prod.yml secret-gating.** `docker-compose.prod.yml` не форсит `:?` на секретах → молчаливый фолбэк
+  на публичные дефолты (signing-seed `5e1f17a0…`, Vault root, service-token). Перенести `:?`-гейты в
+  `prod.yml` (как в `production.yml`) и убрать публичный seed-дефолт из `infra/vault/init.sh`. Либо
+  перевести деплой на `production.yml`. Также `REDIS_PASSWORD`/OIDC-секреты — генерировать, не дефолтить.
+- **Observability в prod.yml.** Хардненинг Grafana/Gitea (AUD-24) лежит в `production.yml`, а реальный
+  деплой идёт через `prod.yml` БЕЗ observability-оверрайдов. Продублировать (ports `!override []`,
+  `ALLOW_SIGN_UP=false`, `GRAFANA_PASSWORD:?`, `DISABLE_REGISTRATION`) в `prod.yml`, либо перейти на
+  `production.yml`. В base: Grafana биндить на `127.0.0.1:3000` и убрать из сети `edge`.
+- **Loki/Promtail.** Loki без ретеншна и без тома (логи теряются на рестарте) — смонтировать
+  `loki-config.yml` (retention) + named volume. Promtail отгружает stdout ВСЕХ контейнеров, а
+  redact-фильтр секретов живёт только в Python-логгере control-plane → Vault dev печатает root-токен в
+  stdout → Loki. Добавить в promtail `pipeline_stages` с regex-replace (Bearer/secret/token/X-Amz-*),
+  либо исключить vault/keycloak/minio из скрейпа, либо поднять их log-level.
+- **MLflow без auth.** Реестр-backend MLflow не аутентифицирован — «единственная дверь» держится только
+  на сетевой изоляции; теги (stage/criticality/signature) подделываемы изнутри сети. Включить
+  `mlflow server --app-name basic-auth` с кредами из Vault; control-plane не доверять MLflow как
+  источнику истины о стадии (авторитетен Postgres+аудит). MLflow-артефакты — отдельный MinIO-юзер на `s3://mlflow`, не root.
+- **Vault audit.** `init.sh` шлёт audit в stdout → Loki (каждый read секрета логируется в общий стек).
+  В проде — отдельный файловый sink с ограниченным доступом, либо исключить vault из promtail.
+- **gitea-data.** `infra/gitea-data/` (SSH host-ключи, JWT/INTERNAL_TOKEN, `gitea.db`) лежит в дереве
+  репо (gitignored, но одна `git add -f`/архив от утечки). Вынести в named volume (как `caddy_data`).
+- **Зависимости с CVE.** `requests` уже поднят до 2.32.4. Остаются `starlette 0.41.3` (через
+  `fastapi 0.115.6`) и `pytest 8.3.4` — согласованный бамп `fastapi`+`starlette` и `pytest`+`pytest-bdd`
+  с прогоном `make up-test && make test`. Включить `pip-audit` в CI на онлайн-базе (или регулярно).
+
 ## AUD-04 · Промоушен не-критичных моделей (решение по политике)
 
 Сейчас `internal`-модели промоутятся без подписи/аппрува (by design — light-touch), а критичность
