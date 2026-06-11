@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import BaseModel
 
 from .. import audit, bus, cards, decisions, domain, mapnodes, registry, runs, scanners, signing, storage, ui
-from ..auth import Principal, get_principal, revoke
+from ..auth import Principal, get_principal, revoke, viewer_roles
 from ..db import AuditEvent, SessionLocal
 from ..rbac import PERMISSIONS, can_read_sensitivity, require
 
@@ -104,10 +104,15 @@ def data_view():
 
 
 @router.get("/data/dataset/{dataset_id}", response_class=HTMLResponse)
-def dataset_card_view(dataset_id: int):
+def dataset_card_view(dataset_id: int, request: Request):
     """Карточка датасета: версии, схема (PII), доверенность источника, проблемы,
-    модели-потребители (lineage) и таймлайн аудита."""
-    card = cards.dataset_card(dataset_id)
+    модели-потребители (lineage) и таймлайн аудита.
+
+    AUD-07: PII-сэмплы в схеме снимаются с маски только для ролей с допуском к pii
+    (DE/MLSecOps) — та же политика `can_read_sensitivity`, что в API. Роль зрителя берём
+    из forward-auth (oauth2-proxy) или Bearer — `viewer_roles`, без жёсткого 401."""
+    unmasked = can_read_sensitivity(viewer_roles(request), "pii")
+    card = cards.dataset_card(dataset_id, unmasked=unmasked)
     if card is None:
         raise HTTPException(status_code=404, detail="dataset not found")
     return ui.dataset_card_page(card)

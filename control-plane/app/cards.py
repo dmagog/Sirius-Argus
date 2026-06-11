@@ -157,9 +157,13 @@ def data_registry():
 
 
 # ─────────────────────────── КАРТОЧКА ДАТАСЕТА ───────────────────────────
-def dataset_card(dataset_id):
+def dataset_card(dataset_id, unmasked: bool = False):
     """История датасета: версии, схема (PII), доверенность источника, проблемы,
-    модели-потребители (lineage), таймлайн аудита."""
+    модели-потребители (lineage), таймлайн аудита.
+
+    `unmasked` (AUD-07): снимать ли маску с PII-сэмплов — решает вызывающий по роли
+    зрителя (`can_read_sensitivity(viewer_roles(request), "pii")`). По умолчанию False
+    (маскируем) — безопасный дефолт для аноним/без-допуска."""
     with SessionLocal() as s:
         d = s.get(domain.Dataset, dataset_id)
         if not d:
@@ -191,10 +195,13 @@ def dataset_card(dataset_id):
             "id": d.id, "name": d.name, "sensitivity": d.sensitivity, "source": d.source or "—",
             "owner": d.owner or "—", "trusted": trusted, "status": status,
             "versions": [{"id": dv.id, "hash": dv.hash or "—"} for dv in versions],
-            # AUD-07: UI-карточка без идентичности — PII-сэмплы маскируем по умолчанию (как заявляет note
-            # в ui/cards.py). Снятие маски для допущенных ролей — на пути с forward_auth (см. рунбук).
+            # AUD-07: PII-сэмплы маскируем, если у роли зрителя нет допуска к pii — так же,
+            # как API `/api/datasets/{id}/schema`. `unmasked` приходит от маршрута по
+            # `can_read_sensitivity(viewer_roles(request), "pii")`; дефолт — маска.
             "columns": [{"name": c.name, "pii": bool(c.is_pii),
-                         "sample": ("***" if c.is_pii else (c.sample or "—"))} for c in columns],
+                         "sample": ("***" if (c.is_pii and not unmasked) else (c.sample or "—"))}
+                        for c in columns],
+            "pii_unmasked": unmasked,
             "findings": findings, "consumers": consumers, "timeline": timeline,
             "open": sum(1 for f in f_rows if f.status == "open"),
         }

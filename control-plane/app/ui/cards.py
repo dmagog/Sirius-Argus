@@ -433,7 +433,10 @@ def dataset_card_page(card):
         + _section("Проблемы", find_panel)
         + _section("Доверенность источника", trust_panel)
         + _section("Схема", schema_panel,
-                   note="PII-значения маскируются для ролей без допуска (DATA-04).")
+                   note=(("PII-значения показаны — у вашей роли есть допуск (DATA-04)."
+                          if card.get("pii_unmasked") else
+                          "PII-значения замаскированы для вашей роли (DATA-04).")
+                         if pii_n else ""))
         + _section("Версии", ver_panel)
         + _section("Потребители (lineage)", cons_panel,
                    note="какие версии моделей обучены на этих данных")
