@@ -1,0 +1,39 @@
+# Конфиг GitGuardian (как .gitleaks.toml для gitleaks): известные ДЕВ-ПЛЕЙСХОЛДЕРЫ и шаблоны —
+# не реальные секреты. Нужны, чтобы `docker compose up` работал из коробки для демо. В проде
+# секреты ОБЯЗАТЕЛЬНЫ через ${VAR:?} без дефолтов (docker-compose.production.yml / .env.production).
+# Реальные секреты GitGuardian продолжит ловить.
+version: 2
+
+secret:
+  ignored-paths:
+    - "**/.env.example"          # шаблоны окружения (значения — примеры)
+    - "**/.env.prod.example"
+    - "**/.env.production.example"
+    - "docs/**"                  # документация (примеры/объяснения находок)
+    - "infra/keycloak/realm-sirius.json"   # dev-realm: демо-персоны намеренны (для тестов)
+  ignored-matches:
+    # дев-дефолты compose (${VAR:-...}); в проде переопределяются стойкими из секрет-стора
+    - name: "dev placeholder — MLflow basic-auth"
+      match: mlflow-auth-dev
+    - name: "dev placeholder — MLflow S3 user"
+      match: mlflow-s3-dev
+    - name: "dev placeholder — control-plane S3 user"
+      match: cp-s3-dev
+    - name: "dev placeholder — Vault dev root token"
+      match: sirius-root-dev
+    - name: "dev placeholder — serving service token"
+      match: svc-serving-local-dev-7f3a9c
+    - name: "dev placeholder — CI webhook secret"
+      match: change-me-ci-webhook
+    - name: "dev placeholder — Grafana OIDC"
+      match: grafana-oidc-dev
+    - name: "dev placeholder — Gitea OIDC"
+      match: gitea-oidc-dev
+    - name: "dev placeholder — MinIO OIDC"
+      match: minio-oidc-dev
+    - name: "dev placeholder — Redis"
+      match: sirius-redis
+    - name: "dev placeholder — MinIO root"
+      match: sirius-minio
+    - name: "dev placeholder — signing seed"
+      match: 5e1f17a05e1f17a0c0ffee
