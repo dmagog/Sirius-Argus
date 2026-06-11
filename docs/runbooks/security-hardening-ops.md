@@ -127,9 +127,12 @@ to pass → выбрать `static-security` и `compose-validate`; Require PR b
   В проде — отдельный файловый sink с ограниченным доступом, либо исключить vault из promtail.
 - **gitea-data.** `infra/gitea-data/` (SSH host-ключи, JWT/INTERNAL_TOKEN, `gitea.db`) лежит в дереве
   репо (gitignored, но одна `git add -f`/архив от утечки). Вынести в named volume (как `caddy_data`).
-- **Зависимости с CVE.** `requests` уже поднят до 2.32.4. Остаются `starlette 0.41.3` (через
-  `fastapi 0.115.6`) и `pytest 8.3.4` — согласованный бамп `fastapi`+`starlette` и `pytest`+`pytest-bdd`
-  с прогоном `make up-test && make test`. Включить `pip-audit` в CI на онлайн-базе (или регулярно).
+- **Зависимости с CVE.** ✅ Закрыто (11.06.2026): согласованный бамп `fastapi 0.115.6 → 0.136.3`
+  + явный пин `starlette 1.2.1` (≥1.0.1 закрывает PYSEC-2026-161, GHSA-2c2j-9gv5-cj73, GHSA-7f5h-v6xp-fcq8)
+  в control-plane и serving; `pytest 8.3.4 → 9.0.3` (GHSA-6w46-j5rx-g56g / CVE-2025-71176, совместим
+  с `pytest-bdd 8.1.0`); pyjwt 2.13.0 (PYSEC-2025-183 ушёл из БД). Все `--ignore-vuln` убраны из
+  `.github/workflows/security.yml` — `pip-audit` теперь «No known vulnerabilities found» по всем трём
+  requirements, любой новый CVE валит гейт. Проверено `make up-test && make test` (контракт не сломан).
 
 ## AUD-04 · Промоушен не-критичных моделей (решение по политике)
 

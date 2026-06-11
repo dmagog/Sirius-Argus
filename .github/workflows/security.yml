@@ -33,16 +33,13 @@ jobs:
       - name: pip-audit (известные CVE в зависимостях)
         run: |
           pip install pip-audit==2.7.3
-          # Отложенные CVE — требуют согласованного мажор-бампа, трекаются в
-          # docs/runbooks/security-hardening-ops.md ("Зависимости с CVE"):
-          #   starlette 0.41.3 завязан на fastapi 0.115.6 (PYSEC-2026-161, GHSA-2c2j-9gv5-cj73, GHSA-7f5h-v6xp-fcq8)
-          #   pyjwt PYSEC-2025-183 — апстрим без фикс-версии
-          #   pytest CVE-2025-71176 завязан на совместимость pytest-bdd 8.1.0 с pytest 9
-          # Любой ДРУГОЙ CVE по-прежнему валит гейт.
-          IGN="--ignore-vuln PYSEC-2026-161 --ignore-vuln GHSA-2c2j-9gv5-cj73 --ignore-vuln GHSA-7f5h-v6xp-fcq8 --ignore-vuln PYSEC-2025-183"
-          pip-audit -r control-plane/requirements.txt $IGN
-          pip-audit -r serving/requirements.txt $IGN
-          pip-audit -r tests/requirements.txt --ignore-vuln CVE-2025-71176
+          # Без --ignore-vuln: ранее отложенные CVE закрыты согласованным бампом —
+          # fastapi 0.136.3 + starlette 1.2.1 (PYSEC-2026-161, GHSA-2c2j-9gv5-cj73,
+          # GHSA-7f5h-v6xp-fcq8), pyjwt 2.13.0 (PYSEC-2025-183 ушёл из БД),
+          # pytest 9.0.3 (GHSA-6w46-j5rx-g56g / CVE-2025-71176). Любой CVE валит гейт.
+          pip-audit -r control-plane/requirements.txt
+          pip-audit -r serving/requirements.txt
+          pip-audit -r tests/requirements.txt
 
       # semgrep — ИНФОРМАЦИОННО (не блокирует): правила control-plane/app/semgrep_rules.yml
       # написаны для скана ПРИСЫЛАЕМОГО кода (ловят subprocess/eval), поэтому на нашем
