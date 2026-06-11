@@ -35,6 +35,18 @@ services:
     restart: unless-stopped
 
   control-plane:
+    environment:
+      DEV_AUTH: "0"                      # публичный контур — никогда dev-токенов (AUD-14)
+      # secret-gating демо-пути: критичные секреты fail-closed (нет тихого фолбэка на
+      # публичные дефолты — signing-seed, service-token, webhook). Значения — в .env.prod
+      # (НЕ коммитим); deploy_netangels.sh их генерирует/пробрасывает.
+      SIGNING_SEED: ${SIGNING_SEED:?задай постоянный SIGNING_SEED из секрет-стора}
+      SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:?задай стойкий SIRIUS_SERVICE_TOKEN}
+      CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:?задай CI_WEBHOOK_SECRET}
+      # AUD-05: issuer известен из PUBLIC_HOST — включаем безопасно (свои токены не отвергаются).
+      # OIDC_AUDIENCE — только после сверки aud (иначе все токены отвергнутся), потому опционален.
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://${PUBLIC_HOST}/auth/realms/sirius}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
     restart: unless-stopped
 
   serving:
@@ -58,6 +70,21 @@ services:
   redis:
     restart: unless-stopped
   vault:
+    restart: unless-stopped
+
+  # AUD-24: ops-консоли (profile full) НЕ публикуем наружу даже на демо — доступ через
+  # SSH-туннель; Grafana — стойкий пароль (не admin/admin) и без само-регистрации,
+  # Gitea — закрытая регистрация. Зеркалит docker-compose.production.yml.
+  grafana:
+    ports: !override []
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?задай GRAFANA_PASSWORD}
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "false"
+    restart: unless-stopped
+  gitea:
+    ports: !override []
+    environment:
+      GITEA__service__DISABLE_REGISTRATION: "true"
     restart: unless-stopped
 
 volumes:
