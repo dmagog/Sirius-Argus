@@ -48,6 +48,8 @@ services:
       KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/sirius/protocol/openid-connect/certs  # /auth — Keycloak под relative-path
       REDIS_URL: redis://:${REDIS_PASSWORD:-sirius-redis}@redis:6379/0
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_AUTH_USER:-sirius-cp}      # basic-auth к реестру (тот же юзер, что у mlflow)
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_AUTH_PASSWORD:-mlflow-auth-dev}
       CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:-change-me-ci-webhook}
       GITEA_BASE_URL: http://gitea:3000
       GITEA_TOKEN: ${GITEA_TOKEN:-}
@@ -175,18 +177,15 @@ services:
     networks: [internal]
 
   mlflow:
-    build: ./infra/mlflow   # psycopg2/boto3 запечены в образ (рантайм без egress)
-    command:
-      - sh
-      - -c
-      - >
-        mlflow server --host 0.0.0.0 --port 5000
-        --backend-store-uri postgresql+psycopg2://${MLFLOW_DB_USER:-mlflow}:${MLFLOW_DB_PASSWORD:-mlflow}@mlflow-db:5432/mlflow
-        --artifacts-destination s3://mlflow
+    build: ./infra/mlflow   # psycopg2/boto3 запечены в образ; entrypoint поднимает basic-auth
     environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://${MLFLOW_DB_USER:-mlflow}:${MLFLOW_DB_PASSWORD:-mlflow}@mlflow-db:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
       AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
+      # basic-auth реестра: control-plane ходит под этими кредами (см. ниже MLFLOW_TRACKING_*)
+      MLFLOW_AUTH_ADMIN_USERNAME: ${MLFLOW_AUTH_USER:-sirius-cp}
+      MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_AUTH_PASSWORD:-mlflow-auth-dev}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 10s

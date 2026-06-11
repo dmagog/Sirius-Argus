@@ -15,6 +15,11 @@ import requests
 logger = logging.getLogger("sirius")
 
 MLFLOW = os.environ.get("MLFLOW_TRACKING_URI", "").rstrip("/")
+# basic-auth к MLflow-реестру: control-plane — единственная дверь не только по сети, но и по
+# аутентификации (рандомный контейнер во internal-сети не пишет в реестр без логина).
+_USER = os.environ.get("MLFLOW_TRACKING_USERNAME", "")
+_PASS = os.environ.get("MLFLOW_TRACKING_PASSWORD", "")
+_AUTH = (_USER, _PASS) if _USER else None
 _HEALTH_TIMEOUT = 2
 _TIMEOUT = 5
 
@@ -35,7 +40,7 @@ def connected():
     if not MLFLOW:
         return False
     try:
-        return requests.get(f"{MLFLOW}/health", timeout=_HEALTH_TIMEOUT).status_code == 200
+        return requests.get(f"{MLFLOW}/health", auth=_AUTH, timeout=_HEALTH_TIMEOUT).status_code == 200
     except requests.RequestException:
         return False
 
@@ -53,7 +58,7 @@ def _tags(d):
 def ensure_registered_model(name, tags=None):
     """Идемпотентно: создаёт registered model; «уже существует» — это ок."""
     try:
-        r = requests.post(_api("/registered-models/create"),
+        r = requests.post(_api("/registered-models/create"), auth=_AUTH,
                           json={"name": name, "tags": _tags(tags)}, timeout=_TIMEOUT)
     except requests.RequestException as e:
         raise RegistryError(str(e))
@@ -64,7 +69,7 @@ def ensure_registered_model(name, tags=None):
 
 def create_model_version(name, source, tags=None):
     try:
-        r = requests.post(_api("/model-versions/create"),
+        r = requests.post(_api("/model-versions/create"), auth=_AUTH,
                           json={"name": name, "source": source, "tags": _tags(tags)}, timeout=_TIMEOUT)
     except requests.RequestException as e:
         raise RegistryError(str(e))
@@ -76,11 +81,11 @@ def create_model_version(name, source, tags=None):
 def get_registered_model(name):
     """Запись MLflow (имя + версии с тегами) или None, если нет/недоступно."""
     try:
-        r = requests.get(_api("/registered-models/get"), params={"name": name}, timeout=_TIMEOUT)
+        r = requests.get(_api("/registered-models/get"), auth=_AUTH, params={"name": name}, timeout=_TIMEOUT)
         if r.status_code != 200:
             return None
         rm = r.json().get("registered_model", {})
-        s = requests.get(_api("/model-versions/search"), params={"filter": f"name='{name}'"}, timeout=_TIMEOUT)
+        s = requests.get(_api("/model-versions/search"), auth=_AUTH, params={"filter": f"name='{name}'"}, timeout=_TIMEOUT)
         versions = s.json().get("model_versions", []) if s.status_code == 200 else rm.get("latest_versions", [])
         return {"name": name, "versions": versions}
     except requests.RequestException:
@@ -101,7 +106,7 @@ def find_version_by_cp(name, cp_version):
 
 def set_version_tag(name, version, key, value):
     try:
-        r = requests.post(_api("/model-versions/set-tag"),
+        r = requests.post(_api("/model-versions/set-tag"), auth=_AUTH,
                           json={"name": name, "version": str(version), "key": key, "value": str(value)}, timeout=_TIMEOUT)
     except requests.RequestException as e:
         raise RegistryError(str(e))

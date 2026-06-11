@@ -114,10 +114,12 @@ to pass → выбрать `static-security` и `compose-validate`; Require PR b
   ВСЕХ контейнеров маскируются ДО отправки в Loki (раньше app-фильтр покрывал только control-plane).
   Проверено end-to-end: инъецированный секрет приходит в Loki как `[REDACTED]`.
   Остаток: для критичного аудита Vault лучше отдельный файловый sink, а не stdout→Loki (ниже).
-- **MLflow без auth.** Реестр-backend MLflow не аутентифицирован — «единственная дверь» держится только
-  на сетевой изоляции; теги (stage/criticality/signature) подделываемы изнутри сети. Включить
-  `mlflow server --app-name basic-auth` с кредами из Vault; control-plane не доверять MLflow как
-  источнику истины о стадии (авторитетен Postgres+аудит). MLflow-артефакты — отдельный MinIO-юзер на `s3://mlflow`, не root.
+- **MLflow без auth.** ✅ Сделано: `mlflow server --app-name basic-auth --workers 1` (entrypoint
+  `infra/mlflow/entrypoint.sh`, креды админа из env `MLFLOW_AUTH_USER/PASSWORD` → в проде из Vault);
+  control-plane ходит под Basic Auth (`registry.py`, `MLFLOW_TRACKING_USERNAME/PASSWORD`). Проверено:
+  модель пишется (`backend_synced=true`) и читается (`/backend present=true`) с auth, без auth → 401.
+  Остатки: control-plane не доверять MLflow как источнику истины о стадии (авторитетен Postgres+аудит);
+  MLflow-артефакты — отдельный MinIO-юзер на `s3://mlflow`, не root; в проде сменить пароль админа MLflow.
 - **Vault audit.** `init.sh` шлёт audit в stdout → Loki (каждый read секрета логируется в общий стек).
   В проде — отдельный файловый sink с ограниченным доступом, либо исключить vault из promtail.
 - **gitea-data.** `infra/gitea-data/` (SSH host-ключи, JWT/INTERNAL_TOKEN, `gitea.db`) лежит в дереве
