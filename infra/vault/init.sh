@@ -17,8 +17,8 @@ vault audit list 2>/dev/null | grep -q '^file/' || vault audit enable file file_
 
 # KV v2: секреты платформы
 vault secrets list 2>/dev/null | grep -q '^secret/' || vault secrets enable -path=secret kv-v2
-vault kv put secret/sirius/signing seed="${SIGNING_SEED:-5e1f17a05e1f17a0c0ffee}"
-vault kv put secret/sirius/service-token token="${SIRIUS_SERVICE_TOKEN:-svc-serving-local-dev-7f3a9c}"
+vault kv put secret/sirius/signing seed="${SIGNING_SEED:-}"
+vault kv put secret/sirius/service-token token="${SIRIUS_SERVICE_TOKEN:-}"
 
 # политика наименьших привилегий: control-plane читает ТОЛЬКО свои секреты
 cat > /tmp/cp.hcl <<'EOF'

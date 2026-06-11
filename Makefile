@@ -1,6 +1,10 @@
-.PHONY: up up-full up-test dev down config test demo pipeline selfscan logs ps
+.PHONY: secrets up up-full up-test dev down config test demo pipeline selfscan logs ps
 
-up:        ## core: поднять MVP-стек (лимит загрузки 2 ГиБ — реальные модели проходят)
+secrets:   ## сгенерировать .env со случайными секретами (нужно один раз перед up; .env не коммитится)
+	python3 scripts/gen_env.py
+
+up:        ## core: поднять MVP-стек (сначала `make secrets`; лимит загрузки 2 ГиБ)
+	@test -f .env || { echo "нет .env — выполни `make secrets`"; exit 1; }
 	docker compose up -d --build
 
 up-full:   ## core + observability (Loki/Grafana/Prometheus) + Gitea
@@ -21,8 +25,9 @@ down:      ## остановить и убрать контейнеры
 config:    ## валидация compose-конфига
 	docker compose config -q && echo "compose: OK"
 
-test:      ## pytest-bdd против поднятого стека (для полного набора с DOS-02: сначала `make up-test`)
-	cd tests && python -m pytest -q
+test:      ## pytest-bdd против поднятого стека (сначала `make secrets && make up-test`)
+	@test -f .env || { echo "нет .env — выполни `make secrets`"; exit 1; }
+	set -a; . ./.env; set +a; cd tests && python3 -m pytest -q   # .env → тесты, читающие SIRIUS_SERVICE_TOKEN/VAULT_ROOT_TOKEN
 
 demo:      ## живой прогон money-shot'ов по поднятому стеку
 	python3 scripts/demo.py
