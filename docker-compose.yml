@@ -58,8 +58,8 @@ services:
       DEV_AUTH: ${DEV_AUTH:-0}
       SERVICE_TOKEN: ${SIRIUS_SERVICE_TOKEN:-svc-serving-local-dev-7f3a9c}  # сервис-аккаунт сервинга (=serving)
       MINIO_ENDPOINT: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
+      AWS_ACCESS_KEY_ID: ${CP_S3_USER:-cp-svc}            # AUD-11: scoped-юзер MinIO (только sirius-quarantine), не root
+      AWS_SECRET_ACCESS_KEY: ${CP_S3_PASSWORD:-cp-s3-dev}
       ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-sirius-quarantine}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}  # AUD-20: 2 ГиБ по умолчанию (не 0/без лимита) — guard от resource-exhaustion, но реальные модели проходят. Малый лимит для DOS-02-теста — в docker-compose.test.yml
       VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}  # секреты из Vault по AppRole (фолбэк на env выше)
@@ -70,6 +70,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      minio-init:
+        condition: service_completed_successfully   # scoped-юзер cp-svc заведён до старта
       redis:
         condition: service_started
       mlflow:
@@ -169,6 +171,9 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-sirius-minio}
       MLFLOW_S3_USER: ${MLFLOW_S3_USER:-mlflow-svc}
       MLFLOW_S3_PASSWORD: ${MLFLOW_S3_PASSWORD:-mlflow-s3-dev}
+      CP_S3_USER: ${CP_S3_USER:-cp-svc}
+      CP_S3_PASSWORD: ${CP_S3_PASSWORD:-cp-s3-dev}
+      ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-sirius-quarantine}
     entrypoint: ["/bin/sh", "/minio-init.sh"]
     volumes:
       - ./infra/minio/init.sh:/minio-init.sh:ro

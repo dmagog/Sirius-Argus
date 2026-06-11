@@ -1,10 +1,12 @@
 #!/bin/sh
-# MinIO: отдельный сервис-юзер для MLflow с политикой ТОЛЬКО на s3://mlflow (least privilege —
-# MLflow больше не ходит под root-кредами MinIO). Идемпотентно, one-shot после старта MinIO.
+# MinIO least privilege: отдельные сервис-юзеры с политикой на ОДИН бакет —
+#   mlflow-svc → s3://mlflow (артефакты MLflow)
+#   cp-svc     → s3://sirius-quarantine (карантин-стор control-plane, AUD-11)
+# Ни тот, ни другой не ходят под root MinIO. Идемпотентно, one-shot после старта MinIO.
 set -e
 ALIAS=local
 
-# ждём MinIO и логинимся root'ом (root — только для bootstrap юзера/политики, не для MLflow)
+# ждём MinIO и логинимся root'ом (root — только для bootstrap юзеров/политик)
 i=0
 until mc alias set "$ALIAS" http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
   i=$((i + 1)); [ "$i" -ge 60 ] && { echo "minio-init: MinIO не поднялся за разумное время"; exit 1; }
@@ -12,29 +14,30 @@ until mc alias set "$ALIAS" http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PA
 done
 echo "minio-init: подключились к MinIO"
 
-# бакет артефактов MLflow
-mc mb --ignore-existing "$ALIAS/mlflow" >/dev/null 2>&1 || true
-
-# политика наименьших привилегий: только s3://mlflow
-cat > /tmp/mlflow-policy.json <<'EOF'
+# ensure_scoped_user <policy> <bucket> <user> <password>: бакет + политика только на него + юзер
+ensure_scoped_user() {
+  pol="$1"; bucket="$2"; usr="$3"; pwd="$4"
+  mc mb --ignore-existing "$ALIAS/$bucket" >/dev/null 2>&1 || true
+  cat > "/tmp/$pol.json" <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
-    { "Effect": "Allow", "Action": ["s3:*"], "Resource": ["arn:aws:s3:::mlflow", "arn:aws:s3:::mlflow/*"] }
+    { "Effect": "Allow", "Action": ["s3:*"], "Resource": ["arn:aws:s3:::${bucket}", "arn:aws:s3:::${bucket}/*"] }
   ]
 }
 EOF
-mc admin policy create "$ALIAS" mlflow-only /tmp/mlflow-policy.json >/dev/null 2>&1 \
-  || mc admin policy add "$ALIAS" mlflow-only /tmp/mlflow-policy.json >/dev/null 2>&1 \
-  || echo "minio-init: политика mlflow-only уже есть"
+  mc admin policy create "$ALIAS" "$pol" "/tmp/$pol.json" >/dev/null 2>&1 \
+    || mc admin policy add "$ALIAS" "$pol" "/tmp/$pol.json" >/dev/null 2>&1 \
+    || echo "minio-init: политика $pol уже есть"
+  mc admin user add "$ALIAS" "$usr" "$pwd" >/dev/null 2>&1 \
+    || echo "minio-init: юзер $usr уже есть"
+  mc admin policy attach "$ALIAS" "$pol" --user "$usr" >/dev/null 2>&1 \
+    || mc admin policy set "$ALIAS" "$pol" "user=$usr" >/dev/null 2>&1 \
+    || echo "minio-init: политика $pol уже привязана к $usr"
+  echo "minio-init: юзер $usr → политика $pol (только s3://$bucket)"
+}
 
-# сервис-юзер MLflow
-mc admin user add "$ALIAS" "$MLFLOW_S3_USER" "$MLFLOW_S3_PASSWORD" >/dev/null 2>&1 \
-  || echo "minio-init: юзер $MLFLOW_S3_USER уже есть"
+ensure_scoped_user mlflow-only mlflow "$MLFLOW_S3_USER" "$MLFLOW_S3_PASSWORD"
+ensure_scoped_user cp-only "${ARTIFACT_BUCKET:-sirius-quarantine}" "$CP_S3_USER" "$CP_S3_PASSWORD"
 
-# привязка политики к юзеру (синтаксис attach в новых mc, set — в старых)
-mc admin policy attach "$ALIAS" mlflow-only --user "$MLFLOW_S3_USER" >/dev/null 2>&1 \
-  || mc admin policy set "$ALIAS" mlflow-only "user=$MLFLOW_S3_USER" >/dev/null 2>&1 \
-  || echo "minio-init: политика уже привязана к $MLFLOW_S3_USER"
-
-echo "minio-init: MLflow-юзер $MLFLOW_S3_USER с политикой mlflow-only (только s3://mlflow) готов"
+echo "minio-init: scoped-юзера готовы (mlflow-svc, cp-svc)"
