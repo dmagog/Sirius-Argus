@@ -154,7 +154,7 @@
 ## Запуск
 
 ```bash
-cp .env.example .env      # поправь секреты
+make secrets              # сгенерировать .env со случайными секретами (в репозиторий не коммитятся)
 make up                   # core: control-plane + Postgres + Keycloak + Redis + MinIO + MLflow + reverse-proxy
 # или: make up-full       # + observability (Loki/Grafana/Prometheus) + Gitea
 ```
