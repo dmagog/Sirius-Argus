@@ -118,8 +118,11 @@ to pass → выбрать `static-security` и `compose-validate`; Require PR b
   `infra/mlflow/entrypoint.sh`, креды админа из env `MLFLOW_AUTH_USER/PASSWORD` → в проде из Vault);
   control-plane ходит под Basic Auth (`registry.py`, `MLFLOW_TRACKING_USERNAME/PASSWORD`). Проверено:
   модель пишется (`backend_synced=true`) и читается (`/backend present=true`) с auth, без auth → 401.
-  Остатки: control-plane не доверять MLflow как источнику истины о стадии (авторитетен Postgres+аудит);
-  MLflow-артефакты — отдельный MinIO-юзер на `s3://mlflow`, не root; в проде сменить пароль админа MLflow.
+  ✅ MLflow-артефакты — отдельный MinIO-юзер `mlflow-svc` с политикой только на `s3://mlflow`
+  (`infra/minio/init.sh` + сервис `minio-init`), не root; проверено: юзер имеет доступ к `s3://mlflow`,
+  но `s3://sirius-quarantine` запрещён. Остатки: control-plane не доверять MLflow как источнику истины
+  о стадии (авторитетен Postgres+аудит); в проде сменить пароль админа MLflow; аналогично дать
+  control-plane узкого MinIO-юзера на `sirius-quarantine` вместо root (AUD-11).
 - **Vault audit.** `init.sh` шлёт audit в stdout → Loki (каждый read секрета логируется в общий стек).
   В проде — отдельный файловый sink с ограниченным доступом, либо исключить vault из promtail.
 - **gitea-data.** `infra/gitea-data/` (SSH host-ключи, JWT/INTERNAL_TOKEN, `gitea.db`) лежит в дереве

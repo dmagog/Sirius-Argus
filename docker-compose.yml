@@ -160,6 +160,22 @@ services:
       - "127.0.0.1:9001:9001"   # AUD-17: веб-консоль MinIO только на loopback (вход root; доступ — SSH-туннель, ADR-0012)
     networks: [internal, edge-minio]   # edge-minio — публикация консоли на хост; НЕ общий edge с serving (RT-06)
 
+  # один-shot: заводит сервис-юзера MLflow с политикой ТОЛЬКО на s3://mlflow (least privilege,
+  # MLflow не ходит под root-кредами MinIO). Идемпотентно.
+  minio-init:
+    image: minio/mc:latest
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-sirius}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-sirius-minio}
+      MLFLOW_S3_USER: ${MLFLOW_S3_USER:-mlflow-svc}
+      MLFLOW_S3_PASSWORD: ${MLFLOW_S3_PASSWORD:-mlflow-s3-dev}
+    entrypoint: ["/bin/sh", "/minio-init.sh"]
+    volumes:
+      - ./infra/minio/init.sh:/minio-init.sh:ro
+    depends_on: [minio]
+    networks: [internal]
+    restart: "no"
+
   mlflow-db:
     image: postgres:17-alpine
     # Своя БД: таблицы MLflow (datasets, model_versions) не должны пересекаться
@@ -181,8 +197,8 @@ services:
     environment:
       MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://${MLFLOW_DB_USER:-mlflow}:${MLFLOW_DB_PASSWORD:-mlflow}@mlflow-db:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_USER:-sirius}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-sirius-minio}
+      AWS_ACCESS_KEY_ID: ${MLFLOW_S3_USER:-mlflow-svc}        # scoped-юзер MinIO (только s3://mlflow), не root
+      AWS_SECRET_ACCESS_KEY: ${MLFLOW_S3_PASSWORD:-mlflow-s3-dev}
       # basic-auth реестра: control-plane ходит под этими кредами (см. ниже MLFLOW_TRACKING_*)
       MLFLOW_AUTH_ADMIN_USERNAME: ${MLFLOW_AUTH_USER:-sirius-cp}
       MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_AUTH_PASSWORD:-mlflow-auth-dev}
@@ -194,6 +210,8 @@ services:
     depends_on:
       mlflow-db:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully   # scoped-юзер MLflow заведён до старта
     networks: [internal]
 
   serving:
