@@ -25,3 +25,15 @@ Feature: Контроль источников данных (gate на зака�
     And DE создал датасет с PII-колонкой
     When MLSecOps читает схему датасета
     Then PII-значение видно
+
+  Scenario: AUD-07 — UI-карточка маскирует PII без допуска
+    Given поднятый control-plane
+    And DE создал датасет с PII-колонкой
+    When DS открывает UI-карточку датасета
+    Then в UI PII-значение замаскировано
+
+  Scenario: AUD-07 — UI-карточка показывает PII с допуском
+    Given поднятый control-plane
+    And DE создал датасет с PII-колонкой
+    When MLSecOps открывает UI-карточку датасета
+    Then в UI PII-значение видно

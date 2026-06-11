@@ -90,3 +90,26 @@ def nonpii_visible():
 @then("PII-значение видно")
 def pii_visible():
     assert _cols()["email"]["sample"] == "alice@example.com", S["resp"].text
+
+
+# --- AUD-07 (per-role маскирование и в server-rendered UI, не только в API) ---
+@when("DS открывает UI-карточку датасета")
+def ds_opens_ui_card():
+    S["resp"] = httpx.get(f"{BASE}/data/dataset/{S['ds_id']}", headers=tok("DS"), timeout=10)
+
+
+@when("MLSecOps открывает UI-карточку датасета")
+def sec_opens_ui_card():
+    S["resp"] = httpx.get(f"{BASE}/data/dataset/{S['ds_id']}", headers=tok("MLSecOps"), timeout=10)
+
+
+@then("в UI PII-значение замаскировано")
+def ui_pii_masked():
+    assert S["resp"].status_code == 200, S["resp"].text
+    assert "alice@example.com" not in S["resp"].text, "PII-сэмпл утёк в UI-карточку роли без допуска"
+
+
+@then("в UI PII-значение видно")
+def ui_pii_visible():
+    assert S["resp"].status_code == 200, S["resp"].text
+    assert "alice@example.com" in S["resp"].text, "PII-сэмпл не показан в UI роли с допуском"

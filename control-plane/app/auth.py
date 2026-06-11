@@ -117,3 +117,26 @@ def get_principal(authorization: str = Header(default="")) -> "Principal":
     if is_revoked(sub):  # AUD-12: durable-отзыв (Redis), а не только in-memory
         raise HTTPException(status_code=401, detail="access revoked (offboarded)")
     return Principal(sub, [r for r in roles if r in ROLES])
+
+
+def viewer_roles(request) -> set:
+    """AUD-07: роли зрителя server-rendered UI — для display-time решений (маскирование PII).
+    НИКОГДА не бросает 401: периметр (анонимный доступ) закрывают oauth2-proxy/basic_auth
+    (AUD-02/03), здесь решаем лишь «что показать». Источник ролей по приоритету:
+      1) X-Auth-Request-Groups — за oauth2-proxy (прод). Caddy строго стрипает ВХОДЯЩИЕ
+         X-Auth-Request-* (Caddyfile.prod/production), поэтому заголовок неспуфабелен — та же
+         гарантия неподделываемости, что у UI-аппрува (AUD-03).
+      2) Bearer-токен — dev/тесты: ТА ЖЕ валидация, что get_principal (никакого второго,
+         более слабого пути); 401 → пустые роли (маскируем).
+      3) иначе пусто (аноним → всё чувствительное замаскировано).
+    """
+    groups = request.headers.get("X-Auth-Request-Groups")
+    if groups:
+        return {g.strip() for g in groups.split(",") if g.strip() in ROLES}
+    authz = request.headers.get("authorization", "")
+    if authz.startswith("Bearer "):
+        try:
+            return get_principal(authz).roles
+        except HTTPException:
+            return set()
+    return set()
