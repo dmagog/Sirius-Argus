@@ -182,6 +182,9 @@ def _sa_css():
         # ── hero-сплэш при входе (играет каждую загрузку обзора; фон = --sa-bg, тема до отрисовки) ──
         ".sa-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--sa-bg);transition:opacity .55s ease;}"
         ".sa-splash.out{opacity:0;pointer-events:none;}"
+        # раз-в-сутки: если сплэш уже показан сегодня, head-скрипт ставит html.sa-skip-splash →
+        # прячем мгновенно (до пейнта, без вспышки); контроллер ниже сразу снимет элемент
+        "html.sa-skip-splash .sa-splash{display:none!important}"
         ".sa-splash .halo{position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;}"
         # комета (SVG-путь): ширина плавно СУЖАЕТСЯ к хвосту (до точки) + градиент #cometg затухает
         # по прозрачности. Голова движется ТОЛЬКО вращением SVG (saComet linear) → постоянная скорость.
@@ -289,7 +292,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         f"<div class='sa-railfoot'><span class='sa-mono'>argus · prod</span><span class='sa-mono'>{nnodes} узлов</span></div></nav>"
     )
 
-    # hero-сплэш — только на стартовом экране (обзор); играет при каждой загрузке
+    # hero-сплэш — только на стартовом экране (обзор); играет РАЗ В СУТКИ (первое открытие за день)
     _comet = _comet_path(span=175)  # ФИКСИРОВАННАЯ геометрия на круге (не морфим → ничего не проваливается)
     splash = (
         "<div class='sa-splash' id='sa-splash'>"
@@ -308,6 +311,15 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         "<div class='bar'><i></i></div>"
         "<div class='step'><span class='dot'></span><span class='txt'>Инициализация control-plane…</span></div>"
         "</div></div>"
+    ) if active == "overview" else ""
+
+    # раз-в-сутки: в <head> (до парса body) сверяем дату последнего показа сплэша. Уже показан
+    # сегодня → ставим html.sa-skip-splash (CSS прячет мгновенно, без вспышки). Иначе запоминаем
+    # сегодняшнюю дату — т.е. показ «тратится» ТОЛЬКО на overview, где сплэш реально рендерится.
+    splash_gate = (
+        "<script>try{var _d=new Date(),_k=_d.getFullYear()+'-'+(_d.getMonth()+1)+'-'+_d.getDate();"
+        "if(localStorage.getItem('sa-splash-day')===_k){document.documentElement.classList.add('sa-skip-splash');}"
+        "else{localStorage.setItem('sa-splash-day',_k);}}catch(e){}</script>"
     ) if active == "overview" else ""
 
     gates_col = "var(--sa-alert)" if gates_ok < len(gates) else "var(--sa-ok)"
@@ -329,6 +341,7 @@ def _shell(active, pipeline, infra, breadcrumb, content, body_js="", title="Siri
         "<!doctype html><html lang=ru><head><meta charset=utf-8>"
         "<script>try{var _t=localStorage.getItem('sa-theme');if(_t)document.documentElement.setAttribute('data-sa-theme',_t);"
         "if(localStorage.getItem('sa-nav')==='hidden'&&window.matchMedia('(min-width:901px)').matches)document.documentElement.classList.add('nav-hidden');}catch(e){}</script>"
+        f"{splash_gate}"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         f"<title>{_e(title)}</title><link rel=icon type=image/png href='/static/avatar.png'>"
         "<link rel=preconnect href='https://fonts.googleapis.com'><link rel=preconnect href='https://fonts.gstatic.com' crossorigin>"
@@ -355,10 +368,11 @@ function saThemeIcon(){var t=document.documentElement.getAttribute('data-sa-them
   if(i)i.className='bi '+(t==='light'?'bi-sun':'bi-moon-stars');}
 (function(){saThemeIcon();function tick(){var u=document.getElementById('sa-upd');if(u)u.textContent=new Date().toLocaleTimeString('ru-RU');}
  setInterval(tick,4000);tick();})();
-// hero-сплэш: играет ПРИ КАЖДОЙ загрузке обзора (удобно отлаживать промо-материалы). По мере
-// заполнения прогрессбара под ним сменяются тексты этапов («прорабатываем модули контура»).
-// ~2.5с, декоративно; уважаем prefers-reduced-motion; оверлей не блокирует контент.
+// hero-сплэш: играет РАЗ В СУТКИ — при первом открытии обзора за день (гейт по дате в <head>,
+// localStorage 'sa-splash-day'). По мере заполнения прогрессбара сменяются тексты этапов.
+// ~9с, декоративно; уважаем prefers-reduced-motion; оверлей не блокирует контент.
 (function(){var el=document.getElementById('sa-splash');if(!el)return;
+ if(document.documentElement.classList.contains('sa-skip-splash')){el.remove();return;}
  var step=el.querySelector('.step'),txt=el.querySelector('.step .txt'),dot=el.querySelector('.step .dot');
  var STEPS=['Инициализация control-plane…','Проверка hash-chain аудита…','Загрузка карты покрытия угроз…',
             'Гейты и сканеры на постах…','Контур под наблюдением'];
