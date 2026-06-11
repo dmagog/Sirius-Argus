@@ -3,7 +3,7 @@
 > Принцип: **test-first в BDD-стиле** (outside-in). Поведение — угроза и ответ системы — описывается сценарием **до кода**; код итерации делает сценарий зелёным. Сценарий = спека + приёмочный тест + шаг демо + строка карты покрытия ([ADR-0004](adr/0004-bdd-methodology.md)).
 
 ## Что значит «test-first» у нас
-- 54 BDD-сценария ([bdd-catalog](threat-model/bdd-catalog.md)) написаны раньше кода; код итераций И0–И6 + защита энфорсера перевёл **53 из них в `green`** (73 pytest-функции, включая интеграционные serving/pipeline и доп. контроли сверх каталога — Vault, risk-acceptance, оверсайз, сервис-аккаунт, evidence-аппрув, append-only аудит, атомарный промоушен, ре-верификация прода, Keycloak brute-force), остаётся 1 — `spec` (`SUP-06` ShadowLogic — предел статического анализа, закрывается ручным аппрув-гейтом) ([risk-register](threat-model/risk-register.md) §«Статус контролей»).
+- 54 BDD-сценария ([bdd-catalog](threat-model/bdd-catalog.md)) написаны раньше кода; код итераций И0–И6 + защита энфорсера перевёл **53 из них в `green`** (75 pytest-функций — 73 passed + 2 skipped, включая интеграционные serving/pipeline и доп. контроли сверх каталога — Vault, risk-acceptance, оверсайз, сервис-аккаунт, evidence-аппрув, append-only аудит, атомарный промоушен, ре-верификация прода, Keycloak brute-force), остаётся 1 — `spec` (`SUP-06` ShadowLogic — предел статического анализа, закрывается ручным аппрув-гейтом) ([risk-register](threat-model/risk-register.md) §«Статус контролей»).
 - Код каждой итерации переводит свой набор `spec` → `green`.
 - «Зелёный» = проходящий `pytest-bdd` против **живой системы** (`docker compose up`), не моки.
 - Зелёная колонка в [roadmap](roadmap.md) — это Definition of Done итерации.
@@ -14,7 +14,7 @@
 
 | Уровень | Что покрывает | Инструмент | Test-first |
 |---|---|---|---|
-| Приёмка (BDD) | поведения против живого стека (53 сценария каталога green из 54; 73 pytest-функции) | pytest-bdd + httpx + проверки БД | да — сценарии раньше кода |
+| Приёмка (BDD) | поведения против живого стека (53 сценария каталога green из 54; 75 pytest-функций — 73 passed + 2 skipped) | pytest-bdd + httpx + проверки БД | да — сценарии раньше кода |
 | Unit | security-критичная чистая логика: policy-движок (матрица гейтов по критичности), hash-chain аудита, RBAC/object-authz, политика форматов, extraction-детектор | pytest | да — TDD там, где окупается |
 | Smoke | UI / шаблоны / glue | pytest, минимально | нет — без фанатизма |
 
@@ -67,4 +67,4 @@ def not_registered(ctx):
 - Связь с видимостью: статус сценария (`green`/`spec`/`fail`) питает [карту покрытия](architecture.md) и [KPI](threat-model/security-kpis.md) — «статус защищённости» берётся из проходящих тестов.
 
 ## Запуск
-`pytest` после `docker compose up`. В перспективе — шаг в control-plane как CI ([ADR-0002](adr/0002-gitea-control-plane-ci.md)), тот же набор гейтов.
+`make secrets && make up-test && make test`. `make test` подсасывает `.env` (`set -a; . ./.env; set +a`) и зовёт `python3 -m pytest` — без этого vault/service-auth падают; `make up-test` поднимает стек с `MAX_UPLOAD_BYTES=25 МиБ` для сценария `DOS-02`. В перспективе — шаг в control-plane как CI ([ADR-0002](adr/0002-gitea-control-plane-ci.md)), тот же набор гейтов.

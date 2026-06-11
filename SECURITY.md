@@ -6,30 +6,30 @@
 
 | Контроль | Где | Закрывает риск |
 |---|---|---|
-| Скан секретов (gitleaks) | pre-commit (локально); control-plane CI — план | SECR-1 |
-| Скан уязвимостей/секретов (Trivy fs) | control-plane CI — план; reference в `ci/` | SC-1 |
-| SAST (Semgrep) | control-plane CI при наличии кода | качество/инъекции |
+| Скан секретов (gitleaks) | pre-commit (локально) + обязательный гейт GitHub Actions (`.github/workflows/security.yml`, джоб `static-security`) | SECR-1 |
+| Скан зависимостей (pip-audit) | обязательный гейт GitHub Actions (джоб `static-security`, без `--ignore-vuln`); Trivy fs — reference-only в запаркованном `ci/gitlab-ci.reference.yml` | SC-1 |
+| SAST (bandit + semgrep) | обязательный гейт GitHub Actions (джоб `static-security`) | качество/инъекции |
 | Локальные хуки (pre-commit) | dev-машина | shift-left |
-| Fail-closed гейты | принцип; конфиг-reference `ci/gitlab-ci.reference.yml` | SC-1 (fail-open) |
-| Обязательное ревью | CODEOWNERS + MR-аппрув | ACC-02 (разделение полномочий) |
+| Fail-closed гейты | GitHub Actions: required status checks `static-security` + `compose-validate` (strict) на `main` | SC-1 (fail-open) |
+| Владелец изменений (CODEOWNERS) | задаёт владельца чувствительных путей; обязательное ревью ≥1 / запрет self-approve — план при росте команды (сейчас solo-merge) | ACC-02 (разделение полномочий) |
 
-> **GitLab CI запаркован** (`ci/gitlab-ci.reference.yml`): gitlab.com не запускает CI для неймспейса владельца (неверифицированный free-аккаунт), пайплайн падал на каждый push с 0 джобами. Реальный гейт — локальный (control-plane как CI, ADR-0002) + pre-commit. Конфиг сохранён как reference и lint-валиден; реактивируется возвратом в корень как `.gitlab-ci.yml` после верификации аккаунта владельца.
+> **Реальный гейт — GitHub Actions** (`.github/workflows/security.yml`): джобы `static-security` (bandit + pip-audit + gitleaks + semgrep) и `compose-validate`. Канон репозитория — GitHub (`github.com/dmagog/Sirius-Argus`); GitLab — legacy-remote. Старый `ci/gitlab-ci.reference.yml` запаркован как reference-only (Trivy fs там не активен) и в гейте не участвует.
 
-## Рекомендуемые настройки проекта (GitLab → Settings)
+## Настройки репозитория (GitHub → Settings → Branches)
 
-Применяются к защищаемым веткам (`main`) — это настройки уровня проекта, не файлы:
+Применяются к защищаемой ветке (`main`) — это настройки уровня репозитория, не файлы:
 
-- **Protected branch `main`:** запрет force-push, запрет прямого push (только через MR).
-- **Require approvals:** ≥1 аппрув, **запрет аппрува автором MR** (separation of duties, ACC-02).
-- **Require pipeline to succeed** перед merge (fail-closed на уровне ветки, закрывает GT-1; актуально после разблокировки CI).
-- **Require Code Owner approval** на изменения `ci/`, `/docs/threat-model/`, `SECURITY.md`.
+- **Branch protection `main` (включена 11.06.2026):** запрет force-push, запрет прямого push (только через PR).
+- **Required status checks (strict):** `static-security` + `compose-validate` обязаны пройти перед merge (fail-closed на уровне ветки, закрывает GT-1).
+- **Обязательное ревью:** сейчас **не включено** — solo-merge сохранён, `enforce_admins=false`. Required approval ≥1 и запрет self-approve — план при росте команды.
+- **CODEOWNERS** задаёт владельца изменений `ci/`, `/docs/threat-model/`, `SECURITY.md`.
 - **Signed commits** (рекомендуется) — целостность авторства.
 
-> Эти настройки правятся в shared-проекте и затрагивают всех — применять с согласованием, не автоматически.
+> Эти настройки правятся на уровне репозитория и затрагивают всех с доступом — менять с согласованием, не автоматически.
 
 ## Сообщить об уязвимости
 
-Внутренний процесс: завести issue с меткой `security` (confidential) либо эскалировать роли **MLSecOps**. Реакция и классификация — см. [docs/runbooks/incident-response.md](docs/runbooks/incident-response.md).
+Внутренний процесс: завести приватный GitHub issue с меткой `security` либо эскалировать роли **MLSecOps**. Реакция и классификация — см. [docs/runbooks/incident-response.md](docs/runbooks/incident-response.md).
 
 ## Контекст безопасности
 

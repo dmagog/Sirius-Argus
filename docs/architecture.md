@@ -11,7 +11,7 @@
 **Цель:** собрать из готовых блоков безопасную MLOps-систему, склеить её практиками MLSecOps и доказать на работающем MVP, что ключевые боли (типичные для ML-систем) закрыты — с полной видимостью статуса защищённости.
 
 **Нефункциональные требования (договорённости):**
-- Всё поднимается на ноутбуке одной командой `docker compose up`.
+- Всё поднимается на ноутбуке после генерации секретов: `make secrets && make up`.
 - Демо-сценарии запускаются легко (в пределе — одной командой-конвейером).
 - Никаких реальных RCE-закладок в коде.
 - Покрытие всего жизненного цикла ML-решения — от требований до вывода из эксплуатации.
@@ -448,7 +448,7 @@ flowchart LR
 | Бизнес-критичность, чтение реестра | — | — | ✅ | ✅ | — |
 | Исполнительный дашборд (read-only) | — | — | ✅ | ✅ | ✅ |
 
-Эта матрица энфорсится живьём — раздел «Роли (RBAC)» в UI показывает «действие → роль» из единого источника (слева — тёмная тема, справа — светлая):
+Таблица выше — бизнес-проекция (по интенту ролей); authoritative-источник прав — `rbac.py` и страница «Роли» в UI (например, чтение реестра и исполнительный дашборд по `PERMISSIONS` доступны всем пяти ролям). Эта матрица энфорсится живьём — раздел «Роли (RBAC)» в UI показывает «действие → роль» из единого источника (слева — тёмная тема, справа — светлая):
 
 <table><tr>
 <td><img src="_assets/img/15-roles.png" alt="Матрица ролей RBAC — тёмная"></td>
@@ -505,7 +505,7 @@ flowchart LR
 | Git + CI-вход | Gitea (branch protection, webhooks) |
 | Метаданные | PostgreSQL |
 | AuthN / идентичность | Keycloak (OIDC, realm-as-code) |
-| Гейты безопасности | реализовано: **modelaudit** (артефакты, изолир. venv) + **Semgrep** + **detect-secrets** (код/секреты) + **pip-audit** (CVE, best-effort) + подпись **OpenSSF model-signing** (офлайн-ключ, над реальными байтами) ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST / typosquat·dep-confusion / качество данных — `control-plane/app/scanners.py`); целевое: Trivy, Syft, gitleaks |
+| Гейты безопасности | реализовано: **modelaudit** (артефакты, изолир. venv) + **Semgrep** + **detect-secrets** + **gitleaks** (код/секреты; CI-гейт `security.yml` + pre-commit) + **pip-audit** (CVE, best-effort) + подпись **OpenSSF model-signing** (офлайн-ключ, над реальными байтами) ∪ собственные сканеры (pickle-опкоды / формат / зависимости / AST / typosquat·dep-confusion / качество данных — `control-plane/app/scanners.py`); целевое: Trivy, Syft |
 | Секрет-менеджмент | **HashiCorp Vault** (AppRole, политика least-privilege, аудит доступа, revoke/rotate); в демо dev-backend, прод — file/raft + auto-unseal (KMS/HSM) |
 | ML / валидация | scikit-learn (3 модели: boosting / linear / anomaly, CPU-only); целевое: XGBoost, ART; deep — pre-trained CPU-only |
 | Брокер / шина событий | Redis Streams (события + бэкенд rate-limit) — в профиле `core` |

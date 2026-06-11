@@ -21,7 +21,7 @@ Vault и Keycloak в production-режиме, управляемые секре�
 | `/api` | `DEV_AUTH=0`, но засев через временный `DEV_AUTH=1` | `DEV_AUTH=0` всегда; dev-токены недоступны; никакого сид-режима |
 | Keycloak | `start-dev`, демо-персоны (логин=пароль) | `start --optimized`, HTTPS, реальные пользователи/федерация, brute-force detection |
 | Vault | `server -dev`, фикс. root-токен | `server` с raft/file-storage + TLS + auto-unseal; AppRole; без root-токена в control-plane |
-| Секреты | дефолты `change-me-*` / `*-dev` | из секрет-стора/KMS, ротация, **ноль** дефолтных значений |
+| Секреты | секреты из `make secrets` (случайные, `.env` не коммитится) | из секрет-стора/KMS, ротация, **ноль** дефолтных значений |
 | Данные | `scripts/demo.py` (синтетика) | реальный ЖЦ моделей через gated-пайплайн; сид не запускается |
 | Бэкапы | выключены | Postgres PITR + бэкап объектного стора + снапшоты ВМ; проверка восстановления |
 | Сеть | `ufw` 22/80/443, ops на `127.0.0.1` | публично только 443; ops-консоли за SSO + VPN/allowlist; управление через VPN |
@@ -68,7 +68,7 @@ Vault и Keycloak в production-режиме, управляемые секре�
   Строгий ролевой контроль (`require(...)`, object-level, fail-closed) остаётся на `/api` и работает
   по Keycloak-JWT; `DEV_AUTH=0` гарантирует, что `dev:*`-токены не принимаются.
 - **Сервис-аккаунт serving→control-plane.** `SIRIUS_SERVICE_TOKEN` — стойкое значение из
-  секрет-стора (не дефолт `svc-serving-local-dev-7f3a9c`); узкая роль `Service` (только
+  секрет-стора (не пустое и не из репозитория); узкая роль `Service` (только
   `runtime.event` / `prod.verify`).
 - **Offboarding (ACC-03).** Отзыв субъекта закрывает доступ немедленно — встроить в процесс
   ухода/смены ролей.
@@ -131,7 +131,7 @@ Vault и Keycloak в production-режиме, управляемые секре�
 ## 9. Чек-лист перед go-live
 
 - [ ] `DEV_AUTH=0` (и нигде в проде не включается `1`).
-- [ ] Ни одного дефолтного секрета (`change-me-*`, `*-dev`, `*-local`) — все ротированы из стора.
+- [ ] Ни одной пустой/несгенерированной переменной секрета — все из секрет-стора.
 - [ ] Keycloak: `start` (не `start-dev`), демо-персоны удалены, brute-force on, HTTPS-hostname.
 - [ ] Vault: production-режим, sealed/auto-unseal, control-plane ходит по AppRole, не по root.
 - [ ] UI control-plane закрыт (auth-proxy или приватная сеть); login-less гейт не публичен.
