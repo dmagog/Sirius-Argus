@@ -127,7 +127,7 @@ flowchart TB
 | Реестр | `MLFLOW_TRACKING_URI` | адрес обёрнутого MLflow (наружу не публикуется) | да |
 | Хранилище | `MINIO_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3-совместимое хранилище | да |
 | | `ARTIFACT_BUCKET` | карантин-бакет проверенных артефактов | да |
-| | `MAX_UPLOAD_BYTES` | лимит тела загрузки (`DOS-02`) | дефолт 25 МиБ |
+| | `MAX_UPLOAD_BYTES` | лимит тела загрузки (`DOS-02`) | дефолт 2 ГиБ (реальные модели проходят); 25 МиБ — только в тест-стеке `make up-test`/`docker-compose.test.yml` для DOS-02 |
 | Данные / аудит | `DATABASE_URL` | PostgreSQL — метаданные + append-only аудит | да |
 | Шина | `REDIS_URL` | события + rate-limit + anti-replay | да |
 | CI | `CI_WEBHOOK_SECRET` | HMAC-секрет вебхука Git | да (для CI-гейта) |
@@ -141,7 +141,7 @@ flowchart TB
 
 ## Режимы развёртывания
 
-**Greenfield (из коробки).** Поднимается одним `docker compose` со всем стеком: control-plane + Keycloak + MLflow + MinIO + Postgres + Redis + Vault + Gitea + наблюдаемость. Подходит для пилота и демо.
+**Greenfield (из коробки).** Поднимается через `make secrets` (генерация `.env` со случайными секретами) + `make up` / `docker compose up` со всем стеком: control-plane + Keycloak + MLflow + MinIO + Postgres + Redis + Vault + Gitea + наблюдаемость. Подходит для пилота и демо.
 
 **Brownfield (в существующий контур).** Подключаем к вашим системам поэтапно — что заменяемо и на каких условиях, см. [«Где подключить своё»](#где-подключить-своё-вариативность-компонентов) выше.
 

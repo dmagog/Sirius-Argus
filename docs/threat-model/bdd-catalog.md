@@ -40,6 +40,7 @@
 | DATA-02 | Label-flip от поставщика флагается | A10 | @ML02 | статистика качества данных | P1 | И2/И4 |
 | DATA-03 | UGC backdoor-триггер в карантине | A5 | @ML02 | scoped-детект + карантин | P2 | И4 |
 | DATA-04 | PII маскируется; немаскированный доступ запрещён | A8 | @privacy | masking + authz | P2 | И2 |
+| AUD-07 | PII в UI-карточке датасета маскируется по роли (поверх DATA-04) | A8 | @privacy | per-role маскирование в server-rendered UI-карточке датасета | P2 | И2 |
 | DATA-05 | Training-serving skew ловится | A8 | @ML08 | consistency-тест | P2 | И4 |
 | MON-01 | Дрейф данных/концепта → Finding + alert | A4,A5 | @ML08 | drift-монитор | P1 | И4 |
 | MON-02 | Невоспроизводимая модель не доходит до прода | A8,A9 | @governance | гейт воспроизводимости | P1 | И3 |
@@ -257,6 +258,23 @@ Feature: Маскирование PII
     Then значение PII-колонки замаскировано, не-PII видно
     When схему читает роль с допуском к PII
     Then значение PII-колонки видно
+```
+
+```gherkin
+@data @privacy @P2
+Feature: Маскирование PII в UI-карточке датасета (поверх DATA-04)
+  # AUD-07: контроль поверх DATA-04 — per-role маскирование в server-rendered UI.
+  # Реализация: cards.py dataset_card(unmasked) + auth.py viewer_roles
+  # (X-Auth-Request-Groups / Bearer). DATA-04 закрывает чтение схемы через API,
+  # AUD-07 — отображение той же схемы в карточке /data/dataset/{id}.
+  Scenario: AUD-07 — карточка датасета маскирует PII для роли без допуска
+    Given карточка датасета /data/dataset/{id} с PII-колонкой
+    When страницу открывает роль без допуска к PII
+    Then значение PII-колонки в карточке замаскировано, не-PII видно
+  Scenario: AUD-07 — карточка датасета показывает PII роли с допуском
+    Given карточка датасета /data/dataset/{id} с PII-колонкой
+    When страницу открывает роль с допуском к PII
+    Then значение PII-колонки в карточке видно
 ```
 
 ```gherkin

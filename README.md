@@ -4,7 +4,7 @@
 
 [![last commit](https://img.shields.io/github/last-commit/dmagog/Sirius-Argus?style=flat-square)](https://github.com/dmagog/Sirius-Argus/commits/main)
 ![BDD](https://img.shields.io/badge/BDD-53%2F54_green-2ea44f?style=flat-square)
-![tests](https://img.shields.io/badge/pytest-73_green-2ea44f?style=flat-square)
+![tests](https://img.shields.io/badge/pytest-75_green-2ea44f?style=flat-square)
 ![run](https://img.shields.io/badge/run-make_up-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![SSO](https://img.shields.io/badge/SSO-Keycloak_OIDC-FF6C37?style=flat-square&logo=keycloak&logoColor=white)
@@ -167,7 +167,7 @@ make up                   # core: control-plane + Postgres + Keycloak + Redis + 
 DEV_AUTH=1 make up      # локальное демо с dev-токенами ролей
 make demo               # money-shot'ы по живому стеку
 make pipeline           # сквозной ЖЦ одной модели: приём→скан→gate→аппрув-гейт→деплой→атака→decommission
-cd tests && pip install -r requirements.txt && pytest -q   # BDD против живого стека
+make secrets && make up-test && make test   # BDD против живого стека (make test подсасывает .env)
 ```
 
 AuthN — через Keycloak; для локали без Keycloak можно `DEV_AUTH=1` и токены `Bearer dev:<user>:<role>` (иначе dev-токены отклоняются — fail-closed). Профили `core`/`full` — см. [roadmap](docs/roadmap.md).
@@ -176,7 +176,7 @@ AuthN — через Keycloak; для локали без Keycloak можно `D
 
 ## Статус
 
-В разработке, итерации [И0–И6](docs/roadmap.md) — всё обязательное к сдаче готово, money-shot'ы гоняются одной командой (`make demo` / `make pipeline`). **73 pytest-функции green** (53 из 54 сценариев каталога; остаётся 1 — ShadowLogic, предел статического анализа, см. [risk-register](docs/threat-model/risk-register.md)). Документация идёт впереди кода намеренно: модель угроз и поведения (BDD) задают, что строим.
+В разработке, итерации [И0–И6](docs/roadmap.md) — всё обязательное к сдаче готово, money-shot'ы гоняются одной командой (`make demo` / `make pipeline`). **75 pytest-функций green** (73 passed + 2 skipped; 53 из 54 сценариев каталога; остаётся 1 — ShadowLogic, предел статического анализа, см. [risk-register](docs/threat-model/risk-register.md)). Документация идёт впереди кода намеренно: модель угроз и поведения (BDD) задают, что строим.
 
 ## Как датасеты и модели попадают в систему
 
@@ -211,7 +211,7 @@ Sirius Argus — контур контроля, а не замена вашем�
 | [docs/roadmap.md](docs/roadmap.md) | Итеративный план реализации (И0–И6), привязка к приоритетам куратора и сценариям |
 | [docs/architecture.md](docs/architecture.md) | Архитектура: компоненты, ER-модель, жизненный цикл, потоки, карта покрытия (схемы Mermaid) |
 | [docs/threat-model/personas.md](docs/threat-model/personas.md) | Персоны атакующих (A1–A22) и защитников (D1–D10), с кодовыми именами |
-| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 53 BDD-сценария: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
+| [docs/threat-model/bdd-catalog.md](docs/threat-model/bdd-catalog.md) | 54 BDD-сценария: разом модель угроз, acceptance-тест, шаг демо и строка карты покрытия |
 | [docs/testing.md](docs/testing.md) | Стратегия тестирования: test-first BDD, пирамида, pytest-bdd против compose |
 | [docs/threat-model/risk-register.md](docs/threat-model/risk-register.md) | Пер-узловой реестр рисков: приоритет L×I, обработка, владелец |
 | [docs/threat-model/security-kpis.md](docs/threat-model/security-kpis.md) | Измеримая безопасность: KPI и SLO |
@@ -239,4 +239,4 @@ Sirius Argus — контур контроля, а не замена вашем�
 
 ## Безопасность этого репозитория
 
-Репозиторий живёт по тем же правилам, что платформа применяет к ML: стоят pre-commit-хуки (gitleaks), чувствительные изменения проходят ревью через CODEOWNERS, конфиг fail-closed гейтов (gitleaks, Trivy, Semgrep) хранится как reference в `ci/`. Серверный гейт по плану — локальный control-plane как CI (ADR-0002); GitLab CI запаркован, потому что gitlab.com не запускает пайплайны на аккаунте владельца. Подробности — в [SECURITY.md](SECURITY.md).
+Репозиторий живёт по тем же правилам, что платформа применяет к ML: стоят pre-commit-хуки (gitleaks), чувствительные изменения проходят ревью через CODEOWNERS. Серверный гейт — GitHub Actions (`.github/workflows/security.yml`): джоба `static-security` (bandit + pip-audit + gitleaks + semgrep) и `compose-validate`; оба чека required для merge в `main`. Запаркованный legacy GitLab-конфиг (с Trivy) хранится как reference в `ci/`. Подробности — в [SECURITY.md](SECURITY.md).

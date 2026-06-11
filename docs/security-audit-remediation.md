@@ -54,7 +54,7 @@
 | AUD-18 | ⏳ | promtail (profile full) — операционный фикс (docker-socket-proxy/journald), описан в остатках |
 | AUD-19 | 🟡 | Прод требует секреты через `:?`/примеры; dev-дефолты оставлены намеренно (нужны тестам) |
 | AUD-20 | ✅ | Дефолт `MAX_UPLOAD_BYTES` — 2 ГиБ (не 0/безлимит; реальные модели проходят); потолки Caddy подняты выше app-лимита; малый лимит 25 МиБ для DOS-02 — в `docker-compose.test.yml` (`make up-test`) |
-| AUD-21 | ✅ | `.github/workflows/security.yml` (bandit/pip-audit/semgrep/gitleaks/compose-config); branch protection — операционно |
+| AUD-21 | ✅ | `.github/workflows/security.yml` (bandit/pip-audit/semgrep/gitleaks/compose-validate); branch protection — операционно |
 | AUD-22 | 📝 | Зафиксировать как осознанный остаточный риск (сервинг не из реестра) |
 | AUD-23 | ✅ | `ci_scans_api.py`: валидация `repo`/`path` из вебхука (anti-SSRF/traversal) |
 | AUD-24 | ✅ | `production.yml`: Grafana/Gitea не публикуются, пароль Grafana обязателен, регистрация Gitea закрыта |
@@ -72,7 +72,7 @@
 - **AUD-03/07** (идентичность и по-ролевое маскирование в UI): полностью закрываются переходом боевого стенда на `Caddyfile.production` + oauth2-proxy (forward_auth даёт `X-Auth-Request-User`); до этого Basic Auth убирает анонимный доступ.
 - **AUD-08** (non-owner роль БД), **AUD-09** (Vault unseal), **AUD-18** (docker-socket-proxy), **AUD-21** (branch protection), **AUD-16** (лимиты ресурсов) — конкретные шаги в [рунбуке хардненинга](runbooks/security-hardening-ops.md).
 
-> Перед публичным показом: на машине с Docker — `make config`; боевой/демо-режим и реальные модели (лимит 2 ГиБ) — `make up` (+ `make demo`); полный pytest-набор (с DOS-02, лимит 25 МиБ) — `make up-test`, затем `cd tests && python -m pytest -q`; для боевого стенда — `deploy_netangels.sh` (теперь Basic Auth реально включается, импортируется прод-realm).
+> Перед публичным показом: на машине с Docker — сначала `make secrets` (генерит `.env` со случайными секретами; без него `make up`/`make up-test` падают), затем `make config`; боевой/демо-режим и реальные модели (лимит 2 ГиБ) — `make up` (+ `make demo`); полный pytest-набор (с DOS-02, лимит 25 МиБ) — `make up-test`, затем `make test` (подсасывает `.env` и зовёт `python3 -m pytest -q`); для боевого стенда — `deploy_netangels.sh` (теперь Basic Auth реально включается, импортируется прод-realm).
 
 ## Второй заход — исследование «что упустили» (2026-06-10)
 

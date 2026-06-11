@@ -15,7 +15,7 @@
 
 ## Последствия
 - (+) «каждое действие сохранено» в прод-грейд виде; SIEM-style корреляция; метрики питают [security-KPIs](../threat-model/security-kpis.md) и карту покрытия.
-- (−) +3 контейнера (Loki/Grafana/Prometheus) → профиль compose `full`; вес.
+- (−) +4 контейнера (Loki/Promtail/Grafana/Prometheus) → профиль compose `full`; вес. Promtail (`docker-compose.yml` сервис `promtail`, конфиг `infra/observability/promtail-config.yml`) — агент сбора и отгрузки логов в Loki с redaction секретов.
 
 ## Альтернативы
 - **OpenSearch/Elastic** — ближе к SIEM, но тяжелее; на будущее.

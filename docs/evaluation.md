@@ -7,7 +7,7 @@
 ## Запуск
 
 ```bash
-cp .env.example .env          # дефолтов хватает для оценки
+make secrets                  # генерит .env со случайными секретами (scripts/gen_env.py; .env в .gitignore)
 DEV_AUTH=1 make up            # ядро: control-plane + Postgres + Keycloak + Redis + MinIO + MLflow + reverse-proxy
 # или: DEV_AUTH=1 make up-full # + наблюдаемость (Loki/Grafana/Prometheus) + Gitea
 ```
@@ -39,8 +39,11 @@ UI control-plane — **http://localhost:8080**. Сервинг моделей �
 ## Приёмочные тесты (BDD)
 
 ```bash
-cd tests && pip install -r requirements.txt && pytest -q     # 73 сценария против живого стека
+make secrets && make up-test     # тест-стек: лимит загрузки 25 МиБ (для DOS-02), обычный make up = 2 ГиБ
+make test                        # подсасывает .env и гоняет pytest против живого стека: 75 функций
 ```
+
+Без `make up-test` сценарий `DOS-02` красный (обычный лимит 2 ГиБ); без проброса `.env` (его делает `make test`) падают проверки vault и service-auth.
 
 Каждый `.feature` в `tests/features/` (Gherkin) — спека вида «угроза → что система обязана отработать»: блок / `Finding` / запись в аудит / объект не попал в реестр. Тесты гоняются против поднятого стека, не против моков.
 
