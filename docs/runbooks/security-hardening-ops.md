@@ -89,9 +89,11 @@ promtail (profile full) монтирует `/var/run/docker.sock` (= полны�
 
 ## AUD-21 · Branch protection
 
-CI-гейт (`.github/workflows/security.yml`) добавлен; включить на GitHub
-(`dmagog/Sirius-Argus`, ветка `main`): Settings → Branches → Protection rule → Require status checks
-to pass → выбрать `static-security` и `compose-validate`; Require PR before merge.
+✅ Включено (11.06.2026) на `dmagog/Sirius-Argus`, ветка `main`: required status checks (strict)
+`static-security` + `compose-validate` — мёрж в `main` блокируется, пока CI не зелёный. Без
+обязательного ревьюера (сохраняет solo-merge), `enforce_admins: false` (владелец может обойти при ЧП).
+Ужесточение при росте команды: `required_pull_request_reviews` ≥ 1 и/или `enforce_admins: true`
+(Settings → Branches, либо `PUT /repos/{owner}/{repo}/branches/main/protection`).
 
 ## Второй заход (исследование «что упустили»)
 
@@ -106,14 +108,20 @@ to pass → выбрать `static-security` и `compose-validate`; Require PR b
 - **AUD-11 Object-Lock.** Версионирование (уже включено) спасает от перезаписи, но НЕ от удаления.
   Для неизменяемости — создавать бакет карантина с Object-Lock (COMPLIANCE retention) при первом
   создании; control-plane выдать узкую S3-политику (PutObject/GetObject на префикс), не root MinIO.
-- **prod.yml secret-gating.** `docker-compose.prod.yml` не форсит `:?` на секретах → молчаливый фолбэк
-  на публичные дефолты (signing-seed `5e1f17a0…`, Vault root, service-token). Перенести `:?`-гейты в
-  `prod.yml` (как в `production.yml`) и убрать публичный seed-дефолт из `infra/vault/init.sh`. Либо
-  перевести деплой на `production.yml`. Также `REDIS_PASSWORD`/OIDC-секреты — генерировать, не дефолтить.
-- **Observability в prod.yml.** Хардненинг Grafana/Gitea (AUD-24) лежит в `production.yml`, а реальный
-  деплой идёт через `prod.yml` БЕЗ observability-оверрайдов. Продублировать (ports `!override []`,
-  `ALLOW_SIGN_UP=false`, `GRAFANA_PASSWORD:?`, `DISABLE_REGISTRATION`) в `prod.yml`, либо перейти на
-  `production.yml`. В base: Grafana биндить на `127.0.0.1:3000` и убрать из сети `edge`.
+- **prod.yml secret-gating.** ✅ Сделано (11.06.2026): в `docker-compose.prod.yml` control-plane теперь
+  `DEV_AUTH: "0"` (публичный контур — без dev-токенов) + fail-closed `:?`-гейты на `SIGNING_SEED`,
+  `SERVICE_TOKEN` (из `SIRIUS_SERVICE_TOKEN`), `CI_WEBHOOK_SECRET` + `OIDC_ISSUER` из `PUBLIC_HOST`
+  (AUD-05). Доказано: `docker compose -f … -f prod.yml config` без `SIGNING_SEED` → ошибка
+  «required variable SIGNING_SEED is missing» (нет тихого фолбэка на публичный дефолт). Поскольку база
+  после no-secrets-рефактора держит `${VAR:-}` (пусто, не публичный литерал), а демо `:?` (fail-closed),
+  публичный seed `5e1f17a0…` из `signing.py` в проде уже не используется (там fail-fast, AUD-10).
+  Остаток: `REDIS_PASSWORD`/OIDC-секреты на демо-пути — генерировать (сейчас base `${VAR:-}` → пусто).
+- **Observability в prod.yml.** ✅ Сделано (11.06.2026): в `prod.yml` продублирован хардненинг
+  Grafana/Gitea (AUD-24) — `ports: !override []` (ops-консоли не торчат наружу даже на демо),
+  `GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?}` (стойкий пароль, fail-closed),
+  `GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP=false`, `GITEA__service__DISABLE_REGISTRATION=true`. Проверено
+  под `--profile full`: `grafana.ports=None`, пароль gated, регистрация закрыта. Остаток (base): Grafana
+  биндить на `127.0.0.1:3000` и убрать из сети `edge` — это правка базового файла (затронет dev), отдельно.
 - **Loki/Promtail.** ✅ Сделано: `infra/observability/loki-config.yml` (filesystem-storage +
   retention 7д) + named volume `loki_data` (раньше логи терялись на рестарте); в promtail добавлены
   `pipeline_stages` redact (Bearer / hvs.* / root-token+unseal / key=value-секреты) — секреты из stdout
