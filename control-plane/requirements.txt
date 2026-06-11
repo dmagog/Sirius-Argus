@@ -1,4 +1,5 @@
-fastapi==0.115.6
+fastapi==0.136.3  # 0.136.x тянет starlette 1.x — закрывает PYSEC-2026-161/GHSA-2c2j/GHSA-7f5h
+starlette==1.2.1  # явный пин фикс-версии (≥1.0.1); совместим с fastapi 0.136.3
 uvicorn[standard]==0.34.0
 python-multipart==0.0.27  # form-data аппрув-гейта; 0.0.27 закрывает GHSA-wp53/mj87/pp6c (DoS)
 sqlalchemy==2.0.36
