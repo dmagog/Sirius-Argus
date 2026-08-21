@@ -75,7 +75,7 @@ flowchart TB
 | Git / CI | Gitea + control-plane-как-CI | GitHub, GitLab, Bitbucket; либо шаг в вашем CI | webhook с HMAC → `/api/ci/webhook`, либо вызов гейта из вашего пайплайна | высокая |
 | Хранилище | MinIO | AWS S3, GCS (S3-interop), Ceph, Wasabi | S3 API + отдельный карантин-бакет | высокая |
 | **Реестр моделей** | **обёрнутый MLflow** | **ваш MLflow; другой реестр — через адаптер; либо без внешнего реестра** | **control-plane — источник истины; запись write-through и fail-soft** | **через адаптер** |
-| Секреты / ключ | Vault (AppRole) | AWS KMS / Secrets Manager, Azure Key Vault, GCP SM, HSM | ключ подписи офлайн + выдача кредов по политике | через адаптер |
+| Секреты / ключ | Vault-совместимое API (AppRole) | **OpenBao (открытый форк Vault, MPL-2.0 — drop-in)**; AWS KMS / Secrets Manager, Azure Key Vault, GCP SM, HSM | ключ подписи офлайн + выдача кредов по политике | drop-in (OpenBao) / через адаптер |
 | Наблюдаемость | Prometheus / Loki / Grafana | любой OpenMetrics-сборщик + лог-сток | `/metrics` + выгрузка событий с шины | высокая |
 | Serving | встроенный reference | ваш сервинг за рантайм-защитами | рантайм-петля: отчёт о детектах в control-plane по сервис-токену | высокая |
 | Метаданные + аудит | PostgreSQL | любая Postgres-совместимая СУБД, в т.ч. реестровые российские (Postgres Pro, Tantor) | append-only триггер + hash-chain | через Postgres-совместимость |
