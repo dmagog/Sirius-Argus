@@ -1,7 +1,7 @@
 fastapi==0.136.3  # 0.136.x тянет starlette 1.x — закрывает PYSEC-2026-161/GHSA-2c2j/GHSA-7f5h
-starlette==1.2.1  # явный пин фикс-версии (≥1.0.1); совместим с fastapi 0.136.3
+starlette==1.3.1  # PYSEC-2026-248/249 — фикс в 1.3.1; совместим с fastapi 0.136.3 (требует starlette>=0.46)
 uvicorn[standard]==0.34.0
-python-multipart==0.0.27  # form-data аппрув-гейта; 0.0.27 закрывает GHSA-wp53/mj87/pp6c (DoS)
+python-multipart==0.0.31  # form-data аппрув-гейта; 0.0.31 закрывает PYSEC-2026-3036/3037/3040 (+ранние GHSA-wp53/mj87/pp6c)
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
 pyjwt[crypto]==2.13.0  # CVE: 2.13.0 закрывает PYSEC-2026-120/175-179 и др. (OIDC-валидация)
@@ -10,11 +10,11 @@ jinja2==3.1.6  # GHSA-q2x7/gmj6/cpwx (sandbox/XSS) — фикс в 3.1.6
 redis==5.2.1
 prometheus-client==0.21.1
 detect-secrets==1.5.0
-semgrep==1.95.0
-setuptools<81  # pkg_resources для semgrep на py3.12
+semgrep==1.174.0  # свежая ветка: транзитивный protobuf>=5.29.6 (закрывает PYSEC-2026-1805)
+setuptools>=83  # PYSEC-2026-3447 — фикс в 83.0.0; актуальному semgrep pkg_resources не нужен
 pip-audit==2.7.3
 boto3==1.35.99  # S3-клиент к MinIO: карантин-стор проверенных артефактов (persist + verify-on-consume)
 hvac==2.3.0  # клиент HashiCorp Vault (AppRole): секреты по политике + аудит + revoke/rotate
 model-signing==1.1.1  # OpenSSF model-signing: подпись реальных байтов артефакта офлайн-ключом (SUP-04)
-# modelaudit — в ИЗОЛИРОВАННОМ venv (Dockerfile): его protobuf>=5 несовместим с semgrep otel<5
-# в одном окружении. Вызываем CLI через subprocess (как semgrep) → semgrep, pip-audit и modelaudit сосуществуют.
+# modelaudit — в ИЗОЛИРОВАННОМ venv (Dockerfile), вызывается как CLI через subprocess (как semgrep):
+# изоляция развязывает версии его зависимостей от основного окружения (исторически конфликтовал protobuf).
