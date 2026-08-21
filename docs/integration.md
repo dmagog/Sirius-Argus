@@ -35,11 +35,11 @@ flowchart LR
 
 ## Где подключить своё (вариативность компонентов)
 
-Авторитетный реестр и аудит — это **сам control-plane** (его Postgres-надстройка: версии, стадии, критичность, lineage, append-only аудит). Всё вокруг заменяемо на ваше, пока держится контракт интеграции. Обязательная тех-основа — только control-plane + PostgreSQL + Redis; остальное подключается под вас.
+Авторитетный реестр и аудит — это **сам control-plane** (его Postgres-надстройка: версии, стадии, критичность, lineage, append-only аудит). Компоненты вокруг заменяются совместимыми, пока соблюдён контракт интеграции. Обязательное ядро — только control-plane, PostgreSQL и Redis; остальное подключается по стандартным протоколам.
 
 ```mermaid
 flowchart TB
-    subgraph yours["Ваш выбор — подключаем ваше"]
+    subgraph yours["Подключаемые компоненты"]
       direction LR
       IdP["IdP по OIDC<br/>Keycloak · Okta · Entra · Auth0"]
       Train["Тренер<br/>CI · Kubeflow · Airflow · SageMaker · Vertex"]
@@ -78,8 +78,16 @@ flowchart TB
 | Секреты / ключ | Vault (AppRole) | AWS KMS / Secrets Manager, Azure Key Vault, GCP SM, HSM | ключ подписи офлайн + выдача кредов по политике | через адаптер |
 | Наблюдаемость | Prometheus / Loki / Grafana | любой OpenMetrics-сборщик + лог-сток | `/metrics` + выгрузка событий с шины | высокая |
 | Serving | встроенный reference | ваш сервинг за рантайм-защитами | рантайм-петля: отчёт о детектах в control-plane по сервис-токену | высокая |
-| Метаданные + аудит | PostgreSQL | Postgres-совместимая СУБД с триггерами | append-only триггер + hash-chain | низкая (нужен Postgres) |
-| Шина / лимиты | Redis | Valkey, KeyDB, ElastiCache | протокол Redis | низкая |
+| Метаданные + аудит | PostgreSQL | любая Postgres-совместимая СУБД, в т.ч. реестровые российские (Postgres Pro, Tantor) | append-only триггер + hash-chain | через Postgres-совместимость |
+| Шина / лимиты | Redis | Redis-совместимые Valkey, KeyDB, ElastiCache; российский in-memory (Tarantool, Picodata) — через адаптер | протокол Redis (pub/sub + счётчики) | через протокол / адаптер |
+
+### Обязательная основа — на стандартах, а не на вендоре
+
+PostgreSQL и Redis — зарубежный OSS, но контракт держится на стандартах (SQL + триггеры; протокол Redis), поэтому основа переносится на российские реестровые аналоги без переписывания control-plane:
+- **СУБД** — любая Postgres-совместимая, в т.ч. реестровые **Postgres Pro**, **Tantor**; append-only триггеры и hash-chain работают как есть.
+- **In-memory шина/лимиты** — Redis-совместимые **Valkey/KeyDB** (drop-in) или российский in-memory (**Tarantool/Picodata**) через тонкий адаптер; роль некритичная (pub/sub + счётчики окна).
+
+Для реестра отечественного ПО это снимает зависимость от незаменяемого иностранного компонента. По лицензиям: PostgreSQL — пермиссивная; у Redis с 2024 г. — source-available/копилефт (RSALv2/SSPL, в Redis 8 — AGPL), поэтому для чистой дистрибуции предпочтителен **Valkey** (BSD).
 
 ### Можно ли заменить MLflow на другой сервис?
 
